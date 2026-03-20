@@ -5,6 +5,9 @@
  * @format
  */
 
+import React, { useEffect, useState } from 'react';
+import { initDB, createUser, getUsers } from './src/database/db';
+import { Text } from 'react-native';
 import { NewAppScreen } from '@react-native/new-app-screen';
 import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
 import {
@@ -14,6 +17,24 @@ import {
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
+
+ useEffect(() => {
+  initDB();
+
+  createUser(
+    "Aria",
+    "Hariet",
+    "aria@example.com",
+    "123456",
+    "owner"
+  );
+
+  getUsers(data => {
+    console.log("Users:", data);
+    setUsers(data);
+  });
+
+}, []);
 
   return (
     <SafeAreaProvider>
@@ -25,13 +46,16 @@ function App() {
 
 function AppContent() {
   const safeAreaInsets = useSafeAreaInsets();
+  const [users, setUsers] = useState([]);
 
   return (
     <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.tsx"
-        safeAreaInsets={safeAreaInsets}
-      />
+  {users.map(user => (
+    <View key={user.user_id} style={{ padding: 10 }}>
+      <Text>{user.first_name} {user.last_name}</Text>
+      <Text>{user.email}</Text>
+    </View>
+  ))}
     </View>
   );
 }
@@ -42,4 +66,3 @@ const styles = StyleSheet.create({
   },
 });
 
-export default App;
