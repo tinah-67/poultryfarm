@@ -1,8 +1,10 @@
-import SQLite from 'react-native-sqlite-storage';
+import SQLite from 'react-native-sqlite-2';
+
 const db = SQLite.openDatabase(
-  { name: 'poultry.db', location: 'default' },
-  () => {},
-  error => console.log(error)
+  'poultry.db',
+  '1.0',
+  'Poultry Database',
+  200000
 );
 
 console.log("DB initialized");
@@ -145,6 +147,26 @@ export const getUsers = (callback) => {
       },
       (_, error) => {
         console.log("Error fetching users", error);
+      }
+    );
+  });
+};
+
+// Use rLogin
+export const loginUser = (email, password, callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `SELECT * FROM users WHERE email = ? AND password = ?`,
+      [email, password],
+      (_, result) => {
+        if (result.rows.length > 0) {
+          callback(result.rows.item(0)); // user found
+        } else {
+          callback(null); // no user
+        }
+      },
+      (_, error) => {
+        console.log("Login error", error);
       }
     );
   });

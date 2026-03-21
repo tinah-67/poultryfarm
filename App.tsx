@@ -6,8 +6,9 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { Alert } from 'react-native';
 import { View, Text, TextInput, Button, StyleSheet } from 'react-native';
-import { initDB, createUser, getUsers } from './src/database/db';
+import { initDB, createUser, getUsers, loginUser} from './src/database/db';
 
 function AppContent() {
   const [firstName, setFirstName] = useState('');
@@ -16,6 +17,9 @@ function AppContent() {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('owner'); // 
   const [users, setUsers] = useState([]);
+
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
 
   useEffect(() => {
     initDB();
@@ -44,6 +48,28 @@ function AppContent() {
     setPassword('');
     setRole('owner'); // reset role
   };
+
+  const handleLogin = () => {
+    if (!loginEmail || !loginPassword) {
+      return;
+    }
+
+    loginUser(loginEmail, loginPassword, (user) => {
+      if (user) {
+        setCurrentUser(user);
+      } else {
+        console.log("Invalid credentials");
+      }
+    });
+  };
+
+  if (currentUser) {
+    return (
+      <View style={{ padding: 20 }}>
+        <Text>Welcome {currentUser.first_name}</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -92,6 +118,25 @@ function AppContent() {
       />
 
       <Button title="Create Account" onPress={handleRegister} />
+
+      <Text style={styles.title}>Login</Text>
+
+          <TextInput
+            placeholder="Email"
+            value={loginEmail}
+            onChangeText={setLoginEmail}
+            style={styles.input}
+          />
+
+          <TextInput
+            placeholder="Password"
+            value={loginPassword}
+            onChangeText={setLoginPassword}
+            secureTextEntry
+            style={styles.input}
+          />
+
+          <Button title="Login" onPress={handleLogin} />
 
       {/* USERS LIST */}
       <Text style={styles.title}>Users</Text>
