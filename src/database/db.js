@@ -1,43 +1,43 @@
-import SQLite from 'react-native-sqlite-2';
-
-// Open Database
+import SQLite from 'react-native-sqlite-storage';
 const db = SQLite.openDatabase(
-  'poultry.db',
-  '1.0',
-  'Poultry Farm Database',
-  200000
+  { name: 'poultry.db', location: 'default' },
+  () => {},
+  error => console.log(error)
 );
 
-// Initialize Database (Create Tables)
-export const initDB = () => {
-    db.transaction(tx => {
+console.log("DB initialized");
 
-    // USERS TABLE
+// ================= INIT DATABASE =================
+export const initDB = () => {
+  db.transaction(tx => {
+
+    // USERS
     tx.executeSql(`
       CREATE TABLE IF NOT EXISTS users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
         first_name TEXT,
         last_name TEXT,
-        email TEXT UNIQUE,
+        email TEXT,
         password TEXT,
         role TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        synced INTEGER DEFAULT 0
       );
     `);
 
-    // FARMS TABLE
+    // FARMS
     tx.executeSql(`
       CREATE TABLE IF NOT EXISTS farms (
         farm_id INTEGER PRIMARY KEY AUTOINCREMENT,
         owner_id INTEGER,
         farm_name TEXT,
         location TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (owner_id) REFERENCES users(user_id)
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        synced INTEGER DEFAULT 0
       );
     `);
 
-    // BATCHES TABLE
+    // BATCHES
     tx.executeSql(`
       CREATE TABLE IF NOT EXISTS batches (
         batch_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,11 +46,11 @@ export const initDB = () => {
         breed TEXT,
         initial_chicks INTEGER,
         status TEXT,
-        FOREIGN KEY (farm_id) REFERENCES farms(farm_id)
+        synced INTEGER DEFAULT 0
       );
     `);
 
-    // FEED RECORDS TABLE
+    // FEED RECORDS
     tx.executeSql(`
       CREATE TABLE IF NOT EXISTS feed_records (
         feed_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,11 +58,11 @@ export const initDB = () => {
         feed_quantity REAL,
         feed_cost REAL,
         date_recorded TEXT,
-        FOREIGN KEY (batch_id) REFERENCES batches(batch_id)
+        synced INTEGER DEFAULT 0
       );
     `);
 
-    // MORTALITY TABLE
+    // MORTALITY
     tx.executeSql(`
       CREATE TABLE IF NOT EXISTS mortality_records (
         mortality_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,11 +70,11 @@ export const initDB = () => {
         number_dead INTEGER,
         cause_of_death TEXT,
         date_recorded TEXT,
-        FOREIGN KEY (batch_id) REFERENCES batches(batch_id)
+        synced INTEGER DEFAULT 0
       );
     `);
 
-    // VACCINATION TABLE
+    // VACCINATION
     tx.executeSql(`
       CREATE TABLE IF NOT EXISTS vaccination_records (
         vaccination_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,11 +83,11 @@ export const initDB = () => {
         vaccination_date TEXT,
         next_due_date TEXT,
         notes TEXT,
-        FOREIGN KEY (batch_id) REFERENCES batches(batch_id)
+        synced INTEGER DEFAULT 0
       );
     `);
 
-    // EXPENSES TABLE
+    // EXPENSES
     tx.executeSql(`
       CREATE TABLE IF NOT EXISTS expenses (
         expense_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,11 +95,11 @@ export const initDB = () => {
         description TEXT,
         amount REAL,
         expense_date TEXT,
-        FOREIGN KEY (batch_id) REFERENCES batches(batch_id)
+        synced INTEGER DEFAULT 0
       );
     `);
 
-    // SALES TABLE
+    // SALES
     tx.executeSql(`
       CREATE TABLE IF NOT EXISTS sales (
         sale_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -108,27 +108,24 @@ export const initDB = () => {
         price_per_bird REAL,
         total_revenue REAL,
         sale_date TEXT,
-        FOREIGN KEY (batch_id) REFERENCES batches(batch_id)
+        synced INTEGER DEFAULT 0
       );
     `);
 
-  },
-  error => {
-    console.log("DB Error: ", error);
-  },
-  () => {
-    console.log("Database initialized successfully");
   });
 };
 
+// ================= USERS =================
+
+// CREATE USER
 export const createUser = (firstName, lastName, email, password, role) => {
   db.transaction(tx => {
     tx.executeSql(
-      `INSERT INTO users (first_name, last_name, email, password, role)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO users (first_name, last_name, email, password, role, synced)
+       VALUES (?, ?, ?, ?, ?, 0)`,
       [firstName, lastName, email, password, role],
       (_, result) => {
-        console.log("User created successfully");
+        console.log("User created");
       },
       (_, error) => {
         console.log("Error creating user", error);
@@ -137,6 +134,7 @@ export const createUser = (firstName, lastName, email, password, role) => {
   });
 };
 
+// GET USERS
 export const getUsers = (callback) => {
   db.transaction(tx => {
     tx.executeSql(
