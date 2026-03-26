@@ -9,27 +9,41 @@ export default function RegisterScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('owner');
 
-  const handleRegister = () => {
-    if (!firstName || !email || !password) {
-      Alert.alert('Error', 'Please fill all required fields');
-      return;
-    }
+  const handleRegister = async () => {
+  if (!firstName || !email || !password) {
+    Alert.alert('Error', 'Please fill all required fields');
+    return;
+  }
 
-    createUser(firstName, lastName, email, password, role);
+  // 1. Save locally FIRST
+  createUser(firstName, lastName, email, password, role);
 
-    Alert.alert('Success', 'Account created!');
+  try {
+    // 2. Send to backend
+    const response = await fetch('http://10.0.2.2:3000/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        password,
+        role,
+      }),
+    });
 
-    // Clear inputs
-    setFirstName('');
-    setLastName('');
-    setEmail('');
-    setPassword('');
-    setRole('owner');
+    const data = await response.json();
+    console.log(data);
 
-    // Go to login
-    navigation.navigate('Login');
-  };
+    Alert.alert('Success', 'Saved locally & synced to cloud');
 
+  } catch (error) {
+    console.log(error);
+    Alert.alert('Saved locally (offline mode)');
+  }
+
+  navigation.navigate('Login');
+};
   return (
     <View style={{ padding: 20 }}>
       <Text>Create Account</Text>

@@ -172,5 +172,89 @@ export const loginUser = (email, password, callback) => {
   });
 };
 
+//synusc users to server
+export const syncUsers = async () => {
+  db.transaction(tx => {
+    tx.executeSql(
+      "SELECT * FROM users WHERE isSynced = 0",
+      [],
+      async (_, results) => {
+        const users = results.rows.raw();
+
+        for (let user of users) {
+          try {
+            await fetch('http://192.168.100.26:3000/users', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(user),
+            });
+
+            db.transaction(tx2 => {
+              tx2.executeSql(
+                "UPDATE users SET isSynced = 1 WHERE id = ?",
+                [user.id]
+              );
+            });
+
+          } catch (err) {
+            console.log("Sync failed", err);
+          }
+        }
+      }
+    );
+  });
+};
+
+// ================= FARMS =================
+
+// CREATE FARM
+export const createFarm = (owner_id, farm_name, location) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `INSERT INTO farms (owner_id, farm_name, location, synced)
+       VALUES (?, ?, ?, 0)`,
+      [owner_id, farm_name, location],
+      () => console.log("Farm created"),
+      (_, error) => console.log("Error creating farm", error)
+    );
+  });
+};
+
+// GET FARMS
+export const getFarms = (callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `SELECT * FROM farms`,
+      [],
+      (_, result) => callback(result.rows.raw()),
+      (_, error) => console.log("Error fetching farms", error)
+    );
+  });
+};
+
+// UPDATE FARM
+export const updateFarm = (farm_id, farm_name, location) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `UPDATE farms SET farm_name = ?, location = ?, synced = 0 WHERE farm_id = ?`,
+      [farm_name, location, farm_id],
+      () => console.log("Farm updated"),
+      (_, error) => console.log("Update error", error)
+    );
+  });
+};
+
+// DELETE FARM
+export const deleteFarm = (farm_id) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `DELETE FROM farms WHERE farm_id = ?`,
+      [farm_id],
+      () => console.log("Farm deleted"),
+      (_, error) => console.log("Delete error", error)
+    );
+  });
+};
+
 // Export DB
 export default db;
