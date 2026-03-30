@@ -3,15 +3,21 @@ import { View, Text, FlatList, StyleSheet, Button, TextInput } from 'react-nativ
 import { getFarms, deleteFarm, updateFarm } from '../database/db';
 import { Alert } from 'react-native';
 
-export default function ViewFarmsScreen() {
-  const [farms, setFarms] = useState([]);
-  const [editingFarm, setEditingFarm] = useState(null);
-  const [newName, setNewName] = useState('');
-  const [newLocation, setNewLocation] = useState('');
+export default function ViewFarmsScreen({ navigation, route }) {
+    console.log("ViewFarmsScreen rendered");
+    const userId = route?.params?.userId;
+    const [farms, setFarms] = useState([]);
+    const [editingFarm, setEditingFarm] = useState(null);
+    const [newName, setNewName] = useState('');
+    const [newLocation, setNewLocation] = useState('');
 
-  const loadFarms = () => {
-    getFarms((data) => setFarms(data));
-  };
+    const loadFarms = () => {
+        console.log("loadFarms called, userId:", userId);
+        getFarms((data) => {
+            console.log("Loaded farms:", data);
+            setFarms(data);
+        }, userId);
+    };
 
 useEffect(() => {
     loadFarms();
@@ -51,9 +57,9 @@ return (
     <View style={styles.container}>
         <Button
         title="Add New Farm"
-        onPress={() => navigation.navigate('Farm')}
+        onPress={() => navigation.navigate('Farm', userId ? { userId } : {})}
         />
-    <Text style={styles.title}>📋 Registered Farms</Text>
+    <Text style={styles.title}>Registered Farms</Text>
     
 
     <FlatList
@@ -102,9 +108,9 @@ return (
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20 },
-  title: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
-  item: {
+    container: { padding: 20 },
+    title: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
+    item: {
     padding: 12,
     borderBottomWidth: 1,
     marginBottom: 10,

@@ -2,30 +2,41 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet } from 'react-native';
 import { createFarm } from '../database/db';
 
-export default function FarmScreen({ navigation }) {
+export default function FarmScreen({ navigation, route }) {
+  // 👇 RECEIVE USER ID FROM PREVIOUS SCREEN
+  const user_Id = route?.params?.user_Id;
+
+  console.log("FarmScreen userId:", user_Id);
+
   const [farmName, setFarmName] = useState('');
   const [location, setLocation] = useState('');
 
   const handleAddFarm = () => {
+    if (!user_Id) {
+      alert("User not found: " + user_Id);
+      return null;
+    }
+    
     if (!farmName || !location) {
       alert("Enter all fields");
       return;
     }
 
-    createFarm(1, farmName, location);
+    // 👇 PASS owner_id PROPERLY
+    createFarm(user.user_Id, farmName, location, () => {
+      alert("Farm added successfully");
 
-    alert("Farm added successfully ✅");
+      setFarmName('');
+      setLocation('');
 
-    setFarmName('');
-    setLocation('');
-
-    // 👇 NAVIGATE TO VIEW FARMS
-    navigation.navigate('ViewFarms');
+      // 👇 PASS userId AGAIN WHEN NAVIGATING
+      navigation.navigate('ViewFarms', { userId: user_Id });
+    });
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>🏡 Add Farm</Text>
+      <Text style={styles.title}>Add Farm</Text>
 
       <TextInput
         placeholder="Farm Name"
@@ -43,10 +54,9 @@ export default function FarmScreen({ navigation }) {
 
       <Button title="Save Farm" onPress={handleAddFarm} />
 
-      {/* 👇 Optional button */}
       <Button
         title="View Farms"
-        onPress={() => navigation.navigate('ViewFarms')}
+        onPress={() => navigation.navigate('ViewFarms', { userId: user_Id })}
       />
     </View>
   );

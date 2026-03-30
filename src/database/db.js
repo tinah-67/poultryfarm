@@ -11,6 +11,7 @@ console.log("DB initialized");
 
 // ================= INIT DATABASE =================
 export const initDB = () => {
+  console.log("initDB called");
   db.transaction(tx => {
 
     // USERS
@@ -25,19 +26,21 @@ export const initDB = () => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         synced INTEGER DEFAULT 0
       );
-    `);
+    `, [], () => console.log("Users table created"), (_, err) => console.log("Users table error", err));
 
     // FARMS
+    tx.executeSql(`DROP TABLE IF EXISTS farms`);
+    
     tx.executeSql(`
       CREATE TABLE IF NOT EXISTS farms (
         farm_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        owner_id INTEGER,
+        user_id INTEGER,
         farm_name TEXT,
         location TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         synced INTEGER DEFAULT 0
       );
-    `);
+    `, [], () => console.log("Farms table created"), (_, err) => console.log("Farms table error", err));
 
     // BATCHES
     tx.executeSql(`
@@ -50,7 +53,7 @@ export const initDB = () => {
         status TEXT,
         synced INTEGER DEFAULT 0
       );
-    `);
+    `, [], () => console.log("Batches table created"), (_, err) => console.log("Batches table error", err));
 
     // FEED RECORDS
     tx.executeSql(`
@@ -62,7 +65,7 @@ export const initDB = () => {
         date_recorded TEXT,
         synced INTEGER DEFAULT 0
       );
-    `);
+    `, [], () => console.log("Feed records table created"), (_, err) => console.log("Feed records table error", err));
 
     // MORTALITY
     tx.executeSql(`
@@ -74,7 +77,7 @@ export const initDB = () => {
         date_recorded TEXT,
         synced INTEGER DEFAULT 0
       );
-    `);
+    `, [], () => console.log("Mortality records table created"), (_, err) => console.log("Mortality records table error", err));
 
     // VACCINATION
     tx.executeSql(`
@@ -87,7 +90,7 @@ export const initDB = () => {
         notes TEXT,
         synced INTEGER DEFAULT 0
       );
-    `);
+    `, [], () => console.log("Vaccination records table created"), (_, err) => console.log("Vaccination records table error", err));
 
     // EXPENSES
     tx.executeSql(`
@@ -99,7 +102,7 @@ export const initDB = () => {
         expense_date TEXT,
         synced INTEGER DEFAULT 0
       );
-    `);
+    `, [], () => console.log("Expenses table created"), (_, err) => console.log("Expenses table error", err));
 
     // SALES
     tx.executeSql(`
@@ -112,7 +115,7 @@ export const initDB = () => {
         sale_date TEXT,
         synced INTEGER DEFAULT 0
       );
-    `);
+    `, [], () => console.log("Sales table created"), (_, err) => console.log("Sales table error", err));
 
   });
 };
@@ -120,19 +123,25 @@ export const initDB = () => {
 // ================= USERS =================
 
 // CREATE USER
-export const createUser = (firstName, lastName, email, password, role) => {
-  db.transaction(tx => {
-    tx.executeSql(
-      `INSERT INTO users (first_name, last_name, email, password, role, synced)
-       VALUES (?, ?, ?, ?, ?, 0)`,
-      [firstName, lastName, email, password, role],
-      (_, result) => {
-        console.log("User created");
-      },
-      (_, error) => {
-        console.log("Error creating user", error);
-      }
-    );
+export const createUser = (firstName, lastName, email, password, role, callback) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        `INSERT INTO users (first_name, last_name, email, password, role, synced)
+      VALUES (?, ?, ?, ?, ?, 0)`,
+        [firstName, lastName, email, password, role],
+        (_, result) => {
+          console.log("User created");
+          callback && callback();
+          resolve(result);
+        },
+        (_, error) => {
+          console.log("Error creating user", error);
+          reject(error);
+          return false;
+        }
+      );
+    });
   });
 };
 
@@ -208,29 +217,43 @@ export const syncUsers = async () => {
 // ================= FARMS =================
 
 // CREATE FARM
-export const createFarm = (owner_id, farm_name, location) => {
+export const createFarm = (user_id, farm_name, location, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      `INSERT INTO farms (owner_id, farm_name, location, synced)
-       VALUES (?, ?, ?, 0)`,
-      [owner_id, farm_name, location],
-      () => console.log("Farm created"),
-      (_, error) => console.log("Error creating farm", error)
+      `INSERT INTO farms (user_id, farm_name, location, synced) VALUES (?, ?, ?, 0)`,
+      [user_id, farm_name, location],
+      (_, result) => {
+        console.log("Farm added successfully", result.insertId);
+        callback && callback();
+      },
+      (_, error) => {
+        console.log("Error adding farm", error);
+        Alert.alert("Error", "Failed to add farm: " + error.message);
+        return false;
+      }
     );
   });
 };
 
 // GET FARMS
-export const getFarms = (callback) => {
+export const getFarms = (callback, user_Id = null) => {
+  console.log("getFarms called with user_Id:", user_Id);
   db.transaction(tx => {
+    const query = user_Id ? `SELECT * FROM farms WHERE user_id = ?` : `SELECT * FROM farms`;
+    const params = user_Id ? [user_Id] : [];
+    console.log("getFarms query:", query, "params:", params);
     tx.executeSql(
-      `SELECT * FROM farms`,
-      [],
-      (_, result) => callback(result.rows.raw()),
+      query,
+      params,
+      (_, result) => {
+        const data = result.rows.raw();
+        console.log("getFarms result:", data);
+        callback(data);
+      },
       (_, error) => console.log("Error fetching farms", error)
     );
   });
-};
+};;
 
 // UPDATE FARM
 export const updateFarm = (farm_id, farm_name, location) => {
