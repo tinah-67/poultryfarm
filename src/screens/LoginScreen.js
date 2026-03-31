@@ -5,7 +5,6 @@ import { loginUser } from '../database/db';
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
@@ -46,24 +45,20 @@ export default function LoginScreen({ navigation }) {
           value={password}
           onChangeText={setPassword}
           key={showPassword ? 'visible' : 'hidden'}
-          style={{ borderWidth: 1, borderColor: '#ccc', padding: 12, paddingRight: 50, borderRadius: 6 }}
+          style={{ borderWidth: 1, borderColor: '#ccc', padding: 12, paddingRight: 56, borderRadius: 6 }}
         />
         <TouchableOpacity
-          onPress={() => {
-            console.log('Eye pressed, current showPassword:', showPassword);
-            setShowPassword(!showPassword);
-          }}
+          onPress={() => setShowPassword(!showPassword)}
           activeOpacity={0.7}
-          style={{ position: 'absolute', right: 10, top: '50%', transform: [{ translateY: -15 }], width: 30, height: 30, justifyContent: 'center', alignItems: 'center' }}
+          style={{ position: 'absolute', right: 10, top: '50%', transform: [{ translateY: -15 }], width: 40, height: 30, justifyContent: 'center', alignItems: 'center' }}
         >
-          <Text style={{ fontSize: 18 }}>{showPassword ? '🙈' : '👁️'}</Text>
+          <Text style={{ fontSize: 18 }}>{showPassword ? '\u{1F648}' : '\u{1F441}'}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Remember Me */}
       <TouchableOpacity onPress={() => setRememberMe(!rememberMe)}>
         <Text style={{ marginBottom: 10 }}>
-          {rememberMe ? '☑ Remember Me' : '☐ Remember Me'}
+          {rememberMe ? '[x] Remember Me' : '[ ] Remember Me'}
         </Text>
       </TouchableOpacity>
 

@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, Button, TextInput } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { getFarms, deleteFarm, updateFarm } from '../database/db';
 import { Alert } from 'react-native';
 
 export default function ViewFarmsScreen({ navigation, route }) {
-    console.log("ViewFarmsScreen rendered");
-    const userId = route?.params?.userId;
+    console.log("ViewFarmsScreen rendered", route?.params);
+    const userId = route?.params?.userId ?? route?.params?.user_Id;
     const [farms, setFarms] = useState([]);
     const [editingFarm, setEditingFarm] = useState(null);
     const [newName, setNewName] = useState('');
@@ -13,15 +14,33 @@ export default function ViewFarmsScreen({ navigation, route }) {
 
     const loadFarms = () => {
         console.log("loadFarms called, userId:", userId);
-        getFarms((data) => {
-            console.log("Loaded farms:", data);
+
+        if (!userId) {
+            console.log("No userId, skipping fetch");
+            return;
+        }
+
+        getFarms(userId, (data) => {
+            console.log("Filtered farms:", data);
             setFarms(data);
-        }, userId);
+        });
     };
 
-useEffect(() => {
-    loadFarms();
-}, []);
+useFocusEffect(
+    useCallback(() => {
+        console.log("loadFarms called, userId:", userId);
+
+        if (!userId) {
+            console.log("No userId, skipping fetch");
+            return;
+        }
+
+        getFarms(userId, (data) => {
+            console.log("Filtered farms:", data);
+            setFarms(data);
+        });
+    }, [userId])
+);
 
 const handleDelete = (id) => {
     Alert.alert(
@@ -57,9 +76,10 @@ return (
     <View style={styles.container}>
         <Button
         title="Add New Farm"
-        onPress={() => navigation.navigate('Farm', userId ? { userId } : {})}
+        onPress={() => navigation.navigate('Farm', userId ? { userId } : { user_Id: route?.params?.user_Id })}
         />
     <Text style={styles.title}>Registered Farms</Text>
+    <Text style={{ color: '#666', marginBottom: 8 }}>current userId: {String(userId ?? route?.params?.user_Id ?? 'none')}</Text>
     
 
     <FlatList
@@ -95,6 +115,15 @@ return (
                 <Text style={styles.name}>{item.farm_name}</Text>
                 <Text>{item.location}</Text>
 
+                <Button
+                    title="View Batches"
+                    onPress={() =>
+                        navigation.navigate('ViewBatches', {
+                            farmId: item.farm_id,
+                            farmName: item.farm_name,
+                        })
+                    }
+                />
                 <Button title="Edit" onPress={() => startEdit(item)} />
                 <Button title="Delete" onPress={() => handleDelete(item.farm_id)} />
                 </>

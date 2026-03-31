@@ -10,6 +10,14 @@ import RegisterScreen from './src/screens/RegisterScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import FarmScreen from './src/screens/FarmScreen';
 import ViewFarmsScreen from './src/screens/ViewFarmsScreen';
+import CreateBatchScreen from './src/screens/CreateBatchScreen';
+import ViewBatchesScreen from './src/screens/ViewBatchesScreen';
+import BatchDetailsScreen from './src/screens/BatchDetailsScreen';
+import FeedScreen from './src/screens/FeedScreen';
+import MortalityScreen from './src/screens/MortalityScreen';
+import VaccinationScreen from './src/screens/VaccinationScreen';
+import ExpenseScreen from './src/screens/ExpenseScreen';
+import SalesScreen from './src/screens/SalesScreen';
 
 // CREATE STACK
 const Stack = createNativeStackNavigator();
@@ -45,12 +53,51 @@ export default function App() {
         />
         <Stack.Screen 
         name="Farm" 
-        component={FarmScreen} 
+        component={FarmScreen}
         />
 
         <Stack.Screen 
         name="ViewFarms" 
-        component={ViewFarmsScreen} 
+        component={ViewFarmsScreen}
+        options={{ title: 'View Farms' }} 
+        />
+
+        <Stack.Screen name="CreateBatch" 
+        component={CreateBatchScreen} 
+        options={{ title: 'Record Batch' }}
+        />
+        <Stack.Screen name="ViewBatches" 
+        component={ViewBatchesScreen} 
+        options={{ title: 'View Batches' }}
+        />
+        <Stack.Screen name="BatchDetails" 
+        component={BatchDetailsScreen} 
+        options={{ title: 'Batch Details' }}
+        />
+        <Stack.Screen 
+        name="Feed" 
+        component={FeedScreen}
+        options={{ title: 'Feeds' }} 
+        />
+        <Stack.Screen
+        name="Mortality"
+        component={MortalityScreen}
+        options={{ title: 'Mortality' }}
+        />
+        <Stack.Screen
+        name="Vaccination"
+        component={VaccinationScreen}
+        options={{ title: 'Vaccination' }}
+        />
+        <Stack.Screen
+        name="Expense"
+        component={ExpenseScreen}
+        options={{ title: 'Expenses' }}
+        />
+        <Stack.Screen
+        name="Sales"
+        component={SalesScreen}
+        options={{ title: 'Sales' }}
         />
 
       </Stack.Navigator>

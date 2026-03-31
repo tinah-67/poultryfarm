@@ -1,36 +1,47 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet } from 'react-native';
-import { createFarm } from '../database/db';
+import { createFarm, getUserById } from '../database/db';
 
 export default function FarmScreen({ navigation, route }) {
-  // 👇 RECEIVE USER ID FROM PREVIOUS SCREEN
-  const user_Id = route?.params?.user_Id;
+  // `userId` may come as `userId` or `user_Id` depending on navigation source
+  const userId = route?.params?.userId ?? route?.params?.user_Id;
 
-  console.log("FarmScreen userId:", user_Id);
+  console.log("FarmScreen userId:", userId);
 
   const [farmName, setFarmName] = useState('');
   const [location, setLocation] = useState('');
 
   const handleAddFarm = () => {
-    if (!user_Id) {
-      alert("User not found: " + user_Id);
-      return null;
+    if (!userId) {
+      alert("User not found: " + userId);
+      return;
     }
-    
+
     if (!farmName || !location) {
       alert("Enter all fields");
       return;
     }
 
-    // 👇 PASS owner_id PROPERLY
-    createFarm(user.user_Id, farmName, location, () => {
-      alert("Farm added successfully");
+    getUserById(userId, (user) => {
+      if (!user) {
+        alert("User not found in DB: " + userId);
+        return;
+      }
 
-      setFarmName('');
-      setLocation('');
+      if (user.role !== 'owner') {
+        alert('Only owner users can add farms');
+        return;
+      }
 
-      // 👇 PASS userId AGAIN WHEN NAVIGATING
-      navigation.navigate('ViewFarms', { userId: user_Id });
+      createFarm(userId, farmName, location, () => {
+        alert("Farm added successfully");
+
+        setFarmName('');
+        setLocation('');
+
+        // 👇 PASS userId AGAIN WHEN NAVIGATING
+        navigation.navigate('ViewFarms', { userId });
+      });
     });
   };
 
@@ -40,6 +51,7 @@ export default function FarmScreen({ navigation, route }) {
 
       <TextInput
         placeholder="Farm Name"
+        placeholderTextColor="#666"
         value={farmName}
         onChangeText={setFarmName}
         style={styles.input}
@@ -47,6 +59,7 @@ export default function FarmScreen({ navigation, route }) {
 
       <TextInput
         placeholder="Location"
+        placeholderTextColor="#666"
         value={location}
         onChangeText={setLocation}
         style={styles.input}
@@ -56,7 +69,7 @@ export default function FarmScreen({ navigation, route }) {
 
       <Button
         title="View Farms"
-        onPress={() => navigation.navigate('ViewFarms', { userId: user_Id })}
+        onPress={() => navigation.navigate('ViewFarms', { userId })}
       />
     </View>
   );

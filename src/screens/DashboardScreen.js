@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { Alert, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 
 export default function DashboardScreen({ navigation, route }) {
   const userId = route?.params?.userId;
@@ -18,27 +18,42 @@ export default function DashboardScreen({ navigation, route }) {
       </TouchableOpacity>
 
       {/* BATCH */}
-      <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('ViewBatches')}>
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => navigation.navigate('ViewFarms', { userId })}
+      >
         <Text style={styles.cardText}>Batch Management</Text>
       </TouchableOpacity>
 
       {/* FEED */}
-      <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Feed')}>
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => Alert.alert('Select a batch first', 'Open a farm, then choose a batch to manage feed records.')}
+      >
         <Text style={styles.cardText}>Feed Management</Text>
       </TouchableOpacity>
 
       {/* MORTALITY */}
-      <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Mortality')}>
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => Alert.alert('Coming soon', 'Mortality management screen has not been wired yet.')}
+      >
         <Text style={styles.cardText}>Mortality Management</Text>
       </TouchableOpacity>
 
       {/* REPORTS */}
-      <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Performance')}>
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => Alert.alert('Coming soon', 'Batch performance reporting screen has not been wired yet.')}
+      >
         <Text style={styles.cardText}>Batch Performance</Text>
       </TouchableOpacity>
 
       {/* OPTIONAL */}
-      <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Notifications')}>
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => Alert.alert('Coming soon', 'Notifications screen has not been wired yet.')}
+      >
         <Text style={styles.cardText}>Notifications</Text>
       </TouchableOpacity>
 
