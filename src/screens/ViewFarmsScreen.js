@@ -1,11 +1,11 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Button, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Button, TextInput, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { getFarms, deleteFarm, updateFarm } from '../database/db';
 import { Alert } from 'react-native';
+import DataTable from '../components/DataTable';
 
 export default function ViewFarmsScreen({ navigation, route }) {
-    console.log("ViewFarmsScreen rendered", route?.params);
     const userId = route?.params?.userId ?? route?.params?.user_Id;
     const [farms, setFarms] = useState([]);
     const [editingFarm, setEditingFarm] = useState(null);
@@ -13,30 +13,22 @@ export default function ViewFarmsScreen({ navigation, route }) {
     const [newLocation, setNewLocation] = useState('');
 
     const loadFarms = () => {
-        console.log("loadFarms called, userId:", userId);
-
         if (!userId) {
-            console.log("No userId, skipping fetch");
             return;
         }
 
         getFarms(userId, (data) => {
-            console.log("Filtered farms:", data);
             setFarms(data);
         });
     };
 
 useFocusEffect(
     useCallback(() => {
-        console.log("loadFarms called, userId:", userId);
-
         if (!userId) {
-            console.log("No userId, skipping fetch");
             return;
         }
 
         getFarms(userId, (data) => {
-            console.log("Filtered farms:", data);
             setFarms(data);
         });
     }, [userId])
@@ -72,6 +64,13 @@ const saveEdit = () => {
     loadFarms();
 };
 
+const columns = [
+    { key: 'farm_name', title: 'Farm Name', width: 160 },
+    { key: 'location', title: 'Location', width: 170 },
+    { key: 'batches', title: 'Batches', width: 140 },
+    { key: 'actions', title: 'Actions', width: 260 },
+];
+
 return (
     <View style={styles.container}>
         <Button
@@ -79,78 +78,154 @@ return (
         onPress={() => navigation.navigate('Farm', userId ? { userId } : { user_Id: route?.params?.user_Id })}
         />
     <Text style={styles.title}>Registered Farms</Text>
-    <Text style={{ color: '#666', marginBottom: 8 }}>current userId: {String(userId ?? route?.params?.user_Id ?? 'none')}</Text>
-    
+    <Text style={styles.helperText}>Tap a row action to open batches, edit the farm, or remove it.</Text>
 
-    <FlatList
+    <DataTable
+        columns={columns}
         data={farms}
         keyExtractor={(item) => item.farm_id.toString()}
+        emptyText="No farms yet. Add one!"
+        renderCell={(item, column) => {
+            if (editingFarm === item.farm_id) {
+                if (column.key === 'farm_name') {
+                    return (
+                        <TextInput
+                            value={newName}
+                            onChangeText={setNewName}
+                            style={styles.input}
+                            placeholder="Farm name"
+                        />
+                    );
+                }
 
-            ListEmptyComponent={
-            <Text style={{ textAlign: 'center', marginTop: 20 }}>
-            No farms yet. Add one!
-            </Text>
-        }
+                if (column.key === 'location') {
+                    return (
+                        <TextInput
+                            value={newLocation}
+                            onChangeText={setNewLocation}
+                            style={styles.input}
+                            placeholder="Location"
+                        />
+                    );
+                }
 
-        renderItem={({ item }) => (
-            <View style={styles.item}>
+                if (column.key === 'batches') {
+                    return <Text style={styles.cellText}>Save first</Text>;
+                }
 
-            {editingFarm === item.farm_id ? (
-                <>
-                <TextInput
-                    value={newName}
-                    onChangeText={setNewName}
-                    style={styles.input}
-                />
-                <TextInput
-                    value={newLocation}
-                    onChangeText={setNewLocation}
-                    style={styles.input}
-                />
-                <Button title="Save" onPress={saveEdit} />
-                <Button title="Cancel" onPress={() => setEditingFarm(null)} />
-                </>
-            ) : (
-                <>
-                <Text style={styles.name}>{item.farm_name}</Text>
-                <Text>{item.location}</Text>
+                if (column.key === 'actions') {
+                    return (
+                        <View style={styles.actionRow}>
+                            <TouchableOpacity style={styles.primaryAction} onPress={saveEdit}>
+                                <Text style={styles.primaryActionText}>Save</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.secondaryAction} onPress={() => setEditingFarm(null)}>
+                                <Text style={styles.secondaryActionText}>Cancel</Text>
+                            </TouchableOpacity>
+                        </View>
+                    );
+                }
+            }
 
-                <Button
-                    title="View Batches"
-                    onPress={() =>
-                        navigation.navigate('ViewBatches', {
-                            farmId: item.farm_id,
-                            farmName: item.farm_name,
-                        })
-                    }
-                />
-                <Button title="Edit" onPress={() => startEdit(item)} />
-                <Button title="Delete" onPress={() => handleDelete(item.farm_id)} />
-                </>
-            )}
+            if (column.key === 'farm_name') {
+                return <Text style={styles.name}>{item.farm_name}</Text>;
+            }
 
-            </View>
-        )}
-        />
+            if (column.key === 'location') {
+                return <Text style={styles.cellText}>{item.location}</Text>;
+            }
+
+            if (column.key === 'batches') {
+                return <Text style={styles.cellText}>Batch records</Text>;
+            }
+
+            if (column.key === 'actions') {
+                return (
+                    <View style={styles.actionRow}>
+                        <TouchableOpacity
+                            style={styles.primaryAction}
+                            onPress={() =>
+                                navigation.navigate('ViewBatches', {
+                                    farmId: item.farm_id,
+                                    farmName: item.farm_name,
+                                })
+                            }
+                        >
+                            <Text style={styles.primaryActionText}>View Batches</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.secondaryAction} onPress={() => startEdit(item)}>
+                            <Text style={styles.secondaryActionText}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.dangerAction} onPress={() => handleDelete(item.farm_id)}>
+                            <Text style={styles.dangerActionText}>Delete</Text>
+                        </TouchableOpacity>
+                    </View>
+                );
+            }
+
+            return null;
+        }}
+    />
     </View>
 );
 }
 
 const styles = StyleSheet.create({
-    container: { padding: 20 },
-    title: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
-    item: {
-    padding: 12,
-    borderBottomWidth: 1,
-    marginBottom: 10,
+    container: { flex: 1, padding: 20, backgroundColor: '#f1f5f9' },
+    title: { fontSize: 20, fontWeight: 'bold', marginVertical: 10, color: '#0f172a' },
+    helperText: {
+        color: '#475569',
+        marginBottom: 12,
     },
     name: {
         fontWeight: 'bold',
         fontSize: 16,
+        color: '#0f172a',
     },
     input: {
         borderWidth: 1,
-        marginBottom: 5,
-        padding: 5,
+        borderColor: '#94a3b8',
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        backgroundColor: '#fff',
     },
-    });
+    cellText: {
+        color: '#334155',
+    },
+    actionRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    primaryAction: {
+        backgroundColor: '#1d4ed8',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
+    primaryActionText: {
+        color: '#fff',
+        fontWeight: '600',
+    },
+    secondaryAction: {
+        backgroundColor: '#e2e8f0',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
+    secondaryActionText: {
+        color: '#0f172a',
+        fontWeight: '600',
+    },
+    dangerAction: {
+        backgroundColor: '#fee2e2',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
+    dangerActionText: {
+        color: '#b91c1c',
+        fontWeight: '600',
+    },
+});

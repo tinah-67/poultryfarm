@@ -1,7 +1,8 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, TextInput, Button, FlatList, StyleSheet, Alert, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { addVaccinationRecord, getVaccinationRecordsByBatchId, deleteVaccinationRecord } from '../database/db';
+import DataTable from '../components/DataTable';
 
 let DateTimePicker = null;
 try {
@@ -111,9 +112,30 @@ export default function VaccinationScreen({ route }) {
   };
 
   const handleDelete = (vaccinationId) => {
-    deleteVaccinationRecord(vaccinationId);
-    loadRecords();
+    Alert.alert(
+      'Confirm Delete',
+      'Are you sure you want to delete this vaccination record?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteVaccinationRecord(vaccinationId);
+            loadRecords();
+          },
+        },
+      ]
+    );
   };
+
+  const columns = [
+    { key: 'vaccine_name', title: 'Vaccine', width: 170 },
+    { key: 'vaccination_date', title: 'Date Given', width: 140 },
+    { key: 'next_due_date', title: 'Next Due', width: 140 },
+    { key: 'notes', title: 'Notes', width: 200 },
+    { key: 'actions', title: 'Actions', width: 120 },
+  ];
 
   return (
     <View style={styles.container}>
@@ -168,35 +190,58 @@ export default function VaccinationScreen({ route }) {
       />
       <Button title="Add Vaccination Record" onPress={handleAdd} />
 
-      <FlatList
-        data={records}
-        keyExtractor={(item, index) => (item.vaccination_id || index).toString()}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text>Vaccine: {item.vaccine_name}</Text>
-            <Text>Date: {item.vaccination_date}</Text>
-            <Text>Next Due: {item.next_due_date || 'N/A'}</Text>
-            <Text>Notes: {item.notes || 'N/A'}</Text>
-            <Button title="Delete" onPress={() => handleDelete(item.vaccination_id)} />
-          </View>
-        )}
-        ListEmptyComponent={<Text style={styles.emptyText}>No vaccination records yet</Text>}
-      />
+      <View style={styles.tableWrapper}>
+        <DataTable
+          columns={columns}
+          data={records}
+          keyExtractor={(item, index) => (item.vaccination_id || index).toString()}
+          emptyText="No vaccination records yet"
+          renderCell={(item, column) => {
+            if (column.key === 'vaccine_name') {
+              return <Text style={styles.cellText}>{item.vaccine_name}</Text>;
+            }
+
+            if (column.key === 'vaccination_date') {
+              return <Text style={styles.cellText}>{item.vaccination_date}</Text>;
+            }
+
+            if (column.key === 'next_due_date') {
+              return <Text style={styles.cellText}>{item.next_due_date || 'N/A'}</Text>;
+            }
+
+            if (column.key === 'notes') {
+              return <Text style={styles.cellText}>{item.notes || 'N/A'}</Text>;
+            }
+
+            if (column.key === 'actions') {
+              return (
+                <TouchableOpacity style={styles.dangerAction} onPress={() => handleDelete(item.vaccination_id)}>
+                  <Text style={styles.dangerActionText}>Delete</Text>
+                </TouchableOpacity>
+              );
+            }
+
+            return null;
+          }}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  title: { fontSize: 20, marginBottom: 10 },
-  input: { borderWidth: 1, padding: 10, marginBottom: 10, borderRadius: 5 },
+  container: { flex: 1, padding: 20, backgroundColor: '#f1f5f9' },
+  title: { fontSize: 20, marginBottom: 10, color: '#0f172a', fontWeight: '700' },
+  input: { borderWidth: 1, padding: 10, marginBottom: 10, borderRadius: 5, backgroundColor: '#fff', borderColor: '#cbd5e1' },
   dateContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   dateInput: { flex: 1, marginBottom: 0 },
   dateField: { justifyContent: 'center' },
-  dateButton: { marginLeft: 10, padding: 10, backgroundColor: '#007BFF', borderRadius: 5 },
+  dateButton: { marginLeft: 10, padding: 10, backgroundColor: '#1d4ed8', borderRadius: 5 },
   dateButtonText: { color: '#fff' },
   dateValue: { color: '#000' },
   datePlaceholder: { color: '#666' },
-  card: { padding: 10, borderWidth: 1, marginVertical: 5, borderRadius: 5 },
-  emptyText: { textAlign: 'center', marginTop: 20 },
+  tableWrapper: { marginTop: 16 },
+  cellText: { color: '#334155' },
+  dangerAction: { backgroundColor: '#fee2e2', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, alignSelf: 'flex-start' },
+  dangerActionText: { color: '#b91c1c', fontWeight: '600' },
 });

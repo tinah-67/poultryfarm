@@ -1,7 +1,8 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, TextInput, Button, FlatList, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { addMortalityRecord, getMortalityRecordsByBatchId, deleteMortalityRecord } from '../database/db';
+import DataTable from '../components/DataTable';
 
 export default function MortalityScreen({ route }) {
   const batchId = route?.params?.batchId;
@@ -48,11 +49,30 @@ export default function MortalityScreen({ route }) {
   };
 
   const handleDelete = (mortalityId) => {
-    deleteMortalityRecord(mortalityId);
-    loadRecords();
+    Alert.alert(
+      'Confirm Delete',
+      'Are you sure you want to delete this mortality record?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteMortalityRecord(mortalityId);
+            loadRecords();
+          },
+        },
+      ]
+    );
   };
 
   const totalDead = records.reduce((sum, item) => sum + Number(item.number_dead || 0), 0);
+  const columns = [
+    { key: 'number_dead', title: 'Number Dead', width: 120 },
+    { key: 'cause', title: 'Cause', width: 180 },
+    { key: 'date', title: 'Recorded On', width: 210 },
+    { key: 'actions', title: 'Actions', width: 120 },
+  ];
 
   return (
     <View style={styles.container}>
@@ -75,28 +95,48 @@ export default function MortalityScreen({ route }) {
       <Button title="Add Mortality Record" onPress={handleAdd} />
       <Text style={styles.summary}>Total Dead: {totalDead}</Text>
 
-      <FlatList
-        data={records}
-        keyExtractor={(item, index) => (item.mortality_id || index).toString()}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text>Number Dead: {item.number_dead}</Text>
-            <Text>Cause: {item.cause_of_death}</Text>
-            <Text>Date: {item.date_recorded}</Text>
-            <Button title="Delete" onPress={() => handleDelete(item.mortality_id)} />
-          </View>
-        )}
-        ListEmptyComponent={<Text style={styles.emptyText}>No mortality records yet</Text>}
-      />
+      <View style={styles.tableWrapper}>
+        <DataTable
+          columns={columns}
+          data={records}
+          keyExtractor={(item, index) => (item.mortality_id || index).toString()}
+          emptyText="No mortality records yet"
+          renderCell={(item, column) => {
+            if (column.key === 'number_dead') {
+              return <Text style={styles.cellText}>{item.number_dead}</Text>;
+            }
+
+            if (column.key === 'cause') {
+              return <Text style={styles.cellText}>{item.cause_of_death}</Text>;
+            }
+
+            if (column.key === 'date') {
+              return <Text style={styles.cellText}>{item.date_recorded}</Text>;
+            }
+
+            if (column.key === 'actions') {
+              return (
+                <TouchableOpacity style={styles.dangerAction} onPress={() => handleDelete(item.mortality_id)}>
+                  <Text style={styles.dangerActionText}>Delete</Text>
+                </TouchableOpacity>
+              );
+            }
+
+            return null;
+          }}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  title: { fontSize: 20, marginBottom: 10 },
-  input: { borderWidth: 1, padding: 10, marginBottom: 10, borderRadius: 5 },
-  summary: { marginVertical: 10, fontWeight: 'bold' },
-  card: { padding: 10, borderWidth: 1, marginVertical: 5, borderRadius: 5 },
-  emptyText: { textAlign: 'center', marginTop: 20 },
+  container: { flex: 1, padding: 20, backgroundColor: '#f1f5f9' },
+  title: { fontSize: 20, marginBottom: 10, color: '#0f172a', fontWeight: '700' },
+  input: { borderWidth: 1, padding: 10, marginBottom: 10, borderRadius: 5, backgroundColor: '#fff', borderColor: '#cbd5e1' },
+  summary: { marginVertical: 10, fontWeight: 'bold', color: '#0f172a' },
+  tableWrapper: { marginTop: 8 },
+  cellText: { color: '#334155' },
+  dangerAction: { backgroundColor: '#fee2e2', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, alignSelf: 'flex-start' },
+  dangerActionText: { color: '#b91c1c', fontWeight: '600' },
 });
