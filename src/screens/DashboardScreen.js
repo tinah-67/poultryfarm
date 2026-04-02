@@ -1,68 +1,91 @@
-import React from 'react';
-import { Alert, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, ImageBackground, View } from 'react-native';
+import { clearRememberedSession } from '../database/db';
 
 export default function DashboardScreen({ navigation, route }) {
   const userId = route?.params?.userId;
+  const [refreshing, setRefreshing] = useState(false);
 
   console.log("DASHBOARD userId:", userId);
+
+  const handleLogout = () => {
+    clearRememberedSession(() => {
+      navigation.replace('Login');
+    });
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 600);
+  };
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Poultry Farm Dashboard</Text>
+    <ImageBackground
+      source={require('../Broilers-Chickens.webp')}
+      style={styles.background}
+      imageStyle={styles.backgroundImage}
+    >
+      <View style={styles.overlay}>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ffffff" />
+          }
+        >
+          <Text style={styles.title}>Poultry Farm Dashboard</Text>
 
-      {/* FARM */}
-      <TouchableOpacity style={styles.card} onPress={() => {
-        console.log("Navigating to Farm with userId:", userId);
-        navigation.navigate('Farm', { userId });
-      }}>
-        <Text style={styles.cardText}>Farm Management</Text>
-      </TouchableOpacity>
+          <TouchableOpacity style={styles.card} onPress={() => {
+            console.log("Navigating to Farm with userId:", userId);
+            navigation.navigate('Farm', { userId });
+          }}>
+            <Text style={styles.cardText}>Farm Management</Text>
+          </TouchableOpacity>
 
-      {/* BATCH */}
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => navigation.navigate('ViewFarms', { userId })}
-      >
-        <Text style={styles.cardText}>Batch Management</Text>
-      </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => navigation.navigate('ViewFarms', { userId })}
+          >
+            <Text style={styles.cardText}>Batch Management</Text>
+          </TouchableOpacity>
 
-      {/* FEED */}
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => Alert.alert('Select a batch first', 'Open a farm, then choose a batch to manage feed records.')}
-      >
-        <Text style={styles.cardText}>Feed Management</Text>
-      </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => Alert.alert('Coming soon', 'Batch performance reporting screen has not been wired yet.')}
+          >
+            <Text style={styles.cardText}>Batch Performance</Text>
+          </TouchableOpacity>
 
-      {/* MORTALITY */}
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => Alert.alert('Coming soon', 'Mortality management screen has not been wired yet.')}
-      >
-        <Text style={styles.cardText}>Mortality Management</Text>
-      </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => Alert.alert('Coming soon', 'Notifications screen has not been wired yet.')}
+          >
+            <Text style={styles.cardText}>Notifications</Text>
+          </TouchableOpacity>
 
-      {/* REPORTS */}
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => Alert.alert('Coming soon', 'Batch performance reporting screen has not been wired yet.')}
-      >
-        <Text style={styles.cardText}>Batch Performance</Text>
-      </TouchableOpacity>
-
-      {/* OPTIONAL */}
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => Alert.alert('Coming soon', 'Notifications screen has not been wired yet.')}
-      >
-        <Text style={styles.cardText}>Notifications</Text>
-      </TouchableOpacity>
-
-    </ScrollView>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+  },
+  backgroundImage: {
+    resizeMode: 'cover',
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+  },
   container: {
+    flexGrow: 1,
     padding: 20,
     alignItems: 'center',
   },
@@ -70,11 +93,16 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 20,
+    color: '#fff',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   card: {
     width: '100%',
     padding: 20,
-    backgroundColor: '#4CAF50',
+    backgroundColor: 'rgba(76, 175, 80, 0.9)',
     marginVertical: 8,
     borderRadius: 10,
   },
@@ -82,5 +110,19 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     textAlign: 'center',
+  },
+  logoutButton: {
+    marginTop: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fff',
+    backgroundColor: 'rgba(198, 40, 40, 0.82)',
+  },
+  logoutText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

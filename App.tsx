@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import { initDB } from './src/database/db';
+import { getRememberedSession, initDB } from './src/database/db';
 
 // IMPORT SCREENS
 import LoginScreen from './src/screens/LoginScreen';
@@ -23,13 +24,29 @@ import SalesScreen from './src/screens/SalesScreen';
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  const [isReady, setIsReady] = useState(false);
+  const [initialUserId, setInitialUserId] = useState<number | null>(null);
+
   useEffect(() => {
     initDB();
+
+    getRememberedSession((session: { user_id: number } | null) => {
+      setInitialUserId(session?.user_id ?? null);
+      setIsReady(true);
+    });
   }, []);
+
+  if (!isReady) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4CAF50" />
+      </View>
+    );
+  }
 
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="Login">
+      <Stack.Navigator initialRouteName={initialUserId ? 'Home' : 'Login'}>
 
         {/* LOGIN */}
         <Stack.Screen 
@@ -49,6 +66,7 @@ export default function App() {
         <Stack.Screen 
           name="Home" 
           component={DashboardScreen} 
+          initialParams={initialUserId ? { userId: initialUserId } : undefined}
           options={{ title: 'Dashboard' }}
         />
         <Stack.Screen 
@@ -104,3 +122,11 @@ export default function App() {
     </NavigationContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});

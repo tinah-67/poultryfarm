@@ -133,6 +133,13 @@ export const initDB = () => {
       );
     `, [], () => console.log("Sales table created"), (_, err) => console.log("Sales table error", err));
 
+    tx.executeSql(`
+      CREATE TABLE IF NOT EXISTS app_session (
+        session_id INTEGER PRIMARY KEY CHECK (session_id = 1),
+        user_id INTEGER
+      );
+    `, [], () => console.log("App session table created"), (_, err) => console.log("App session table error", err));
+
   });
 };
 
@@ -284,6 +291,30 @@ export const createFarm = (user_id, farm_name, location, callback) => {
   );
 };
 
+export const farmExistsForUser = (userId, farmName, location, callback) => {
+  const normalizedFarmName = farmName.trim().toLowerCase();
+  const normalizedLocation = location.trim().toLowerCase();
+
+  db.transaction(tx => {
+    tx.executeSql(
+      `SELECT farm_id FROM farms
+       WHERE user_id = ?
+       AND LOWER(TRIM(farm_name)) = ?
+       AND LOWER(TRIM(location)) = ?
+       LIMIT 1`,
+      [userId, normalizedFarmName, normalizedLocation],
+      (_, result) => {
+        callback(result.rows.length > 0);
+      },
+      (_, error) => {
+        console.log("Error checking duplicate farm", error);
+        callback(false);
+        return false;
+      }
+    );
+  });
+};
+
 // GET FARMS
 export const getFarms = (userId, callback) => {
   const normalizedUserId = userId != null ? Number(userId) : null;
@@ -374,6 +405,61 @@ export const getBatchesByFarmId = (farm_id, callback) => {
       },
       (_, error) => {
         console.log("Error fetching batches", error);
+      }
+    );
+  });
+};
+
+export const saveRememberedSession = (userId, callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `INSERT OR REPLACE INTO app_session (session_id, user_id) VALUES (1, ?)`,
+      [userId],
+      () => {
+        console.log("Remembered session saved");
+        callback && callback();
+      },
+      (_, error) => {
+        console.log("Error saving remembered session", error);
+        return false;
+      }
+    );
+  });
+};
+
+export const clearRememberedSession = (callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `DELETE FROM app_session WHERE session_id = 1`,
+      [],
+      () => {
+        console.log("Remembered session cleared");
+        callback && callback();
+      },
+      (_, error) => {
+        console.log("Error clearing remembered session", error);
+        return false;
+      }
+    );
+  });
+};
+
+export const getRememberedSession = (callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `SELECT user_id FROM app_session WHERE session_id = 1`,
+      [],
+      (_, result) => {
+        if (result.rows.length > 0) {
+          callback(result.rows.item(0));
+        } else {
+          callback(null);
+        }
+      },
+      (_, error) => {
+        console.log("Error fetching remembered session", error);
+        callback(null);
+        return false;
       }
     );
   });

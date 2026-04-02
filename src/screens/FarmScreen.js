@@ -1,52 +1,87 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet } from 'react-native';
-import { createFarm, getUserById } from '../database/db';
+import React, { useMemo, useState } from 'react';
+import { Text, TextInput, Button, StyleSheet, Alert, ScrollView, RefreshControl } from 'react-native';
+import { createFarm, farmExistsForUser, getUserById } from '../database/db';
 
 export default function FarmScreen({ navigation, route }) {
-  // `userId` may come as `userId` or `user_Id` depending on navigation source
   const userId = route?.params?.userId ?? route?.params?.user_Id;
 
-  console.log("FarmScreen userId:", userId);
+  console.log('FarmScreen userId:', userId);
 
   const [farmName, setFarmName] = useState('');
   const [location, setLocation] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const trimmedFarmName = farmName.trim();
+  const trimmedLocation = location.trim();
+  const isFormValid = useMemo(
+    () => Boolean(trimmedFarmName && trimmedLocation),
+    [trimmedFarmName, trimmedLocation]
+  );
 
   const handleAddFarm = () => {
+    if (isSaving) {
+      return;
+    }
+
     if (!userId) {
-      alert("User not found: " + userId);
+      Alert.alert('Error', 'User not found');
       return;
     }
 
-    if (!farmName || !location) {
-      alert("Enter all fields");
+    if (!isFormValid) {
+      Alert.alert('Error', 'Enter all fields');
       return;
     }
 
-    getUserById(userId, (user) => {
+    getUserById(userId, user => {
       if (!user) {
-        alert("User not found in DB: " + userId);
+        Alert.alert('Error', 'User not found in database');
         return;
       }
 
       if (user.role !== 'owner') {
-        alert('Only owner users can add farms');
+        Alert.alert('Error', 'Only owner users can add farms');
         return;
       }
 
-      createFarm(userId, farmName, location, () => {
-        alert("Farm added successfully");
+      farmExistsForUser(userId, trimmedFarmName, trimmedLocation, exists => {
+        if (exists) {
+          Alert.alert('Duplicate farm', 'This farm has already been registered for this owner.');
+          return;
+        }
 
-        setFarmName('');
-        setLocation('');
+        setIsSaving(true);
 
-        // 👇 PASS userId AGAIN WHEN NAVIGATING
-        navigation.navigate('ViewFarms', { userId });
+        createFarm(userId, trimmedFarmName, trimmedLocation, () => {
+          setIsSaving(false);
+          Alert.alert('Success', 'Farm added successfully');
+
+          setFarmName('');
+          setLocation('');
+
+          navigation.navigate('ViewFarms', { userId });
+        });
       });
     });
   };
 
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setFarmName('');
+    setLocation('');
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 600);
+  };
+
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+    >
       <Text style={styles.title}>Add Farm</Text>
 
       <TextInput
@@ -65,18 +100,23 @@ export default function FarmScreen({ navigation, route }) {
         style={styles.input}
       />
 
-      <Button title="Save Farm" onPress={handleAddFarm} />
+      <Button
+        title={isSaving ? 'Saving...' : 'Save Farm'}
+        onPress={handleAddFarm}
+        disabled={!isFormValid || isSaving}
+      />
 
       <Button
         title="View Farms"
         onPress={() => navigation.navigate('ViewFarms', { userId })}
       />
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20 },
+  screen: { flex: 1 },
+  container: { flexGrow: 1, padding: 20 },
   title: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
   input: {
     borderWidth: 1,

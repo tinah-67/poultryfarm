@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, Button, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, Button, StyleSheet, TouchableOpacity, Alert, ScrollView, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { getBatches, deleteBatch } from '../database/db';
 import DataTable from '../components/DataTable';
@@ -9,6 +9,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
     const farmName = route?.params?.farmName;
 
     const [batches, setBatches] = useState([]);
+    const [refreshing, setRefreshing] = useState(false);
 
     const columns = [
         { key: 'batch_id', title: 'Batch ID', width: 100 },
@@ -18,24 +19,22 @@ export default function ViewBatchesScreen({ navigation, route }) {
         { key: 'actions', title: 'Actions', width: 220 },
     ];
 
-    const loadBatches = () => {
-        if (!farmId) return;
+    const loadBatches = useCallback((done) => {
+        if (!farmId) {
+            done && done();
+            return;
+        }
 
         getBatches(farmId, (data) => {
-        setBatches(data);
+            setBatches(data);
+            done && done();
         });
-    };
+    }, [farmId]);
 
     useFocusEffect(
         useCallback(() => {
-            if (!farmId) {
-                return;
-            }
-
-            getBatches(farmId, (data) => {
-                setBatches(data);
-            });
-        }, [farmId])
+            loadBatches();
+        }, [loadBatches])
     );
 
     const handleDelete = (batchId) => {
@@ -56,8 +55,17 @@ export default function ViewBatchesScreen({ navigation, route }) {
         );
     };
 
+    const handleRefresh = () => {
+        setRefreshing(true);
+        loadBatches(() => setRefreshing(false));
+    };
+
     return (
-        <View style={styles.container}>
+        <ScrollView
+            style={styles.container}
+            contentContainerStyle={styles.contentContainer}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        >
         <Text style={styles.title}>Batches</Text>
         {farmName ? <Text style={styles.subtitle}>Farm: {farmName}</Text> : null}
         <Text style={styles.helperText}>This table keeps the main batch details visible in one place.</Text>
@@ -119,12 +127,13 @@ export default function ViewBatchesScreen({ navigation, route }) {
             }}
         />
         </View>
-        </View>
+        </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: '#f1f5f9' },
+    container: { flex: 1, backgroundColor: '#f1f5f9' },
+    contentContainer: { padding: 20 },
     title: { fontSize: 20, marginBottom: 10, color: '#0f172a', fontWeight: '700' },
     subtitle: { marginBottom: 6, color: '#475569' },
     helperText: { marginBottom: 12, color: '#64748b' },

@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Button, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Button, TextInput, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { getFarms, deleteFarm, updateFarm } from '../database/db';
 import { Alert } from 'react-native';
@@ -11,27 +11,24 @@ export default function ViewFarmsScreen({ navigation, route }) {
     const [editingFarm, setEditingFarm] = useState(null);
     const [newName, setNewName] = useState('');
     const [newLocation, setNewLocation] = useState('');
+    const [refreshing, setRefreshing] = useState(false);
 
-    const loadFarms = () => {
+    const loadFarms = useCallback((done) => {
         if (!userId) {
+            done && done();
             return;
         }
 
         getFarms(userId, (data) => {
             setFarms(data);
+            done && done();
         });
-    };
+    }, [userId]);
 
 useFocusEffect(
     useCallback(() => {
-        if (!userId) {
-            return;
-        }
-
-        getFarms(userId, (data) => {
-            setFarms(data);
-        });
-    }, [userId])
+        loadFarms();
+    }, [loadFarms])
 );
 
 const handleDelete = (id) => {
@@ -64,6 +61,11 @@ const saveEdit = () => {
     loadFarms();
 };
 
+const handleRefresh = () => {
+    setRefreshing(true);
+    loadFarms(() => setRefreshing(false));
+};
+
 const columns = [
     { key: 'farm_name', title: 'Farm Name', width: 160 },
     { key: 'location', title: 'Location', width: 170 },
@@ -72,7 +74,11 @@ const columns = [
 ];
 
 return (
-    <View style={styles.container}>
+    <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+    >
         <Button
         title="Add New Farm"
         onPress={() => navigation.navigate('Farm', userId ? { userId } : { user_Id: route?.params?.user_Id })}
@@ -166,12 +172,13 @@ return (
             return null;
         }}
     />
-    </View>
+    </ScrollView>
 );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: '#f1f5f9' },
+    container: { flex: 1, backgroundColor: '#f1f5f9' },
+    contentContainer: { padding: 20 },
     title: { fontSize: 20, fontWeight: 'bold', marginVertical: 10, color: '#0f172a' },
     helperText: {
         color: '#475569',
