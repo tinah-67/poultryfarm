@@ -1,8 +1,9 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { addVaccinationRecord, getVaccinationRecordsByBatchId, deleteVaccinationRecord } from '../database/db';
+import { addVaccinationRecord, getVaccinationRecordsByBatchId, deleteVaccinationRecord, getUserById } from '../database/db';
 import DataTable from '../components/DataTable';
+import ScreenBackground from '../components/ScreenBackground';
 
 let DateTimePicker = null;
 try {
@@ -13,12 +14,14 @@ try {
 
 export default function VaccinationScreen({ route }) {
   const batchId = route?.params?.batchId;
+  const userId = route?.params?.userId;
   const [vaccineName, setVaccineName] = useState('');
   const [vaccinationDate, setVaccinationDate] = useState('');
   const [nextDueDate, setNextDueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [records, setRecords] = useState([]);
   const [pickerField, setPickerField] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
 
   const loadRecords = useCallback(() => {
     if (!batchId) {
@@ -30,9 +33,19 @@ export default function VaccinationScreen({ route }) {
 
   useFocusEffect(
     useCallback(() => {
+      if (userId) {
+        getUserById(userId, user => {
+          setCurrentUser(user);
+        });
+      } else {
+        setCurrentUser(null);
+      }
+
       loadRecords();
-    }, [loadRecords])
+    }, [loadRecords, userId])
   );
+
+  const canRecordVaccination = currentUser?.role === 'worker';
 
   const formatToday = () => {
     const today = new Date();
@@ -85,6 +98,11 @@ export default function VaccinationScreen({ route }) {
   };
 
   const handleAdd = () => {
+    if (!canRecordVaccination) {
+      Alert.alert('Access denied', 'Only worker users can record vaccinations.');
+      return;
+    }
+
     if (!batchId) {
       Alert.alert('Error', 'Batch not found');
       return;
@@ -112,6 +130,11 @@ export default function VaccinationScreen({ route }) {
   };
 
   const handleDelete = (vaccinationId) => {
+    if (!canRecordVaccination) {
+      Alert.alert('Access denied', 'Only worker users can delete vaccination records.');
+      return;
+    }
+
     Alert.alert(
       'Confirm Delete',
       'Are you sure you want to delete this vaccination record?',
@@ -138,8 +161,13 @@ export default function VaccinationScreen({ route }) {
   ];
 
   return (
-    <View style={styles.container}>
+    <ScreenBackground contentContainerStyle={styles.container}>
       <Text style={styles.title}>Vaccination Records</Text>
+      <Text style={styles.helperText}>
+        {canRecordVaccination
+          ? 'Workers can add and remove vaccination records for this batch.'
+          : 'You can view vaccination records here. Only workers can record or delete them.'}
+      </Text>
       <TextInput
         placeholder="Vaccine Name"
         placeholderTextColor="#666"
@@ -188,7 +216,7 @@ export default function VaccinationScreen({ route }) {
         onChangeText={setNotes}
         style={styles.input}
       />
-      <Button title="Add Vaccination Record" onPress={handleAdd} />
+      <Button title="Add Vaccination Record" onPress={handleAdd} disabled={!canRecordVaccination} />
 
       <View style={styles.tableWrapper}>
         <DataTable
@@ -215,9 +243,13 @@ export default function VaccinationScreen({ route }) {
 
             if (column.key === 'actions') {
               return (
-                <TouchableOpacity style={styles.dangerAction} onPress={() => handleDelete(item.vaccination_id)}>
-                  <Text style={styles.dangerActionText}>Delete</Text>
-                </TouchableOpacity>
+                canRecordVaccination ? (
+                  <TouchableOpacity style={styles.dangerAction} onPress={() => handleDelete(item.vaccination_id)}>
+                    <Text style={styles.dangerActionText}>Delete</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={styles.viewOnlyText}>View only</Text>
+                )
               );
             }
 
@@ -225,14 +257,15 @@ export default function VaccinationScreen({ route }) {
           }}
         />
       </View>
-    </View>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#f1f5f9' },
-  title: { fontSize: 20, marginBottom: 10, color: '#0f172a', fontWeight: '700' },
-  input: { borderWidth: 1, padding: 10, marginBottom: 10, borderRadius: 5, backgroundColor: '#fff', borderColor: '#cbd5e1' },
+  container: { flex: 1, padding: 20 },
+  title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
+  helperText: { color: '#e2e8f0', marginBottom: 10 },
+  input: { borderWidth: 1, padding: 10, marginBottom: 10, borderRadius: 5, backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: '#cbd5e1' },
   dateContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   dateInput: { flex: 1, marginBottom: 0 },
   dateField: { justifyContent: 'center' },
@@ -244,4 +277,5 @@ const styles = StyleSheet.create({
   cellText: { color: '#334155' },
   dangerAction: { backgroundColor: '#fee2e2', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, alignSelf: 'flex-start' },
   dangerActionText: { color: '#b91c1c', fontWeight: '600' },
+  viewOnlyText: { color: '#64748b', fontStyle: 'italic' },
 });

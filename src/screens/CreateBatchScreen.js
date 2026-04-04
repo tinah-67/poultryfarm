@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Button, Alert, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { createBatch } from '../database/db';
+import { createBatch, getUserById } from '../database/db';
+import ScreenBackground from '../components/ScreenBackground';
 
 let DateTimePicker = null;
 try {
@@ -11,12 +12,27 @@ try {
 
 export default function CreateBatchScreen({ navigation, route }) {
     const farmId = route?.params?.farmId;
+    const userId = route?.params?.userId;
 
     const [startDate, setStartDate] = useState('');
     const [breed, setBreed] = useState('');
     const [initialChicks, setInitialChicks] = useState('');
     const [chicksError, setChicksError] = useState('');
     const [showDatePicker, setShowDatePicker] = useState(false);
+    const [currentUser, setCurrentUser] = useState(null);
+
+    useEffect(() => {
+        if (!userId) {
+            setCurrentUser(null);
+            return;
+        }
+
+        getUserById(userId, user => {
+            setCurrentUser(user);
+        });
+    }, [userId]);
+
+    const canManageBatches = currentUser?.role === 'manager';
     const isFormValid = useMemo(() => {
         const isDateValid = startDate.trim() !== '';
         const isBreedValid = breed.trim() !== '';
@@ -36,6 +52,16 @@ export default function CreateBatchScreen({ navigation, route }) {
 
     const formatDate = (date) => {
         return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    };
+
+    const parseLocalDate = (dateString) => {
+        const [year, month, day] = dateString.split('-').map(Number);
+
+        if (!year || !month || !day) {
+            return new Date();
+        }
+
+        return new Date(year, month - 1, day);
     };
 
     const handlePickerChange = (_, selectedDate) => {
@@ -58,10 +84,16 @@ export default function CreateBatchScreen({ navigation, route }) {
     };
 
     const setToday = () => {
+        setShowDatePicker(false);
         setStartDate(formatDate(new Date()));
     };
 
     const handleCreate = () => {
+        if (!canManageBatches) {
+            Alert.alert('Access denied', 'Only manager users can create batches.');
+            return;
+        }
+
         if (!isFormValid) {
             Alert.alert("Error", "Please fill all fields correctly");
             return;
@@ -80,8 +112,13 @@ export default function CreateBatchScreen({ navigation, route }) {
     };
 
     return (
-        <View style={styles.container}>
+        <ScreenBackground contentContainerStyle={styles.container}>
         <Text style={styles.title}>Create Batch</Text>
+        <Text style={styles.helperText}>
+            {canManageBatches
+                ? 'Managers are responsible for creating new batches.'
+                : 'You can view batches, but only managers can create them.'}
+        </Text>
 
         <View style={styles.dateContainer}>
             <TouchableOpacity onPress={openDatePicker} style={[styles.input, styles.dateInput, styles.dateField]}>
@@ -95,7 +132,7 @@ export default function CreateBatchScreen({ navigation, route }) {
         </View>
         {showDatePicker && DateTimePicker ? (
             <DateTimePicker
-                value={startDate ? new Date(startDate) : new Date()}
+                value={startDate ? parseLocalDate(startDate) : new Date()}
                 mode="date"
                 display="default"
                 onChange={handlePickerChange}
@@ -120,36 +157,42 @@ export default function CreateBatchScreen({ navigation, route }) {
         />
         {chicksError ? <Text style={styles.errorText}>{chicksError}</Text> : null}
 
-        <Button title="Create Batch" onPress={handleCreate} disabled={!isFormValid} />
-        </View>
+        <Button title="Create Batch" onPress={handleCreate} disabled={!isFormValid || !canManageBatches} />
+        </ScreenBackground>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1, padding: 20 },
-    title: { fontSize: 20, marginBottom: 20 },
+    title: { fontSize: 20, marginBottom: 20, color: '#fff', fontWeight: '700' },
+    helperText: { color: '#e2e8f0', marginBottom: 12 },
     input: {
         borderWidth: 1,
         padding: 10,
         marginBottom: 15,
-        borderRadius: 5
+        borderRadius: 5,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
     },
     dateInput: {
-        flex: 1
+        flex: 1,
+        marginBottom: 0,
     },
     dateField: {
         justifyContent: 'center'
     },
     dateContainer: {
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'stretch',
         marginBottom: 15
     },
     dateButton: {
         marginLeft: 10,
-        padding: 10,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
         backgroundColor: '#007BFF',
-        borderRadius: 5
+        borderRadius: 5,
+        justifyContent: 'center',
+        alignSelf: 'center',
     },
     dateButtonText: {
         color: '#fff'
@@ -161,7 +204,7 @@ const styles = StyleSheet.create({
         color: '#666'
     },
     errorText: {
-        color: 'red',
+        color: '#fecaca',
         marginBottom: 10
     }
 });

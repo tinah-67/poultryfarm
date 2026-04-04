@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, Alert, TouchableOpacity, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, TextInput, Button, Alert, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { clearRememberedSession, loginUser, saveRememberedSession } from '../database/db';
+import ScreenBackground from '../components/ScreenBackground';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -15,20 +16,26 @@ export default function LoginScreen({ navigation }) {
       return;
     }
 
-    loginUser(email, password, (user) => {
-      if (user) {
-        const finishLogin = () => {
-          Alert.alert('Success', 'Login successful');
-          navigation.replace('Home', { userId: user.user_id });
-        };
-
-        if (rememberMe) {
-          saveRememberedSession(user.user_id, finishLogin);
-        } else {
-          clearRememberedSession(finishLogin);
-        }
-      } else {
+    loginUser(email.trim().toLowerCase(), password, user => {
+      if (!user) {
         Alert.alert('Error', 'User not found');
+        return;
+      }
+
+      if (user.role !== 'owner' && !user.owner_user_id) {
+        Alert.alert('Access denied', 'This staff account is not linked to an owner yet.');
+        return;
+      }
+
+      const finishLogin = () => {
+        Alert.alert('Success', 'Login successful');
+        navigation.replace('Home', { userId: user.user_id });
+      };
+
+      if (rememberMe) {
+        saveRememberedSession(user.user_id, finishLogin);
+      } else {
+        clearRememberedSession(finishLogin);
       }
     });
   };
@@ -41,13 +48,13 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <ScrollView
-      style={styles.screen}
+    <ScreenBackground
+      scroll
       contentContainerStyle={styles.container}
       keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
     >
-      <Text>Login</Text>
+      <Text style={styles.title}>Login</Text>
 
       <TextInput
         placeholder="Email"
@@ -88,20 +95,25 @@ export default function LoginScreen({ navigation }) {
 
       <TouchableOpacity onPress={() => navigation.navigate('Register')}>
         <Text style={styles.registerLink}>
-          Don't have an account? Register
+          Need an owner account? Register
         </Text>
       </TouchableOpacity>
-    </ScrollView>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
   container: {
     flexGrow: 1,
     padding: 20,
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 20,
   },
   input: {
     borderWidth: 1,
@@ -109,6 +121,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
     borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
   passwordField: {
     position: 'relative',
@@ -120,6 +133,7 @@ const styles = StyleSheet.create({
     padding: 12,
     paddingRight: 56,
     borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
   passwordToggle: {
     position: 'absolute',
@@ -159,10 +173,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   rememberText: {
-    color: '#222',
+    color: '#fff',
   },
   registerLink: {
     marginTop: 10,
-    color: 'blue',
+    color: '#bfdbfe',
+    textAlign: 'center',
   },
 });

@@ -1,8 +1,58 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, Button, Alert, TouchableOpacity } from 'react-native';
-import { createUser, markUserAsSynced } from '../database/db';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TextInput, Button, Alert, TouchableOpacity, StyleSheet } from 'react-native';
+import { createUser, getUserByEmail, markUserAsSynced } from '../database/db';
+import ScreenBackground from '../components/ScreenBackground';
 
-export default function RegisterScreen({ navigation }) {
+const getValidationMessage = ({
+  firstName,
+  lastName,
+  email,
+  password,
+  confirmPassword,
+}, forSubmit = false) => {
+  const nameRegex = /^[A-Za-z]+$/;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (forSubmit && (!firstName || !lastName || !normalizedEmail || !password || !confirmPassword)) {
+    return 'Please fill all required fields';
+  }
+
+  if (firstName && !nameRegex.test(firstName)) {
+    return 'First name can only contain letters';
+  }
+
+  if (lastName && !nameRegex.test(lastName)) {
+    return 'Last name can only contain letters';
+  }
+
+  if (normalizedEmail && !emailRegex.test(normalizedEmail)) {
+    return 'Please enter a valid email address';
+  }
+
+  if (password && password.length < 8) {
+    return 'Password must be at least 8 characters';
+  }
+
+  if (password && !/[A-Za-z]/.test(password)) {
+    return 'Password must contain at least one letter';
+  }
+
+  if (password && !/\d/.test(password)) {
+    return 'Password must contain at least one number';
+  }
+
+  if (confirmPassword && password !== confirmPassword) {
+    return 'Passwords do not match';
+  }
+
+  return '';
+};
+
+export default function RegisterScreen({ navigation, route }) {
+  const ownerUserId = route?.params?.ownerUserId ?? null;
+  const isOwnerCreatingStaff = ownerUserId != null;
+
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -10,90 +60,51 @@ export default function RegisterScreen({ navigation }) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [role, setRole] = useState('owner');
+  const [role, setRole] = useState(isOwnerCreatingStaff ? 'manager' : 'owner');
   const [errorMessage, setErrorMessage] = useState('');
+  const hasStartedTyping = Boolean(firstName || lastName || email || password || confirmPassword);
 
-  const isFormValid = useMemo(() => {
-    const nameRegex = /^[A-Za-z]+$/;
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (!firstName || !lastName || !email || !password || !confirmPassword) {
-      return false;
-    }
-
-    if (!nameRegex.test(firstName) || !nameRegex.test(lastName)) {
-      return false;
-    }
-
-    if (!emailRegex.test(email)) {
-      return false;
-    }
-
-    if (password.length < 8) {
-      return false;
-    }
-
-    if (!/[A-Za-z]/.test(password)) {
-      return false;
-    }
-
-    if (!/\d/.test(password)) {
-      return false;
-    }
-
-    return password === confirmPassword;
-  }, [firstName, lastName, email, password, confirmPassword]);
-
-  const handleRegister = async () => {
-    console.log('handleRegister pressed', { firstName, lastName, email, password, confirmPassword, role });
-
-    const nameRegex = /^[A-Za-z]+$/;
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (!firstName || !lastName || !email || !password || !confirmPassword) {
-      const msg = 'Please fill all required fields';
-      setErrorMessage(msg);
-      Alert.alert('Error', msg);
+  useEffect(() => {
+    if (!hasStartedTyping) {
+      setErrorMessage('');
       return;
     }
 
-    if (!nameRegex.test(firstName) || !nameRegex.test(lastName)) {
-      const msg = 'First name and last name can only contain letters';
-      setErrorMessage(msg);
-      Alert.alert('Error', msg);
+    setErrorMessage(
+      getValidationMessage({
+        firstName,
+        lastName,
+        email,
+        password,
+        confirmPassword,
+      })
+    );
+  }, [confirmPassword, email, firstName, hasStartedTyping, lastName, password]);
+
+  const handleRegister = () => {
+    console.log('handleRegister pressed', { firstName, lastName, email, role, ownerUserId });
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const targetRole = isOwnerCreatingStaff ? role : 'owner';
+    const validationMessage = getValidationMessage(
+      {
+        firstName,
+        lastName,
+        email,
+        password,
+        confirmPassword,
+      },
+      true
+    );
+
+    if (validationMessage) {
+      setErrorMessage(validationMessage);
+      Alert.alert('Error', validationMessage);
       return;
     }
 
-    if (!emailRegex.test(email)) {
-      const msg = 'Please enter a valid email address';
-      setErrorMessage(msg);
-      Alert.alert('Error', msg);
-      return;
-    }
-
-    if (password.length < 8) {
-      const msg = 'Password must be at least 8 characters';
-      setErrorMessage(msg);
-      Alert.alert('Error', msg);
-      return;
-    }
-
-    if (!/[A-Za-z]/.test(password)) {
-      const msg = 'Password must contain at least one letter';
-      setErrorMessage(msg);
-      Alert.alert('Error', msg);
-      return;
-    }
-
-    if (!/\d/.test(password)) {
-      const msg = 'Password must contain at least one number';
-      setErrorMessage(msg);
-      Alert.alert('Error', msg);
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      const msg = 'Passwords do not match';
+    if (isOwnerCreatingStaff && !['manager', 'worker'].includes(targetRole)) {
+      const msg = 'Staff accounts can only be manager or worker';
       setErrorMessage(msg);
       Alert.alert('Error', msg);
       return;
@@ -101,58 +112,108 @@ export default function RegisterScreen({ navigation }) {
 
     setErrorMessage('');
 
-    try {
-      const result = await createUser(firstName, lastName, email, password, role);
-      const response = await fetch('http://192.168.100.26:3000/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          first_name: firstName,
-          last_name: lastName,
-          email,
-          password,
-          role,
-        }),
-      });
-
-      if (response.ok && result?.insertId) {
-        markUserAsSynced(result.insertId);
+    getUserByEmail(normalizedEmail, async existingUser => {
+      if (existingUser) {
+        const msg = 'An account with that email already exists';
+        setErrorMessage(msg);
+        Alert.alert('Error', msg);
+        return;
       }
 
-      Alert.alert('Success', response.ok ? 'Saved locally and backed up to cloud' : 'Saved locally (backup pending)');
-    } catch (error) {
-      console.log(error);
-      Alert.alert('Saved locally (offline mode)');
-    }
+      try {
+        const result = await createUser(
+          firstName.trim(),
+          lastName.trim(),
+          normalizedEmail,
+          password,
+          targetRole,
+          isOwnerCreatingStaff ? ownerUserId : null
+        );
 
-    navigation.navigate('Login');
+        try {
+          const response = await fetch('http://192.168.100.26:3000/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              first_name: firstName.trim(),
+              last_name: lastName.trim(),
+              email: normalizedEmail,
+              password,
+              role: targetRole,
+              owner_user_id: isOwnerCreatingStaff ? ownerUserId : null,
+            }),
+          });
+
+          if (response.ok && result?.insertId) {
+            markUserAsSynced(result.insertId);
+          }
+
+          Alert.alert(
+            'Success',
+            response.ok
+              ? isOwnerCreatingStaff
+                ? 'Staff account created and backed up to cloud'
+                : 'Owner account created and backed up to cloud'
+              : isOwnerCreatingStaff
+                ? 'Staff account created locally (backup pending)'
+                : 'Owner account created locally (backup pending)'
+          );
+        } catch (error) {
+          console.log(error);
+          Alert.alert(
+            'Success',
+            isOwnerCreatingStaff
+              ? 'Staff account created locally (offline mode)'
+              : 'Owner account created locally (offline mode)'
+          );
+        }
+
+        if (isOwnerCreatingStaff) {
+          navigation.goBack();
+        } else {
+          navigation.navigate('Login');
+        }
+      } catch (error) {
+        console.log(error);
+        Alert.alert('Error', 'Failed to create account locally');
+      }
+    });
   };
 
   return (
-    <View style={{ padding: 20 }}>
-      <Text>Create Account</Text>
+    <ScreenBackground scroll contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <Text style={styles.title}>{isOwnerCreatingStaff ? 'Create Staff Account' : 'Create Owner Account'}</Text>
 
-      {errorMessage ? <Text style={{ color: 'red', marginBottom: 12 }}>{errorMessage}</Text> : null}
+      {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
 
-      <Text>Select Role: {role}</Text>
+      <Text style={styles.roleLabel}>
+        {isOwnerCreatingStaff ? `Staff Role: ${role}` : 'Public sign-up creates owner accounts only'}
+      </Text>
 
-      <Button title="Owner" onPress={() => setRole('owner')} />
-      <Button title="Manager" onPress={() => setRole('manager')} />
-      <Button title="Worker" onPress={() => setRole('worker')} />
+      {isOwnerCreatingStaff ? (
+        <View style={styles.roleButtons}>
+          <View style={styles.roleButton}>
+            <Button title="Manager" onPress={() => setRole('manager')} />
+          </View>
+          <View style={styles.roleButton}>
+            <Button title="Worker" onPress={() => setRole('worker')} />
+          </View>
+        </View>
+      ) : null}
 
       <TextInput
         placeholder="First Name"
         placeholderTextColor="#999"
         value={firstName}
         onChangeText={setFirstName}
-        style={{ borderWidth: 1, borderColor: '#ccc', padding: 12, marginBottom: 12, borderRadius: 6 }}
+        style={styles.input}
       />
       <TextInput
         placeholder="Last Name"
         placeholderTextColor="#999"
         value={lastName}
         onChangeText={setLastName}
-        style={{ borderWidth: 1, borderColor: '#ccc', padding: 12, marginBottom: 12, borderRadius: 6 }}
+        style={styles.input}
       />
       <TextInput
         placeholder="Email"
@@ -160,49 +221,115 @@ export default function RegisterScreen({ navigation }) {
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
-        style={{ borderWidth: 1, borderColor: '#ccc', padding: 12, marginBottom: 12, borderRadius: 6 }}
+        style={styles.input}
       />
-      <View style={{ position: 'relative', marginBottom: 12 }}>
+
+      <View style={styles.passwordField}>
         <TextInput
           placeholder="Password"
           placeholderTextColor="#999"
           secureTextEntry={!showPassword}
           value={password}
           onChangeText={setPassword}
-          style={{ borderWidth: 1, borderColor: '#ccc', padding: 12, paddingRight: 56, borderRadius: 6 }}
+          style={styles.passwordInput}
         />
-        <TouchableOpacity
-          onPress={() => setShowPassword(!showPassword)}
-          style={{ position: 'absolute', right: 10, top: '50%', transform: [{ translateY: -12 }], width: 40, height: 28, justifyContent: 'center', alignItems: 'center' }}
-        >
-          <Text style={{ fontSize: 18 }}>{showPassword ? '\u{1F648}' : '\u{1F441}'}</Text>
+        <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.passwordToggle}>
+          <Text style={styles.passwordToggleText}>{showPassword ? '\u{1F648}' : '\u{1F441}'}</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={{ position: 'relative', marginBottom: 12 }}>
+      <View style={styles.passwordField}>
         <TextInput
           placeholder="Confirm Password"
           placeholderTextColor="#999"
           secureTextEntry={!showConfirmPassword}
           value={confirmPassword}
           onChangeText={setConfirmPassword}
-          style={{ borderWidth: 1, borderColor: '#ccc', padding: 12, paddingRight: 56, borderRadius: 6 }}
+          style={styles.passwordInput}
         />
-        <TouchableOpacity
-          onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-          style={{ position: 'absolute', right: 10, top: '50%', transform: [{ translateY: -12 }], width: 40, height: 28, justifyContent: 'center', alignItems: 'center' }}
-        >
-          <Text style={{ fontSize: 18 }}>{showConfirmPassword ? '\u{1F648}' : '\u{1F441}'}</Text>
+        <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.passwordToggle}>
+          <Text style={styles.passwordToggleText}>{showConfirmPassword ? '\u{1F648}' : '\u{1F441}'}</Text>
         </TouchableOpacity>
       </View>
 
-      <Button title="Create Account" onPress={handleRegister} disabled={!isFormValid} />
+      <Button
+        title={isOwnerCreatingStaff ? 'Create Staff Account' : 'Create Owner Account'}
+        onPress={handleRegister}
+      />
 
-      <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-        <Text style={{ marginTop: 10, color: 'blue', textAlign: 'center' }}>
-          Already have an account? Login
-        </Text>
-      </TouchableOpacity>
-    </View>
+      {!isOwnerCreatingStaff ? (
+        <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+          <Text style={styles.loginLink}>Already have an account? Login</Text>
+        </TouchableOpacity>
+      ) : null}
+    </ScreenBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flexGrow: 1,
+    padding: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  error: {
+    color: '#fde68a',
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 14,
+  },
+  roleLabel: {
+    color: '#fff',
+    marginBottom: 12,
+  },
+  roleButtons: {
+    marginBottom: 12,
+  },
+  roleButton: {
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    padding: 12,
+    marginBottom: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+  },
+  passwordField: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  passwordInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    padding: 12,
+    paddingRight: 56,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+  },
+  passwordToggle: {
+    position: 'absolute',
+    right: 10,
+    top: 0,
+    bottom: 0,
+    width: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  passwordToggleText: {
+    fontSize: 18,
+  },
+  loginLink: {
+    marginTop: 10,
+    color: '#bfdbfe',
+    textAlign: 'center',
+  },
+});

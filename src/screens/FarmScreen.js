@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Text, TextInput, Button, StyleSheet, Alert, ScrollView, RefreshControl } from 'react-native';
+import { Text, TextInput, Button, StyleSheet, Alert, RefreshControl } from 'react-native';
 import { createFarm, farmExistsForUser, getUserById } from '../database/db';
+import ScreenBackground from '../components/ScreenBackground';
 
 export default function FarmScreen({ navigation, route }) {
   const userId = route?.params?.userId ?? route?.params?.user_Id;
@@ -76,8 +77,8 @@ export default function FarmScreen({ navigation, route }) {
   };
 
   return (
-    <ScrollView
-      style={styles.screen}
+    <ScreenBackground
+      scroll
       contentContainerStyle={styles.container}
       keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
@@ -110,18 +111,18 @@ export default function FarmScreen({ navigation, route }) {
         title="View Farms"
         onPress={() => navigation.navigate('ViewFarms', { userId })}
       />
-    </ScrollView>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1 },
   container: { flexGrow: 1, padding: 20 },
-  title: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
+  title: { fontSize: 20, fontWeight: 'bold', marginBottom: 10, color: '#fff' },
   input: {
     borderWidth: 1,
     marginBottom: 10,
     padding: 8,
     borderRadius: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
 });

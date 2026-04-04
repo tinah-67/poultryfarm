@@ -27,6 +27,35 @@ const rowsToArray = (rows) => {
   return items;
 };
 
+const ensureColumnExists = (tx, tableName, columnName, definition) => {
+  tx.executeSql(
+    `PRAGMA table_info(${tableName})`,
+    [],
+    (_, result) => {
+      const columns = rowsToArray(result.rows);
+      const exists = columns.some(column => column.name === columnName);
+
+      if (exists) {
+        return;
+      }
+
+      tx.executeSql(
+        `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`,
+        [],
+        () => console.log(`${columnName} column added to ${tableName}`),
+        (_transaction, error) => {
+          console.log(`Error adding ${columnName} column to ${tableName}`, error);
+          return false;
+        }
+      );
+    },
+    (_, error) => {
+      console.log(`Error reading schema for ${tableName}`, error);
+      return false;
+    }
+  );
+};
+
 // ================= INIT DATABASE =================
 export const initDB = () => {
   console.log("initDB called");
@@ -41,10 +70,13 @@ export const initDB = () => {
         email TEXT,
         password TEXT,
         role TEXT,
+        owner_user_id INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         synced INTEGER DEFAULT 0
       );
     `, [], () => console.log("Users table created"), (_, err) => console.log("Users table error", err));
+
+    ensureColumnExists(tx, 'users', 'owner_user_id', 'INTEGER');
 
     // FARMS
     tx.executeSql(`
@@ -146,13 +178,13 @@ export const initDB = () => {
 // ================= USERS =================
 
 // CREATE USER
-export const createUser = (firstName, lastName, email, password, role, callback) => {
+export const createUser = (firstName, lastName, email, password, role, ownerUserId = null, callback) => {
   return new Promise((resolve, reject) => {
     db.transaction(tx => {
       tx.executeSql(
-        `INSERT INTO users (first_name, last_name, email, password, role, synced)
-      VALUES (?, ?, ?, ?, ?, 0)`,
-        [firstName, lastName, email, password, role],
+        `INSERT INTO users (first_name, last_name, email, password, role, owner_user_id, synced)
+      VALUES (?, ?, ?, ?, ?, ?, 0)`,
+        [firstName, lastName, email, password, role, ownerUserId],
         (_, result) => {
           console.log("User created");
           callback && callback();
@@ -238,7 +270,14 @@ export const syncUsers = async () => {
             await fetch('http://192.168.100.26:3000/users', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(user),
+              body: JSON.stringify({
+                first_name: user.first_name,
+                last_name: user.last_name,
+                email: user.email,
+                password: user.password,
+                role: user.role,
+                owner_user_id: user.owner_user_id,
+              }),
             });
 
             db.transaction(tx2 => {
@@ -297,11 +336,11 @@ export const farmExistsForUser = (userId, farmName, location, callback) => {
 
   db.transaction(tx => {
     tx.executeSql(
-      `SELECT farm_id FROM farms
-       WHERE user_id = ?
-       AND LOWER(TRIM(farm_name)) = ?
-       AND LOWER(TRIM(location)) = ?
-       LIMIT 1`,
+        `SELECT farm_id FROM farms
+        WHERE user_id = ?
+        AND LOWER(TRIM(farm_name)) = ?
+        AND LOWER(TRIM(location)) = ?
+        LIMIT 1`,
       [userId, normalizedFarmName, normalizedLocation],
       (_, result) => {
         callback(result.rows.length > 0);
@@ -309,6 +348,51 @@ export const farmExistsForUser = (userId, farmName, location, callback) => {
       (_, error) => {
         console.log("Error checking duplicate farm", error);
         callback(false);
+        return false;
+      }
+    );
+  });
+};
+
+export const getAccessibleOwnerId = (userId, callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `SELECT user_id, role, owner_user_id FROM users WHERE user_id = ?`,
+      [userId],
+      (_, result) => {
+        if (result.rows.length === 0) {
+          callback(null, null);
+          return;
+        }
+
+        const user = result.rows.item(0);
+        const ownerId = user.role === 'owner' ? user.user_id : user.owner_user_id;
+        callback(ownerId ?? null, user);
+      },
+      (_, error) => {
+        console.log("Error resolving accessible owner id", error);
+        callback(null, null);
+        return false;
+      }
+    );
+  });
+};
+
+export const getUserByEmail = (email, callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `SELECT * FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1`,
+      [email],
+      (_, result) => {
+        if (result.rows.length > 0) {
+          callback(result.rows.item(0));
+        } else {
+          callback(null);
+        }
+      },
+      (_, error) => {
+        console.log("Error fetching user by email", error);
+        callback(null);
         return false;
       }
     );
@@ -427,6 +511,37 @@ export const saveRememberedSession = (userId, callback) => {
   });
 };
 
+export const getAccessibleFarms = (userId, callback) => {
+  const normalizedUserId = userId != null ? Number(userId) : null;
+
+  if (normalizedUserId == null) {
+    callback([]);
+    return;
+  }
+
+  db.transaction(tx => {
+    tx.executeSql(
+      `SELECT farms.*
+       FROM farms
+       JOIN users ON users.user_id = ?
+       WHERE farms.user_id = CASE
+         WHEN users.role = 'owner' THEN users.user_id
+         ELSE users.owner_user_id
+       END
+       ORDER BY farms.created_at DESC, farms.farm_id DESC`,
+      [normalizedUserId],
+      (_, result) => {
+        callback(rowsToArray(result.rows));
+      },
+      (_, error) => {
+        console.log("Error fetching accessible farms", error);
+        callback([]);
+        return false;
+      }
+    );
+  });
+};
+
 export const clearRememberedSession = (callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -477,6 +592,25 @@ export const markUserAsSynced = (userId) => {
 };
 
 export const getBatches = getBatchesByFarmId;
+
+export const updateBatchDetails = (batch_id, start_date, breed, initial_chicks, status, callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `UPDATE batches
+       SET start_date = ?, breed = ?, initial_chicks = ?, status = ?, synced = 0
+       WHERE batch_id = ?`,
+      [start_date, breed, initial_chicks, status, batch_id],
+      () => {
+        console.log("Batch details updated");
+        callback && callback();
+      },
+      (_, error) => {
+        console.log("Batch detail update error", error);
+        return false;
+      }
+    );
+  });
+};
 
 //UPDATE BATCH STATUS
 export const updateBatchStatus = (batch_id, status) => {

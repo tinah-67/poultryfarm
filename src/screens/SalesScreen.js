@@ -1,14 +1,17 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { addSaleRecord, getSalesByBatchId, deleteSaleRecord } from '../database/db';
+import { addSaleRecord, getSalesByBatchId, deleteSaleRecord, getUserById } from '../database/db';
 import DataTable from '../components/DataTable';
+import ScreenBackground from '../components/ScreenBackground';
 
 export default function SalesScreen({ route }) {
   const batchId = route?.params?.batchId;
+  const userId = route?.params?.userId;
   const [birdsSold, setBirdsSold] = useState('');
   const [pricePerBird, setPricePerBird] = useState('');
   const [records, setRecords] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
 
   const loadRecords = useCallback(() => {
     if (!batchId) {
@@ -20,11 +23,26 @@ export default function SalesScreen({ route }) {
 
   useFocusEffect(
     useCallback(() => {
+      if (userId) {
+        getUserById(userId, user => {
+          setCurrentUser(user);
+        });
+      } else {
+        setCurrentUser(null);
+      }
+
       loadRecords();
-    }, [loadRecords])
+    }, [loadRecords, userId])
   );
 
+  const canRecordSales = currentUser?.role === 'manager';
+
   const handleAdd = () => {
+    if (!canRecordSales) {
+      Alert.alert('Access denied', 'Only manager users can record sales.');
+      return;
+    }
+
     if (!batchId) {
       Alert.alert('Error', 'Batch not found');
       return;
@@ -49,6 +67,11 @@ export default function SalesScreen({ route }) {
   };
 
   const handleDelete = (saleId) => {
+    if (!canRecordSales) {
+      Alert.alert('Access denied', 'Only manager users can delete sales records.');
+      return;
+    }
+
     Alert.alert(
       'Confirm Delete',
       'Are you sure you want to delete this sales record?',
@@ -76,8 +99,13 @@ export default function SalesScreen({ route }) {
   ];
 
   return (
-    <View style={styles.container}>
+    <ScreenBackground contentContainerStyle={styles.container}>
       <Text style={styles.title}>Sales Records</Text>
+      <Text style={styles.helperText}>
+        {canRecordSales
+          ? 'Managers can add and remove sales records for this batch.'
+          : 'You can view sales records here. Only managers can record or delete them.'}
+      </Text>
       <TextInput
         placeholder="Birds Sold"
         placeholderTextColor="#666"
@@ -94,7 +122,7 @@ export default function SalesScreen({ route }) {
         keyboardType="numeric"
         style={styles.input}
       />
-      <Button title="Add Sale" onPress={handleAdd} />
+      <Button title="Add Sale" onPress={handleAdd} disabled={!canRecordSales} />
       <Text style={styles.summary}>Total Revenue: {totalRevenue}</Text>
 
       <View style={styles.tableWrapper}>
@@ -122,9 +150,13 @@ export default function SalesScreen({ route }) {
 
             if (column.key === 'actions') {
               return (
-                <TouchableOpacity style={styles.dangerAction} onPress={() => handleDelete(item.sale_id)}>
-                  <Text style={styles.dangerActionText}>Delete</Text>
-                </TouchableOpacity>
+                canRecordSales ? (
+                  <TouchableOpacity style={styles.dangerAction} onPress={() => handleDelete(item.sale_id)}>
+                    <Text style={styles.dangerActionText}>Delete</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={styles.viewOnlyText}>View only</Text>
+                )
               );
             }
 
@@ -132,17 +164,19 @@ export default function SalesScreen({ route }) {
           }}
         />
       </View>
-    </View>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#f1f5f9' },
-  title: { fontSize: 20, marginBottom: 10, color: '#0f172a', fontWeight: '700' },
-  input: { borderWidth: 1, padding: 10, marginBottom: 10, borderRadius: 5, backgroundColor: '#fff', borderColor: '#cbd5e1' },
-  summary: { marginVertical: 10, fontWeight: 'bold', color: '#0f172a' },
+  container: { flex: 1, padding: 20 },
+  title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
+  helperText: { color: '#e2e8f0', marginBottom: 10 },
+  input: { borderWidth: 1, padding: 10, marginBottom: 10, borderRadius: 5, backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: '#cbd5e1' },
+  summary: { marginVertical: 10, fontWeight: 'bold', color: '#fff' },
   tableWrapper: { marginTop: 8 },
   cellText: { color: '#334155' },
   dangerAction: { backgroundColor: '#fee2e2', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, alignSelf: 'flex-start' },
   dangerActionText: { color: '#b91c1c', fontWeight: '600' },
+  viewOnlyText: { color: '#64748b', fontStyle: 'italic' },
 });

@@ -1,15 +1,18 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { addFeedRecord, getFeedRecordsByBatch, deleteFeedRecord } from '../database/db';
+import { addFeedRecord, getFeedRecordsByBatch, deleteFeedRecord, getUserById } from '../database/db';
 import DataTable from '../components/DataTable';
+import ScreenBackground from '../components/ScreenBackground';
 
 export default function FeedScreen({ route }) {
     const batchId = route?.params?.batchId;
+    const userId = route?.params?.userId;
 
     const [quantity, setQuantity] = useState('');
     const [cost, setCost] = useState('');
     const [records, setRecords] = useState([]);
+    const [currentUser, setCurrentUser] = useState(null);
 
     const loadFeed = () => {
         if (!batchId) {
@@ -23,6 +26,14 @@ export default function FeedScreen({ route }) {
 
     useFocusEffect(
         useCallback(() => {
+            if (userId) {
+                getUserById(userId, user => {
+                    setCurrentUser(user);
+                });
+            } else {
+                setCurrentUser(null);
+            }
+
             if (!batchId) {
                 return;
             }
@@ -30,10 +41,17 @@ export default function FeedScreen({ route }) {
             getFeedRecordsByBatch(batchId, (data) => {
                 setRecords(data || []);
             });
-        }, [batchId])
+        }, [batchId, userId])
     );
 
+    const canRecordFeed = currentUser?.role === 'worker';
+
     const handleAdd = () => {
+        if (!canRecordFeed) {
+            Alert.alert('Access denied', 'Only worker users can record feed.');
+            return;
+        }
+
         if (!quantity || !cost) {
             Alert.alert("Error", "Enter quantity and cost");
             return;
@@ -58,6 +76,11 @@ export default function FeedScreen({ route }) {
     };
 
     const handleDelete = (id) => {
+        if (!canRecordFeed) {
+            Alert.alert('Access denied', 'Only worker users can delete feed records.');
+            return;
+        }
+
         Alert.alert(
             'Confirm Delete',
             'Are you sure you want to delete this feed record?',
@@ -87,27 +110,34 @@ export default function FeedScreen({ route }) {
     ];
 
     return (
-        <View style={styles.container}>
+        <ScreenBackground contentContainerStyle={styles.container}>
             <Text style={styles.title}>Feed Management</Text>
-            <TextInput
-                placeholder="Quantity (kg)"
-                placeholderTextColor="#666"
-                value={quantity}
-                onChangeText={setQuantity}
-                keyboardType="numeric"
-                style={styles.input}
-            />
+            {canRecordFeed ? (
+                <Text style={styles.helperText}>Workers can add and remove feed records for this batch.</Text>
+            ) : null}
+            {canRecordFeed ? (
+                <>
+                    <TextInput
+                        placeholder="Quantity (kg)"
+                        placeholderTextColor="#666"
+                        value={quantity}
+                        onChangeText={setQuantity}
+                        keyboardType="numeric"
+                        style={styles.input}
+                    />
 
-            <TextInput
-                placeholder="Cost"
-                placeholderTextColor="#666"
-                value={cost}
-                onChangeText={setCost}
-                keyboardType="numeric"
-                style={styles.input}
-            />
+                    <TextInput
+                        placeholder="Cost"
+                        placeholderTextColor="#666"
+                        value={cost}
+                        onChangeText={setCost}
+                        keyboardType="numeric"
+                        style={styles.input}
+                    />
 
-            <Button title="Add Feed" onPress={handleAdd} />
+                    <Button title="Add Feed" onPress={handleAdd} />
+                </>
+            ) : null}
 
             <Text style={styles.total}>Total Feed Cost: {totalCost}</Text>
 
@@ -132,12 +162,16 @@ export default function FeedScreen({ route }) {
 
                         if (column.key === 'actions') {
                             return (
-                                <TouchableOpacity
-                                    style={styles.dangerAction}
-                                    onPress={() => handleDelete(item.feed_id || item.id)}
-                                >
-                                    <Text style={styles.dangerActionText}>Delete</Text>
-                                </TouchableOpacity>
+                                canRecordFeed ? (
+                                    <TouchableOpacity
+                                        style={styles.dangerAction}
+                                        onPress={() => handleDelete(item.feed_id || item.id)}
+                                    >
+                                        <Text style={styles.dangerActionText}>Delete</Text>
+                                    </TouchableOpacity>
+                                ) : (
+                                    <Text style={styles.viewOnlyText}>View only</Text>
+                                )
                             );
                         }
 
@@ -145,7 +179,7 @@ export default function FeedScreen({ route }) {
                     }}
                 />
             </View>
-        </View>
+        </ScreenBackground>
     );
 }
 
@@ -153,12 +187,15 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         padding: 20,
-        backgroundColor: '#f1f5f9',
+    },
+    helperText: {
+        color: '#e2e8f0',
+        marginBottom: 10,
     },
     title: {
         fontSize: 20,
         marginBottom: 10,
-        color: '#0f172a',
+        color: '#fff',
         fontWeight: '700',
     },
     input: {
@@ -166,14 +203,14 @@ const styles = StyleSheet.create({
         padding: 10,
         marginBottom: 10,
         borderRadius: 5,
-        backgroundColor: '#fff',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderColor: '#cbd5e1',
     },
     total: {
         marginTop: 10,
         marginBottom: 10,
         fontWeight: 'bold',
-        color: '#0f172a',
+        color: '#fff',
     },
     tableWrapper: {
         marginTop: 8,
@@ -191,5 +228,9 @@ const styles = StyleSheet.create({
     dangerActionText: {
         color: '#b91c1c',
         fontWeight: '600',
+    },
+    viewOnlyText: {
+        color: '#64748b',
+        fontStyle: 'italic',
     },
 });

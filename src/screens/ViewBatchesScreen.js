@@ -1,23 +1,22 @@
-import React, { useCallback, useState } from 'react';
-import { View, Text, Button, StyleSheet, TouchableOpacity, Alert, ScrollView, RefreshControl } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, Button, StyleSheet, TouchableOpacity, Alert, ScrollView, RefreshControl, TextInput } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { getBatches, deleteBatch } from '../database/db';
+import { getBatches, deleteBatch, getUserById, updateBatchDetails } from '../database/db';
 import DataTable from '../components/DataTable';
 
 export default function ViewBatchesScreen({ navigation, route }) {
     const farmId = route?.params?.farmId;
     const farmName = route?.params?.farmName;
+    const userId = route?.params?.userId;
 
     const [batches, setBatches] = useState([]);
+    const [currentUser, setCurrentUser] = useState(null);
+    const [editingBatch, setEditingBatch] = useState(null);
+    const [editedStartDate, setEditedStartDate] = useState('');
+    const [editedBreed, setEditedBreed] = useState('');
+    const [editedInitialChicks, setEditedInitialChicks] = useState('');
+    const [editedStatus, setEditedStatus] = useState('');
     const [refreshing, setRefreshing] = useState(false);
-
-    const columns = [
-        { key: 'batch_id', title: 'Batch ID', width: 100 },
-        { key: 'breed', title: 'Breed', width: 160 },
-        { key: 'initial_chicks', title: 'Chicks', width: 110 },
-        { key: 'status', title: 'Status', width: 120 },
-        { key: 'actions', title: 'Actions', width: 220 },
-    ];
 
     const loadBatches = useCallback((done) => {
         if (!farmId) {
@@ -31,13 +30,92 @@ export default function ViewBatchesScreen({ navigation, route }) {
         });
     }, [farmId]);
 
+    const loadUser = useCallback(() => {
+        if (!userId) {
+            setCurrentUser(null);
+            return;
+        }
+
+        getUserById(userId, user => {
+            setCurrentUser(user);
+        });
+    }, [userId]);
+
     useFocusEffect(
         useCallback(() => {
+            loadUser();
             loadBatches();
-        }, [loadBatches])
+        }, [loadBatches, loadUser])
     );
 
+    const isManager = currentUser?.role === 'manager';
+    const canManageBatches = isManager;
+
+    const columns = useMemo(() => [
+        { key: 'batch_id', title: 'Batch ID', width: 100 },
+        { key: 'start_date', title: 'Start Date', width: 130 },
+        { key: 'breed', title: 'Breed', width: 160 },
+        { key: 'initial_chicks', title: 'Chicks', width: 110 },
+        { key: 'status', title: 'Status', width: 120 },
+        { key: 'actions', title: 'Actions', width: canManageBatches ? 310 : 140 },
+    ], [canManageBatches]);
+
+    const startEdit = (batch) => {
+        if (!canManageBatches) {
+            Alert.alert('Access denied', 'Only manager users can edit batches.');
+            return;
+        }
+
+        setEditingBatch(batch.batch_id);
+        setEditedStartDate(batch.start_date || '');
+        setEditedBreed(batch.breed || '');
+        setEditedInitialChicks(String(batch.initial_chicks ?? ''));
+        setEditedStatus(batch.status || 'active');
+    };
+
+    const cancelEdit = () => {
+        setEditingBatch(null);
+        setEditedStartDate('');
+        setEditedBreed('');
+        setEditedInitialChicks('');
+        setEditedStatus('');
+    };
+
+    const saveEdit = () => {
+        if (!canManageBatches) {
+            Alert.alert('Access denied', 'Only manager users can edit batches.');
+            return;
+        }
+
+        if (!editedStartDate.trim() || !editedBreed.trim() || !editedInitialChicks.trim()) {
+            Alert.alert('Error', 'Enter start date, breed, and initial chicks.');
+            return;
+        }
+
+        if (!/^\d+$/.test(editedInitialChicks.trim()) || Number(editedInitialChicks) <= 0) {
+            Alert.alert('Error', 'Initial chicks must be a positive number.');
+            return;
+        }
+
+        updateBatchDetails(
+            editingBatch,
+            editedStartDate.trim(),
+            editedBreed.trim(),
+            Number(editedInitialChicks),
+            editedStatus.trim() || 'active',
+            () => {
+                cancelEdit();
+                loadBatches();
+            }
+        );
+    };
+
     const handleDelete = (batchId) => {
+        if (!canManageBatches) {
+            Alert.alert('Access denied', 'Only manager users can delete batches.');
+            return;
+        }
+
         Alert.alert(
             'Confirm Delete',
             'Are you sure you want to delete this batch?',
@@ -68,26 +146,100 @@ export default function ViewBatchesScreen({ navigation, route }) {
         >
         <Text style={styles.title}>Batches</Text>
         {farmName ? <Text style={styles.subtitle}>Farm: {farmName}</Text> : null}
-        <Text style={styles.helperText}>This table keeps the main batch details visible in one place.</Text>
+        <Text style={styles.helperText}>
+            {canManageBatches
+                ? 'Managers can add and remove batches for this farm.'
+                : 'You can view batch details here. Only managers can add or delete batches.'}
+        </Text>
 
-        <Button
-            title="Add Batch"
-            onPress={() => navigation.navigate("CreateBatch", { farmId })}
-        />
+        {canManageBatches ? (
+            <Button
+                title="Add Batch"
+                onPress={() => navigation.navigate("CreateBatch", { farmId, userId })}
+            />
+        ) : null}
 
         <View style={styles.tableWrapper}>
         <DataTable
             columns={columns}
             data={batches}
             keyExtractor={(item) => item.batch_id.toString()}
-            emptyText="No batches yet. Add one for this farm."
-            renderCell={(item, column) => {
-                if (column.key === 'batch_id') {
-                    return <Text style={styles.batchIdText}>#{item.batch_id}</Text>;
-                }
+                    emptyText="No batches yet. Add one for this farm."
+                    renderCell={(item, column) => {
+                        if (editingBatch === item.batch_id && canManageBatches) {
+                            if (column.key === 'batch_id') {
+                                return <Text style={styles.batchIdText}>#{item.batch_id}</Text>;
+                            }
 
-                if (column.key === 'breed') {
-                    return <Text style={styles.cellText}>{item.breed}</Text>;
+                            if (column.key === 'start_date') {
+                                return (
+                                    <TextInput
+                                        value={editedStartDate}
+                                        onChangeText={setEditedStartDate}
+                                        placeholder="YYYY-MM-DD"
+                                        style={styles.input}
+                                    />
+                                );
+                            }
+
+                            if (column.key === 'breed') {
+                                return (
+                                    <TextInput
+                                        value={editedBreed}
+                                        onChangeText={setEditedBreed}
+                                        placeholder="Breed"
+                                        style={styles.input}
+                                    />
+                                );
+                            }
+
+                            if (column.key === 'initial_chicks') {
+                                return (
+                                    <TextInput
+                                        value={editedInitialChicks}
+                                        onChangeText={setEditedInitialChicks}
+                                        placeholder="Chicks"
+                                        keyboardType="numeric"
+                                        style={styles.input}
+                                    />
+                                );
+                            }
+
+                            if (column.key === 'status') {
+                                return (
+                                    <TextInput
+                                        value={editedStatus}
+                                        onChangeText={setEditedStatus}
+                                        placeholder="Status"
+                                        style={styles.input}
+                                    />
+                                );
+                            }
+
+                            if (column.key === 'actions') {
+                                return (
+                                    <View style={styles.actionRow}>
+                                        <TouchableOpacity style={styles.primaryAction} onPress={saveEdit}>
+                                            <Text style={styles.primaryActionText}>Save</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={styles.secondaryAction} onPress={cancelEdit}>
+                                            <Text style={styles.secondaryActionText}>Cancel</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                );
+                            }
+                        }
+
+                        if (column.key === 'batch_id') {
+                            return <Text style={styles.batchIdText}>#{item.batch_id}</Text>;
+                        }
+
+                        if (column.key === 'start_date') {
+                            return <Text style={styles.cellText}>{item.start_date}</Text>;
+                        }
+
+                        if (column.key === 'breed') {
+                            return <Text style={styles.cellText}>{item.breed}</Text>;
                 }
 
                 if (column.key === 'initial_chicks') {
@@ -108,17 +260,28 @@ export default function ViewBatchesScreen({ navigation, route }) {
                                         batchId: item.batch_id,
                                         farmId,
                                         farmName,
+                                        userId,
                                     })
                                 }
                             >
                                 <Text style={styles.primaryActionText}>View Details</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.dangerAction}
-                                onPress={() => handleDelete(item.batch_id)}
-                            >
-                                <Text style={styles.dangerActionText}>Delete</Text>
-                            </TouchableOpacity>
+                            {canManageBatches ? (
+                                <TouchableOpacity
+                                    style={styles.secondaryAction}
+                                    onPress={() => startEdit(item)}
+                                >
+                                    <Text style={styles.secondaryActionText}>Edit</Text>
+                                </TouchableOpacity>
+                            ) : null}
+                            {canManageBatches ? (
+                                <TouchableOpacity
+                                    style={styles.dangerAction}
+                                    onPress={() => handleDelete(item.batch_id)}
+                                >
+                                    <Text style={styles.dangerActionText}>Delete</Text>
+                                </TouchableOpacity>
+                            ) : null}
                         </View>
                     );
                 }
@@ -140,6 +303,14 @@ const styles = StyleSheet.create({
     tableWrapper: { marginTop: 16 },
     batchIdText: { color: '#0f172a', fontWeight: '700' },
     cellText: { color: '#334155' },
+    input: {
+        borderWidth: 1,
+        borderColor: '#94a3b8',
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        backgroundColor: '#fff',
+    },
     statusText: { color: '#0f766e', fontWeight: '600', textTransform: 'capitalize' },
     actionRow: {
         flexDirection: 'row',
@@ -154,6 +325,16 @@ const styles = StyleSheet.create({
     },
     primaryActionText: {
         color: '#fff',
+        fontWeight: '600',
+    },
+    secondaryAction: {
+        backgroundColor: '#e2e8f0',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
+    secondaryActionText: {
+        color: '#0f172a',
         fontWeight: '600',
     },
     dangerAction: {
