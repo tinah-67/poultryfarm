@@ -98,22 +98,28 @@ export const initDB = () => {
         start_date TEXT,
         breed TEXT,
         initial_chicks INTEGER,
+        purchase_cost REAL DEFAULT 0,
         status TEXT,
         synced INTEGER DEFAULT 0
       );
     `, [], () => console.log("Batches table created"), (_, err) => console.log("Batches table error", err));
+
+    ensureColumnExists(tx, 'batches', 'purchase_cost', 'REAL DEFAULT 0');
 
     // FEED RECORDS
     tx.executeSql(`
       CREATE TABLE IF NOT EXISTS feed_records (
         feed_id INTEGER PRIMARY KEY AUTOINCREMENT,
         batch_id INTEGER,
+        feed_type TEXT,
         feed_quantity REAL,
         feed_cost REAL,
         date_recorded TEXT,
         synced INTEGER DEFAULT 0
       );
     `, [], () => console.log("Feed records table created"), (_, err) => console.log("Feed records table error", err));
+
+    ensureColumnExists(tx, 'feed_records', 'feed_type', 'TEXT');
 
     // MORTALITY
     tx.executeSql(`
@@ -456,14 +462,14 @@ export const deleteFarm = (farm_id) => {
 };
 
 // CREATE BATCH
-export const createBatch = (farm_id, start_date, breed, initial_chicks, callback) => {
-  console.log("createBatch called:", { farm_id, start_date, breed, initial_chicks });
+export const createBatch = (farm_id, start_date, breed, initial_chicks, purchase_cost, callback) => {
+  console.log("createBatch called:", { farm_id, start_date, breed, initial_chicks, purchase_cost });
 
   db.transaction(tx => {
     tx.executeSql(
-      `INSERT INTO batches (farm_id, start_date, breed, initial_chicks, status, synced)
-      VALUES (?, ?, ?, ?, 'active', 0)`,
-      [farm_id, start_date, breed, initial_chicks],
+      `INSERT INTO batches (farm_id, start_date, breed, initial_chicks, purchase_cost, status, synced)
+        VALUES (?, ?, ?, ?, ?, 'active', 0)`,
+      [farm_id, start_date, breed, initial_chicks, purchase_cost],
       (_, result) => {
         console.log("Batch created:", result.insertId);
         callback && callback();
@@ -521,15 +527,15 @@ export const getAccessibleFarms = (userId, callback) => {
 
   db.transaction(tx => {
     tx.executeSql(
-      `SELECT farms.*
-       FROM farms
-       JOIN users ON users.user_id = ?
-       WHERE farms.user_id = CASE
-         WHEN users.role = 'owner' THEN users.user_id
-         ELSE users.owner_user_id
-       END
-       ORDER BY farms.created_at DESC, farms.farm_id DESC`,
-      [normalizedUserId],
+        `SELECT farms.*
+        FROM farms
+        JOIN users ON users.user_id = ?
+        WHERE farms.user_id = CASE
+          WHEN users.role = 'owner' THEN users.user_id
+          ELSE users.owner_user_id
+        END
+        ORDER BY farms.created_at DESC, farms.farm_id DESC`,
+        [normalizedUserId],
       (_, result) => {
         callback(rowsToArray(result.rows));
       },
@@ -593,13 +599,34 @@ export const markUserAsSynced = (userId) => {
 
 export const getBatches = getBatchesByFarmId;
 
-export const updateBatchDetails = (batch_id, start_date, breed, initial_chicks, status, callback) => {
+export const getBatchById = (batch_id, callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `SELECT * FROM batches WHERE batch_id = ? LIMIT 1`,
+      [batch_id],
+      (_, result) => {
+        if (result.rows.length > 0) {
+          callback(result.rows.item(0));
+        } else {
+          callback(null);
+        }
+      },
+      (_, error) => {
+        console.log("Error fetching batch by id", error);
+        callback(null);
+        return false;
+      }
+    );
+  });
+};
+
+export const updateBatchDetails = (batch_id, start_date, breed, initial_chicks, purchase_cost, status, callback) => {
   db.transaction(tx => {
     tx.executeSql(
       `UPDATE batches
-       SET start_date = ?, breed = ?, initial_chicks = ?, status = ?, synced = 0
-       WHERE batch_id = ?`,
-      [start_date, breed, initial_chicks, status, batch_id],
+        SET start_date = ?, breed = ?, initial_chicks = ?, purchase_cost = ?, status = ?, synced = 0
+        WHERE batch_id = ?`,
+      [start_date, breed, initial_chicks, purchase_cost, status, batch_id],
       () => {
         console.log("Batch details updated");
         callback && callback();
@@ -637,12 +664,12 @@ export const deleteBatch = (batch_id) => {
 };
 
 //ADD FEED RECORD
-export const addFeedRecord = (batch_id, feed_quantity, feed_cost, date_recorded, callback) => {
+export const addFeedRecord = (batch_id, feed_type, feed_quantity, date_recorded, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      `INSERT INTO feed_records (batch_id, feed_quantity, feed_cost, date_recorded, synced)
-      VALUES (?, ?, ?, ?, 0)`,
-      [batch_id, feed_quantity, feed_cost, date_recorded],
+      `INSERT INTO feed_records (batch_id, feed_type, feed_quantity, feed_cost, date_recorded, synced)
+        VALUES (?, ?, ?, ?, ?, 0)`,
+      [batch_id, feed_type, feed_quantity, 0, date_recorded],
       (_, result) => {
         console.log("Feed record added", result.insertId);
         callback && callback();

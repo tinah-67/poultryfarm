@@ -17,7 +17,9 @@ export default function CreateBatchScreen({ navigation, route }) {
     const [startDate, setStartDate] = useState('');
     const [breed, setBreed] = useState('');
     const [initialChicks, setInitialChicks] = useState('');
+    const [purchaseCost, setPurchaseCost] = useState('');
     const [chicksError, setChicksError] = useState('');
+    const [costError, setCostError] = useState('');
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
 
@@ -32,14 +34,15 @@ export default function CreateBatchScreen({ navigation, route }) {
         });
     }, [userId]);
 
-    const canManageBatches = currentUser?.role === 'manager';
+    const canManageBatches = ['owner', 'manager'].includes(currentUser?.role);
     const isFormValid = useMemo(() => {
         const isDateValid = startDate.trim() !== '';
         const isBreedValid = breed.trim() !== '';
         const isChicksValid = initialChicks.trim() !== '' && /^\d{1,4}$/.test(initialChicks) && Number(initialChicks) > 0;
+        const isCostValid = purchaseCost.trim() !== '' && !Number.isNaN(Number(purchaseCost)) && Number(purchaseCost) >= 0;
 
-        return isDateValid && isBreedValid && isChicksValid;
-    }, [startDate, breed, initialChicks]);
+        return isDateValid && isBreedValid && isChicksValid && isCostValid;
+    }, [startDate, breed, initialChicks, purchaseCost]);
 
     const handleChicksChange = (text) => {
         if (/^\d{0,4}$/.test(text)) {
@@ -47,6 +50,15 @@ export default function CreateBatchScreen({ navigation, route }) {
             setChicksError('');
         } else {
             setChicksError('Only numbers, max 4 digits');
+        }
+    };
+
+    const handlePurchaseCostChange = text => {
+        if (/^\d*(\.\d{0,2})?$/.test(text)) {
+            setPurchaseCost(text);
+            setCostError('');
+        } else {
+            setCostError('Use numbers only, up to 2 decimal places');
         }
     };
 
@@ -90,12 +102,12 @@ export default function CreateBatchScreen({ navigation, route }) {
 
     const handleCreate = () => {
         if (!canManageBatches) {
-            Alert.alert('Access denied', 'Only manager users can create batches.');
+            Alert.alert('Access denied', 'Only owner and manager users can create batches.');
             return;
         }
 
         if (!isFormValid) {
-            Alert.alert("Error", "Please fill all fields correctly");
+            Alert.alert("Error", "Please fill all fields correctly, including chick purchase cost");
             return;
         }
 
@@ -104,6 +116,7 @@ export default function CreateBatchScreen({ navigation, route }) {
             startDate,
             breed,
             Number(initialChicks),
+            purchaseCost.trim() === '' ? 0 : Number(purchaseCost),
             () => {
                 Alert.alert("Success", "Batch created");
                 navigation.goBack();
@@ -116,8 +129,8 @@ export default function CreateBatchScreen({ navigation, route }) {
         <Text style={styles.title}>Create Batch</Text>
         <Text style={styles.helperText}>
             {canManageBatches
-                ? 'Managers are responsible for creating new batches.'
-                : 'You can view batches, but only managers can create them.'}
+                ? 'Owners and managers can create new batches.'
+                : 'You can view batches, but only owners and managers can create them.'}
         </Text>
 
         <View style={styles.dateContainer}>
@@ -156,6 +169,16 @@ export default function CreateBatchScreen({ navigation, route }) {
             style={styles.input}
         />
         {chicksError ? <Text style={styles.errorText}>{chicksError}</Text> : null}
+
+        <TextInput
+            placeholder="Chick Purchase Cost"
+            placeholderTextColor="#666"
+            value={purchaseCost}
+            onChangeText={handlePurchaseCostChange}
+            keyboardType="numeric"
+            style={styles.input}
+        />
+        {costError ? <Text style={styles.errorText}>{costError}</Text> : null}
 
         <Button title="Create Batch" onPress={handleCreate} disabled={!isFormValid || !canManageBatches} />
         </ScreenBackground>

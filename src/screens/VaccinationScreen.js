@@ -1,8 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { addVaccinationRecord, getVaccinationRecordsByBatchId, deleteVaccinationRecord, getUserById } from '../database/db';
-import DataTable from '../components/DataTable';
+import { addVaccinationRecord, getUserById } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 
 let DateTimePicker = null;
@@ -12,24 +11,15 @@ try {
   DateTimePicker = null;
 }
 
-export default function VaccinationScreen({ route }) {
+export default function VaccinationScreen({ route, navigation }) {
   const batchId = route?.params?.batchId;
   const userId = route?.params?.userId;
   const [vaccineName, setVaccineName] = useState('');
   const [vaccinationDate, setVaccinationDate] = useState('');
   const [nextDueDate, setNextDueDate] = useState('');
   const [notes, setNotes] = useState('');
-  const [records, setRecords] = useState([]);
   const [pickerField, setPickerField] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-
-  const loadRecords = useCallback(() => {
-    if (!batchId) {
-      return;
-    }
-
-    getVaccinationRecordsByBatchId(batchId, setRecords);
-  }, [batchId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -40,12 +30,10 @@ export default function VaccinationScreen({ route }) {
       } else {
         setCurrentUser(null);
       }
-
-      loadRecords();
-    }, [loadRecords, userId])
+    }, [userId])
   );
 
-  const canRecordVaccination = currentUser?.role === 'worker';
+  const canRecordVaccination = ['owner', 'worker'].includes(currentUser?.role);
 
   const formatToday = () => {
     const today = new Date();
@@ -99,7 +87,7 @@ export default function VaccinationScreen({ route }) {
 
   const handleAdd = () => {
     if (!canRecordVaccination) {
-      Alert.alert('Access denied', 'Only worker users can record vaccinations.');
+      Alert.alert('Access denied', 'Only owner and worker users can record vaccinations.');
       return;
     }
 
@@ -124,138 +112,73 @@ export default function VaccinationScreen({ route }) {
         setVaccinationDate('');
         setNextDueDate('');
         setNotes('');
-        loadRecords();
+        setPickerField(null);
+        Alert.alert('Success', 'Vaccination record added');
       }
     );
   };
 
-  const handleDelete = (vaccinationId) => {
-    if (!canRecordVaccination) {
-      Alert.alert('Access denied', 'Only worker users can delete vaccination records.');
-      return;
-    }
-
-    Alert.alert(
-      'Confirm Delete',
-      'Are you sure you want to delete this vaccination record?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            deleteVaccinationRecord(vaccinationId);
-            loadRecords();
-          },
-        },
-      ]
-    );
-  };
-
-  const columns = [
-    { key: 'vaccine_name', title: 'Vaccine', width: 170 },
-    { key: 'vaccination_date', title: 'Date Given', width: 140 },
-    { key: 'next_due_date', title: 'Next Due', width: 140 },
-    { key: 'notes', title: 'Notes', width: 200 },
-    { key: 'actions', title: 'Actions', width: 120 },
-  ];
-
   return (
     <ScreenBackground contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Vaccination Records</Text>
-      <Text style={styles.helperText}>
-        {canRecordVaccination
-          ? 'Workers can add and remove vaccination records for this batch.'
-          : 'You can view vaccination records here. Only workers can record or delete them.'}
-      </Text>
-      <TextInput
-        placeholder="Vaccine Name"
-        placeholderTextColor="#666"
-        value={vaccineName}
-        onChangeText={setVaccineName}
-        style={styles.input}
-      />
-      <View style={styles.dateContainer}>
-        <TouchableOpacity onPress={() => openPicker('vaccinationDate')} style={[styles.input, styles.dateInput, styles.dateField]}>
-          <Text style={vaccinationDate ? styles.dateValue : styles.datePlaceholder}>
-            {vaccinationDate || 'Vaccination Date (YYYY-MM-DD)'}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setToday('vaccinationDate')} style={styles.dateButton}>
-          <Text style={styles.dateButtonText}>Today</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.dateContainer}>
-        <TouchableOpacity onPress={() => openPicker('nextDueDate')} style={[styles.input, styles.dateInput, styles.dateField]}>
-          <Text style={nextDueDate ? styles.dateValue : styles.datePlaceholder}>
-            {nextDueDate || 'Next Due Date (optional)'}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setToday('nextDueDate')} style={styles.dateButton}>
-          <Text style={styles.dateButtonText}>Today</Text>
-        </TouchableOpacity>
-      </View>
-      {pickerField && DateTimePicker ? (
-        <DateTimePicker
-          value={
-            pickerField === 'vaccinationDate' && vaccinationDate
-              ? new Date(vaccinationDate)
-              : pickerField === 'nextDueDate' && nextDueDate
-                ? new Date(nextDueDate)
-                : new Date()
-          }
-          mode="date"
-          display="default"
-          onChange={handlePickerChange}
-        />
-      ) : null}
-      <TextInput
-        placeholder="Notes (optional)"
-        placeholderTextColor="#666"
-        value={notes}
-        onChangeText={setNotes}
-        style={styles.input}
-      />
-      <Button title="Add Vaccination Record" onPress={handleAdd} disabled={!canRecordVaccination} />
+      <Text style={styles.title}>Record Vaccination</Text>
+      {canRecordVaccination ? (
+        <>
+          <TextInput
+            placeholder="Vaccine Name"
+            placeholderTextColor="#666"
+            value={vaccineName}
+            onChangeText={setVaccineName}
+            style={styles.input}
+          />
+          <View style={styles.dateContainer}>
+            <TouchableOpacity onPress={() => openPicker('vaccinationDate')} style={[styles.input, styles.dateInput, styles.dateField]}>
+              <Text style={vaccinationDate ? styles.dateValue : styles.datePlaceholder}>
+                {vaccinationDate || 'Vaccination Date (YYYY-MM-DD)'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setToday('vaccinationDate')} style={styles.dateButton}>
+              <Text style={styles.dateButtonText}>Today</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.dateContainer}>
+            <TouchableOpacity onPress={() => openPicker('nextDueDate')} style={[styles.input, styles.dateInput, styles.dateField]}>
+              <Text style={nextDueDate ? styles.dateValue : styles.datePlaceholder}>
+                {nextDueDate || 'Next Due Date (optional)'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setToday('nextDueDate')} style={styles.dateButton}>
+              <Text style={styles.dateButtonText}>Today</Text>
+            </TouchableOpacity>
+          </View>
+          {pickerField && DateTimePicker ? (
+            <DateTimePicker
+              value={
+                pickerField === 'vaccinationDate' && vaccinationDate
+                  ? new Date(vaccinationDate)
+                  : pickerField === 'nextDueDate' && nextDueDate
+                    ? new Date(nextDueDate)
+                    : new Date()
+              }
+              mode="date"
+              display="default"
+              onChange={handlePickerChange}
+            />
+          ) : null}
+          <TextInput
+            placeholder="Notes (optional)"
+            placeholderTextColor="#666"
+            value={notes}
+            onChangeText={setNotes}
+            style={styles.input}
+          />
+          <Button title="Add Vaccination Record" onPress={handleAdd} />
+        </>
+      ) : (
+        <Text style={styles.noteText}>You can review vaccination records, but only owners and workers can add vaccination entries.</Text>
+      )}
 
-      <View style={styles.tableWrapper}>
-        <DataTable
-          columns={columns}
-          data={records}
-          keyExtractor={(item, index) => (item.vaccination_id || index).toString()}
-          emptyText="No vaccination records yet"
-          renderCell={(item, column) => {
-            if (column.key === 'vaccine_name') {
-              return <Text style={styles.cellText}>{item.vaccine_name}</Text>;
-            }
-
-            if (column.key === 'vaccination_date') {
-              return <Text style={styles.cellText}>{item.vaccination_date}</Text>;
-            }
-
-            if (column.key === 'next_due_date') {
-              return <Text style={styles.cellText}>{item.next_due_date || 'N/A'}</Text>;
-            }
-
-            if (column.key === 'notes') {
-              return <Text style={styles.cellText}>{item.notes || 'N/A'}</Text>;
-            }
-
-            if (column.key === 'actions') {
-              return (
-                canRecordVaccination ? (
-                  <TouchableOpacity style={styles.dangerAction} onPress={() => handleDelete(item.vaccination_id)}>
-                    <Text style={styles.dangerActionText}>Delete</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <Text style={styles.viewOnlyText}>View only</Text>
-                )
-              );
-            }
-
-            return null;
-          }}
-        />
+      <View style={styles.actions}>
+        <Button title="View Vaccination Records" onPress={() => navigation.navigate('ViewVaccinations', { batchId, userId })} />
       </View>
     </ScreenBackground>
   );
@@ -264,7 +187,7 @@ export default function VaccinationScreen({ route }) {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
   title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
-  helperText: { color: '#e2e8f0', marginBottom: 10 },
+  noteText: { color: '#cbd5e1', marginBottom: 12 },
   input: { borderWidth: 1, padding: 10, marginBottom: 10, borderRadius: 5, backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: '#cbd5e1' },
   dateContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   dateInput: { flex: 1, marginBottom: 0 },
@@ -273,9 +196,5 @@ const styles = StyleSheet.create({
   dateButtonText: { color: '#fff' },
   dateValue: { color: '#000' },
   datePlaceholder: { color: '#666' },
-  tableWrapper: { marginTop: 16 },
-  cellText: { color: '#334155' },
-  dangerAction: { backgroundColor: '#fee2e2', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, alignSelf: 'flex-start' },
-  dangerActionText: { color: '#b91c1c', fontWeight: '600' },
-  viewOnlyText: { color: '#64748b', fontStyle: 'italic' },
+  actions: { marginTop: 14 },
 });

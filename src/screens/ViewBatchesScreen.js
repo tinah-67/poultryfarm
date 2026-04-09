@@ -15,6 +15,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
     const [editedStartDate, setEditedStartDate] = useState('');
     const [editedBreed, setEditedBreed] = useState('');
     const [editedInitialChicks, setEditedInitialChicks] = useState('');
+    const [editedPurchaseCost, setEditedPurchaseCost] = useState('');
     const [editedStatus, setEditedStatus] = useState('');
     const [refreshing, setRefreshing] = useState(false);
 
@@ -48,8 +49,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
         }, [loadBatches, loadUser])
     );
 
-    const isManager = currentUser?.role === 'manager';
-    const canManageBatches = isManager;
+    const canManageBatches = ['owner', 'manager'].includes(currentUser?.role);
 
     const columns = useMemo(() => [
         { key: 'batch_id', title: 'Batch ID', width: 100 },
@@ -62,7 +62,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
 
     const startEdit = (batch) => {
         if (!canManageBatches) {
-            Alert.alert('Access denied', 'Only manager users can edit batches.');
+            Alert.alert('Access denied', 'Only owner and manager users can edit batches.');
             return;
         }
 
@@ -70,6 +70,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
         setEditedStartDate(batch.start_date || '');
         setEditedBreed(batch.breed || '');
         setEditedInitialChicks(String(batch.initial_chicks ?? ''));
+        setEditedPurchaseCost(String(batch.purchase_cost ?? '0'));
         setEditedStatus(batch.status || 'active');
     };
 
@@ -78,12 +79,13 @@ export default function ViewBatchesScreen({ navigation, route }) {
         setEditedStartDate('');
         setEditedBreed('');
         setEditedInitialChicks('');
+        setEditedPurchaseCost('');
         setEditedStatus('');
     };
 
     const saveEdit = () => {
         if (!canManageBatches) {
-            Alert.alert('Access denied', 'Only manager users can edit batches.');
+            Alert.alert('Access denied', 'Only owner and manager users can edit batches.');
             return;
         }
 
@@ -97,11 +99,17 @@ export default function ViewBatchesScreen({ navigation, route }) {
             return;
         }
 
+        if (editedPurchaseCost.trim() && (Number.isNaN(Number(editedPurchaseCost)) || Number(editedPurchaseCost) < 0)) {
+            Alert.alert('Error', 'Purchase cost must be 0 or more.');
+            return;
+        }
+
         updateBatchDetails(
             editingBatch,
             editedStartDate.trim(),
             editedBreed.trim(),
             Number(editedInitialChicks),
+            editedPurchaseCost.trim() === '' ? 0 : Number(editedPurchaseCost),
             editedStatus.trim() || 'active',
             () => {
                 cancelEdit();
@@ -112,7 +120,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
 
     const handleDelete = (batchId) => {
         if (!canManageBatches) {
-            Alert.alert('Access denied', 'Only manager users can delete batches.');
+            Alert.alert('Access denied', 'Only owner and manager users can delete batches.');
             return;
         }
 
@@ -148,8 +156,8 @@ export default function ViewBatchesScreen({ navigation, route }) {
         {farmName ? <Text style={styles.subtitle}>Farm: {farmName}</Text> : null}
         <Text style={styles.helperText}>
             {canManageBatches
-                ? 'Managers can add and remove batches for this farm.'
-                : 'You can view batch details here. Only managers can add or delete batches.'}
+                ? 'Tap the buttons to add, edit, and remove batches.'
+                : 'You can view batch details here.'}
         </Text>
 
         {canManageBatches ? (
@@ -207,12 +215,21 @@ export default function ViewBatchesScreen({ navigation, route }) {
 
                             if (column.key === 'status') {
                                 return (
+                                    <View style={styles.editFields}>
+                                    <TextInput
+                                        value={editedPurchaseCost}
+                                        onChangeText={setEditedPurchaseCost}
+                                        placeholder="Purchase Cost"
+                                        keyboardType="numeric"
+                                        style={styles.input}
+                                    />
                                     <TextInput
                                         value={editedStatus}
                                         onChangeText={setEditedStatus}
                                         placeholder="Status"
                                         style={styles.input}
                                     />
+                                    </View>
                                 );
                             }
 
@@ -310,6 +327,9 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
         paddingVertical: 8,
         backgroundColor: '#fff',
+    },
+    editFields: {
+        gap: 8,
     },
     statusText: { color: '#0f766e', fontWeight: '600', textTransform: 'capitalize' },
     actionRow: {

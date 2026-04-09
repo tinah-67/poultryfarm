@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Alert, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, ImageBackground, View } from 'react-native';
+import { Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, ImageBackground, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearRememberedSession, getUserById } from '../database/db';
 
@@ -87,14 +87,21 @@ export default function DashboardScreen({ navigation, route }) {
 
           <TouchableOpacity
             style={styles.card}
-            onPress={() => Alert.alert('Coming soon', 'Batch performance reporting screen has not been wired yet.')}
+            onPress={() => navigation.navigate('FarmPerformanceSummary', { userId })}
           >
-            <Text style={styles.cardText}>Batch Performance</Text>
+            <Text style={styles.cardText}>Farm Performance Summary</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.card}
-            onPress={() => Alert.alert('Coming soon', 'Notifications screen has not been wired yet.')}
+            onPress={() => navigation.navigate('Reports', { userId })}
+          >
+            <Text style={styles.cardText}>Reports</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => navigation.navigate('Notifications', { userId })}
           >
             <Text style={styles.cardText}>Notifications</Text>
           </TouchableOpacity>

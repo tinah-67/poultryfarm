@@ -1,202 +1,240 @@
-import React, { useCallback, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import { addFeedRecord, getFeedRecordsByBatch, deleteFeedRecord, getUserById } from '../database/db';
-import DataTable from '../components/DataTable';
+import { addFeedRecord, getBatchById, getUserById } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 
-export default function FeedScreen({ route }) {
+export default function FeedScreen({ route, navigation }) {
     const batchId = route?.params?.batchId;
     const userId = route?.params?.userId;
+    const feedTypeOptions = ['starter', 'grower', 'finisher'];
 
+    const [feedType, setFeedType] = useState('starter');
+    const [showFeedTypeDropdown, setShowFeedTypeDropdown] = useState(false);
     const [quantity, setQuantity] = useState('');
-    const [cost, setCost] = useState('');
-    const [records, setRecords] = useState([]);
+    const [quantityError, setQuantityError] = useState('');
     const [currentUser, setCurrentUser] = useState(null);
+    const [batch, setBatch] = useState(null);
 
-    const loadFeed = () => {
+    useEffect(() => {
+        if (userId) {
+        getUserById(userId, user => {
+            setCurrentUser(user);
+        });
+        } else {
+        setCurrentUser(null);
+        }
+    }, [userId]);
+
+    useEffect(() => {
         if (!batchId) {
-            return;
+        setBatch(null);
+        return;
         }
 
-        getFeedRecordsByBatch(batchId, (data) => {
-            setRecords(data || []);
+        getBatchById(batchId, batchRecord => {
+        setBatch(batchRecord);
         });
+    }, [batchId]);
+
+    const canRecordFeed = ['owner', 'worker'].includes(currentUser?.role);
+
+    const parseLocalDate = dateString => {
+        const [year, month, day] = (dateString || '').split('-').map(Number);
+
+        if (!year || !month || !day) {
+        return null;
+        }
+
+        return new Date(year, month - 1, day);
     };
 
-    useFocusEffect(
-        useCallback(() => {
-            if (userId) {
-                getUserById(userId, user => {
-                    setCurrentUser(user);
-                });
-            } else {
-                setCurrentUser(null);
-            }
+    const getAgeInDays = startDate => {
+        const batchStartDate = parseLocalDate(startDate);
 
-            if (!batchId) {
-                return;
-            }
+        if (!batchStartDate) {
+        return null;
+        }
 
-            getFeedRecordsByBatch(batchId, (data) => {
-                setRecords(data || []);
-            });
-        }, [batchId, userId])
-    );
+        const today = new Date();
+        const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const diffMs = todayLocal.getTime() - batchStartDate.getTime();
 
-    const canRecordFeed = currentUser?.role === 'worker';
+        if (!Number.isFinite(diffMs)) {
+        return null;
+        }
+
+        return Math.max(Math.floor(diffMs / (1000 * 60 * 60 * 24)), 0);
+    };
+
+    const getRecommendedFeedType = ageInDays => {
+        if (ageInDays == null) {
+        return null;
+        }
+
+        if (ageInDays < 21) {
+        return 'starter';
+        }
+
+        if (ageInDays < 35) {
+        return 'grower';
+        }
+
+        return 'finisher';
+    };
+
+    const ageInDays = getAgeInDays(batch?.start_date);
+    const ageInWeeks = ageInDays == null ? null : (ageInDays / 7).toFixed(1);
+    const recommendedFeedType = getRecommendedFeedType(ageInDays);
+
+    const handleQuantityChange = text => {
+        if (/^\d{0,2}$/.test(text)) {
+        setQuantity(text);
+        setQuantityError('');
+        } else {
+        setQuantityError('Quantity must be numbers only, max 2 digits');
+        }
+    };
 
     const handleAdd = () => {
         if (!canRecordFeed) {
-            Alert.alert('Access denied', 'Only worker users can record feed.');
-            return;
+        Alert.alert('Access denied', 'Only owner and worker users can record feed.');
+        return;
         }
 
-        if (!quantity || !cost) {
-            Alert.alert("Error", "Enter quantity and cost");
-            return;
+        if (!feedType || !quantity) {
+        Alert.alert('Error', 'Choose feed type and enter quantity');
+        return;
         }
 
         if (!batchId) {
-            Alert.alert("Error", "Batch not found");
-            return;
+        Alert.alert('Error', 'Batch not found');
+        return;
+        }
+
+        if (recommendedFeedType && feedType !== recommendedFeedType) {
+        Alert.alert(
+            'Wrong feed stage',
+            `This batch is ${ageInDays} day(s) old (${ageInWeeks} weeks). Use ${recommendedFeedType.charAt(0).toUpperCase() + recommendedFeedType.slice(1)} feed.`
+        );
+        return;
+        }
+
+        if (!/^\d{1,2}$/.test(quantity)) {
+        Alert.alert('Error', 'Quantity must be numbers only, max 2 digits');
+        return;
+        }
+
+        const quantityValue = Number(quantity);
+
+        if (!Number.isFinite(quantityValue) || quantityValue <= 0) {
+        Alert.alert('Error', 'Quantity must be a valid number greater than 0');
+        return;
         }
 
         addFeedRecord(
-            batchId,
-            Number(quantity),
-            Number(cost),
-            new Date().toISOString(),
-            () => {
-                setQuantity('');
-                setCost('');
-                loadFeed();
-            }
-        );
-    };
-
-    const handleDelete = (id) => {
-        if (!canRecordFeed) {
-            Alert.alert('Access denied', 'Only worker users can delete feed records.');
-            return;
+        batchId,
+        feedType,
+        quantityValue,
+        new Date().toISOString(),
+        () => {
+            setFeedType('starter');
+            setShowFeedTypeDropdown(false);
+            setQuantity('');
+            setQuantityError('');
+            Alert.alert('Success', 'Feed record added');
         }
-
-        Alert.alert(
-            'Confirm Delete',
-            'Are you sure you want to delete this feed record?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: () => {
-                        deleteFeedRecord(id);
-                        loadFeed();
-                    },
-                },
-            ]
         );
     };
-
-    const totalCost = records.reduce((sum, item) => {
-        return sum + (item.feed_cost || item.cost || 0);
-    }, 0);
-
-    const columns = [
-        { key: 'quantity', title: 'Quantity (kg)', width: 130 },
-        { key: 'cost', title: 'Cost', width: 120 },
-        { key: 'date', title: 'Recorded On', width: 210 },
-        { key: 'actions', title: 'Actions', width: 120 },
-    ];
 
     return (
         <ScreenBackground contentContainerStyle={styles.container}>
-            <Text style={styles.title}>Feed Management</Text>
-            {canRecordFeed ? (
-                <Text style={styles.helperText}>Workers can add and remove feed records for this batch.</Text>
-            ) : null}
-            {canRecordFeed ? (
-                <>
-                    <TextInput
-                        placeholder="Quantity (kg)"
-                        placeholderTextColor="#666"
-                        value={quantity}
-                        onChangeText={setQuantity}
-                        keyboardType="numeric"
-                        style={styles.input}
-                    />
+        <Text style={styles.title}>Record Feed</Text>
+        {recommendedFeedType ? (
+            <Text style={styles.ageNote}>
+            Batch age: {ageInDays} day(s) ({ageInWeeks} weeks). Recommended feed: {recommendedFeedType.charAt(0).toUpperCase() + recommendedFeedType.slice(1)}.
+            </Text>
+        ) : null}
 
-                    <TextInput
-                        placeholder="Cost"
-                        placeholderTextColor="#666"
-                        value={cost}
-                        onChangeText={setCost}
-                        keyboardType="numeric"
-                        style={styles.input}
-                    />
+        {canRecordFeed ? (
+            <>
+            <View style={styles.dropdownContainer}>
+                <TouchableOpacity
+                style={styles.dropdownTrigger}
+                activeOpacity={0.8}
+                onPress={() => setShowFeedTypeDropdown(previous => !previous)}
+                >
+                <Text style={styles.dropdownTriggerText}>
+                    {feedType.charAt(0).toUpperCase() + feedType.slice(1)}
+                </Text>
+                <Text style={styles.dropdownChevron}>{showFeedTypeDropdown ? '^' : 'v'}</Text>
+                </TouchableOpacity>
 
-                    <Button title="Add Feed" onPress={handleAdd} />
-                </>
-            ) : null}
+                {showFeedTypeDropdown ? (
+                <View style={styles.dropdownMenu}>
+                    {feedTypeOptions.map(option => {
+                    const isSelected = option === feedType;
 
-            <Text style={styles.total}>Total Feed Cost: {totalCost}</Text>
-
-            <View style={styles.tableWrapper}>
-                <DataTable
-                    columns={columns}
-                    data={records}
-                    keyExtractor={(item, index) => (item.feed_id || item.id || index).toString()}
-                    emptyText="No feed records yet"
-                    renderCell={(item, column) => {
-                        if (column.key === 'quantity') {
-                            return <Text style={styles.cellText}>{item.feed_quantity || item.quantity}</Text>;
-                        }
-
-                        if (column.key === 'cost') {
-                            return <Text style={styles.cellText}>{item.feed_cost || item.cost}</Text>;
-                        }
-
-                        if (column.key === 'date') {
-                            return <Text style={styles.cellText}>{item.date_recorded || item.date}</Text>;
-                        }
-
-                        if (column.key === 'actions') {
-                            return (
-                                canRecordFeed ? (
-                                    <TouchableOpacity
-                                        style={styles.dangerAction}
-                                        onPress={() => handleDelete(item.feed_id || item.id)}
-                                    >
-                                        <Text style={styles.dangerActionText}>Delete</Text>
-                                    </TouchableOpacity>
-                                ) : (
-                                    <Text style={styles.viewOnlyText}>View only</Text>
-                                )
-                            );
-                        }
-
-                        return null;
-                    }}
-                />
+                    return (
+                        <TouchableOpacity
+                        key={option}
+                        style={[styles.dropdownOption, isSelected ? styles.dropdownOptionSelected : null]}
+                        activeOpacity={0.8}
+                        onPress={() => {
+                            setFeedType(option);
+                            setShowFeedTypeDropdown(false);
+                        }}
+                        >
+                        <Text style={[styles.dropdownOptionText, isSelected ? styles.dropdownOptionTextSelected : null]}>
+                            {option.charAt(0).toUpperCase() + option.slice(1)}
+                        </Text>
+                        </TouchableOpacity>
+                    );
+                    })}
+                </View>
+                ) : null}
             </View>
+
+            <TextInput
+                placeholder="Quantity (kg)"
+                placeholderTextColor="#666"
+                value={quantity}
+                onChangeText={handleQuantityChange}
+                keyboardType="numeric"
+                style={styles.input}
+            />
+            {quantityError ? <Text style={styles.errorText}>{quantityError}</Text> : null}
+
+            <Button title="Add Feed" onPress={handleAdd} />
+            </>
+        ) : (
+            <Text style={styles.noteText}>You can review feed records, but only owners and workers can add feed entries.</Text>
+        )}
+
+        <View style={styles.actions}>
+            <Button title="View Feed Records" onPress={() => navigation.navigate('ViewFeeds', { batchId, userId })} />
+        </View>
         </ScreenBackground>
     );
-}
+    }
 
-const styles = StyleSheet.create({
+    const styles = StyleSheet.create({
     container: {
         flex: 1,
         padding: 20,
-    },
-    helperText: {
-        color: '#e2e8f0',
-        marginBottom: 10,
     },
     title: {
         fontSize: 20,
         marginBottom: 10,
         color: '#fff',
         fontWeight: '700',
+    },
+    noteText: {
+        color: '#cbd5e1',
+        marginBottom: 12,
+    },
+    ageNote: {
+        color: '#bfdbfe',
+        marginBottom: 12,
     },
     input: {
         borderWidth: 1,
@@ -206,31 +244,55 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderColor: '#cbd5e1',
     },
-    total: {
-        marginTop: 10,
+    errorText: {
+        color: '#fecaca',
         marginBottom: 10,
-        fontWeight: 'bold',
-        color: '#fff',
     },
-    tableWrapper: {
-        marginTop: 8,
+    dropdownContainer: {
+        marginBottom: 12,
     },
-    cellText: {
-        color: '#334155',
-    },
-    dangerAction: {
-        backgroundColor: '#fee2e2',
+    dropdownTrigger: {
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
+        borderRadius: 6,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
         paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 8,
-        alignSelf: 'flex-start',
+        paddingVertical: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
     },
-    dangerActionText: {
-        color: '#b91c1c',
-        fontWeight: '600',
+    dropdownTriggerText: {
+        color: '#0f172a',
+        fontSize: 15,
     },
-    viewOnlyText: {
-        color: '#64748b',
-        fontStyle: 'italic',
+    dropdownChevron: {
+        color: '#475569',
+        fontSize: 12,
+    },
+    dropdownMenu: {
+        marginTop: 6,
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
+        borderRadius: 6,
+        overflow: 'hidden',
+        backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    },
+    dropdownOption: {
+        paddingHorizontal: 12,
+        paddingVertical: 14,
+    },
+    dropdownOptionSelected: {
+        backgroundColor: '#dbeafe',
+    },
+    dropdownOptionText: {
+        color: '#0f172a',
+        fontSize: 15,
+    },
+    dropdownOptionTextSelected: {
+        fontWeight: '700',
+    },
+    actions: {
+        marginTop: 14,
     },
 });

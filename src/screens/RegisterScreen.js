@@ -52,6 +52,10 @@ const getValidationMessage = ({
 export default function RegisterScreen({ navigation, route }) {
   const ownerUserId = route?.params?.ownerUserId ?? null;
   const isOwnerCreatingStaff = ownerUserId != null;
+  const roleOptions = [
+    { label: 'Manager', value: 'manager' },
+    { label: 'Worker', value: 'worker' },
+  ];
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -61,6 +65,7 @@ export default function RegisterScreen({ navigation, route }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [role, setRole] = useState(isOwnerCreatingStaff ? 'manager' : 'owner');
+  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const hasStartedTyping = Boolean(firstName || lastName || email || password || confirmPassword);
 
@@ -191,13 +196,41 @@ export default function RegisterScreen({ navigation, route }) {
       </Text>
 
       {isOwnerCreatingStaff ? (
-        <View style={styles.roleButtons}>
-          <View style={styles.roleButton}>
-            <Button title="Manager" onPress={() => setRole('manager')} />
-          </View>
-          <View style={styles.roleButton}>
-            <Button title="Worker" onPress={() => setRole('worker')} />
-          </View>
+        <View style={styles.dropdownContainer}>
+          <TouchableOpacity
+            style={styles.dropdownTrigger}
+            activeOpacity={0.8}
+            onPress={() => setShowRoleDropdown(previous => !previous)}
+          >
+            <Text style={styles.dropdownTriggerText}>
+              {roleOptions.find(option => option.value === role)?.label ?? 'Select role'}
+            </Text>
+            <Text style={styles.dropdownChevron}>{showRoleDropdown ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+
+          {showRoleDropdown ? (
+            <View style={styles.dropdownMenu}>
+              {roleOptions.map(option => {
+                const isSelected = option.value === role;
+
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[styles.dropdownOption, isSelected ? styles.dropdownOptionSelected : null]}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setRole(option.value);
+                      setShowRoleDropdown(false);
+                    }}
+                  >
+                    <Text style={[styles.dropdownOptionText, isSelected ? styles.dropdownOptionTextSelected : null]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
         </View>
       ) : null}
 
@@ -289,11 +322,49 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 12,
   },
-  roleButtons: {
+  dropdownContainer: {
     marginBottom: 12,
   },
-  roleButton: {
-    marginBottom: 8,
+  dropdownTrigger: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dropdownTriggerText: {
+    color: '#0f172a',
+    fontSize: 15,
+  },
+  dropdownChevron: {
+    color: '#475569',
+    fontSize: 12,
+  },
+  dropdownMenu: {
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 6,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+  },
+  dropdownOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+  },
+  dropdownOptionSelected: {
+    backgroundColor: '#dcfce7',
+  },
+  dropdownOptionText: {
+    color: '#0f172a',
+    fontSize: 15,
+  },
+  dropdownOptionTextSelected: {
+    fontWeight: '700',
   },
   input: {
     borderWidth: 1,
