@@ -7,6 +7,7 @@ import DataTable from '../components/DataTable';
 export default function ViewFarmsScreen({ navigation, route }) {
   const userId = route?.params?.userId ?? route?.params?.user_Id;
   const [farms, setFarms] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
   const [editingFarm, setEditingFarm] = useState(null);
   const [newName, setNewName] = useState('');
@@ -103,6 +104,20 @@ export default function ViewFarmsScreen({ navigation, route }) {
     return [...baseColumns, { key: 'actions', title: 'Actions', width: 160 }];
   }, [isOwner]);
 
+  const filteredFarms = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return farms;
+    }
+
+    return farms.filter(farm =>
+      [farm.farm_name, farm.location]
+        .filter(Boolean)
+        .some(value => String(value).toLowerCase().includes(normalizedQuery))
+    );
+  }, [farms, searchQuery]);
+
   return (
     <ScrollView
       style={styles.container}
@@ -123,11 +138,25 @@ export default function ViewFarmsScreen({ navigation, route }) {
           : 'These farms are linked to the owner account that created your login.'}
       </Text>
 
+      <TextInput
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        style={styles.searchInput}
+        placeholder="Search by farm name or location"
+        placeholderTextColor="#64748b"
+      />
+
       <DataTable
         columns={columns}
-        data={farms}
+        data={filteredFarms}
         keyExtractor={(item) => item.farm_id.toString()}
-        emptyText={isOwner ? 'No farms yet. Add one!' : 'No owner farms are linked to this account yet.'}
+        emptyText={
+          searchQuery.trim()
+            ? 'No farms match your search.'
+            : isOwner
+              ? 'No farms yet. Add one!'
+              : 'No owner farms are linked to this account yet.'
+        }
         renderCell={(item, column) => {
           if (editingFarm === item.farm_id && isOwner) {
             if (column.key === 'farm_name') {
@@ -240,6 +269,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     backgroundColor: '#fff',
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    color: '#0f172a',
+    marginBottom: 14,
   },
   cellText: {
     color: '#334155',

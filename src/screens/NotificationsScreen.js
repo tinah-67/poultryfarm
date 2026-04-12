@@ -1,14 +1,14 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenBackground from '../components/ScreenBackground';
-import DataTable from '../components/DataTable';
 import {
   getAccessibleFarms,
   getBatchesByFarmId,
   getFeedRecordsByBatchId,
   getMortalityRecordsByBatchId,
   getSalesByBatchId,
+  getUserById,
   getVaccinationRecordsByBatchId,
 } from '../database/db';
 
@@ -54,6 +54,25 @@ const NotificationCard = ({ label, value }) => (
   </View>
 );
 
+const NotificationListItem = ({ item, onPress }) => (
+  <TouchableOpacity style={styles.notificationItem} activeOpacity={0.85} onPress={onPress}>
+    <View style={styles.notificationHeader}>
+      <View style={styles.notificationHeaderLeft}>
+        <View style={[styles.notificationDot, styles[`${item.severity}Dot`]]} />
+        <Text style={styles.notificationSender}>Farm Notification</Text>
+      </View>
+      <Text style={styles.notificationType}>{item.type}</Text>
+    </View>
+    <Text style={styles.notificationMessage}>{item.title}</Text>
+    <Text style={styles.notificationPreview} numberOfLines={1}>
+      {item.detail}
+    </Text>
+    <Text style={styles.notificationMeta}>
+      {item.batchLabel} - {item.farmName} - {item.farmLocation}
+    </Text>
+  </TouchableOpacity>
+);
+
 const getBatchLabel = batch => {
   const breed = String(batch?.breed || '').trim();
   const startDate = String(batch?.start_date || '').trim();
@@ -69,14 +88,60 @@ const getBatchLabel = batch => {
   return `Batch #${batch?.batch_id ?? 'N/A'}`;
 };
 
+const canRoleSeeNotification = (role, notificationType) => {
+  if (role === 'owner') {
+    return true;
+  }
+
+  if (role === 'manager') {
+    return [
+      'Vaccination',
+      'Mortality',
+      'Sale readiness',
+      'Feed records',
+      'Low birds',
+      'Batch status',
+    ].includes(notificationType);
+  }
+
+  if (role === 'worker') {
+    return [
+      'Vaccination',
+      'Mortality',
+      'Feed records',
+      'Age milestone',
+    ].includes(notificationType);
+  }
+
+  return false;
+};
+
 export default function NotificationsScreen({ route }) {
   const userId = route?.params?.userId;
   const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [selectedSeverity, setSelectedSeverity] = useState('all');
+  const [currentUser, setCurrentUser] = useState(null);
+
+  const finalizeNotifications = useCallback((items, role, done) => {
+    setNotifications(
+      items
+        .filter(item => canRoleSeeNotification(role, item.type))
+        .sort((left, right) => {
+          const severityDifference = SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity];
+          if (severityDifference !== 0) {
+            return severityDifference;
+          }
+
+          return left.title.localeCompare(right.title);
+        })
+    );
+    done && done();
+  }, []);
 
   const loadNotifications = useCallback((done) => {
     if (!userId) {
+      setCurrentUser(null);
       setNotifications([]);
       done && done();
       return;
@@ -84,47 +149,42 @@ export default function NotificationsScreen({ route }) {
 
     const today = startOfDay(new Date());
 
-    getAccessibleFarms(userId, farms => {
-      const safeFarms = farms || [];
+    getUserById(userId, user => {
+      setCurrentUser(user);
 
-      if (safeFarms.length === 0) {
-        setNotifications([]);
-        done && done();
-        return;
-      }
+      getAccessibleFarms(userId, farms => {
+        const safeFarms = farms || [];
 
-      const nextNotifications = [];
-      let processedFarms = 0;
+        if (safeFarms.length === 0) {
+          setNotifications([]);
+          done && done();
+          return;
+        }
 
-      safeFarms.forEach(farm => {
-        getBatchesByFarmId(farm.farm_id, batches => {
-          const safeBatches = batches || [];
+        const nextNotifications = [];
+        let processedFarms = 0;
 
-          if (safeBatches.length === 0) {
-            processedFarms += 1;
+        safeFarms.forEach(farm => {
+          getBatchesByFarmId(farm.farm_id, batches => {
+            const safeBatches = batches || [];
 
-            if (processedFarms === safeFarms.length) {
-              setNotifications(nextNotifications.sort((left, right) => {
-                const severityDifference = SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity];
-                if (severityDifference !== 0) {
-                  return severityDifference;
-                }
+            if (safeBatches.length === 0) {
+              processedFarms += 1;
 
-                return left.title.localeCompare(right.title);
-              }));
-              done && done();
+              if (processedFarms === safeFarms.length) {
+                finalizeNotifications(nextNotifications, user?.role, done);
+              }
+
+              return;
             }
 
-            return;
-          }
+            let processedBatches = 0;
 
-          let processedBatches = 0;
-
-          safeBatches.forEach(batch => {
-            getFeedRecordsByBatchId(batch.batch_id, feedRecords => {
-              getMortalityRecordsByBatchId(batch.batch_id, mortalityRecords => {
-                getSalesByBatchId(batch.batch_id, saleRecords => {
-                  getVaccinationRecordsByBatchId(batch.batch_id, vaccinationRecords => {
+            safeBatches.forEach(batch => {
+              getFeedRecordsByBatchId(batch.batch_id, feedRecords => {
+                getMortalityRecordsByBatchId(batch.batch_id, mortalityRecords => {
+                  getSalesByBatchId(batch.batch_id, saleRecords => {
+                    getVaccinationRecordsByBatchId(batch.batch_id, vaccinationRecords => {
                     const safeFeedRecords = feedRecords || [];
                     const safeMortalityRecords = mortalityRecords || [];
                     const safeSaleRecords = saleRecords || [];
@@ -179,7 +239,7 @@ export default function NotificationsScreen({ route }) {
                       });
                     }
 
-                    if (isActive && ageInDays != null && ageInDays >= 35 && birdsAlive > 0) {
+                    if (isActive && ageInDays != null && ageInDays >= 49 && birdsAlive > 0) {
                       nextNotifications.push({
                         id: `sale-ready-${batch.batch_id}`,
                         severity: 'warning',
@@ -257,7 +317,7 @@ export default function NotificationsScreen({ route }) {
                         return;
                       }
 
-                      if (daysUntilDue <= 3) {
+                      if (daysUntilDue <= 1) {
                         nextNotifications.push({
                           id: `vaccination-due-${record.vaccination_id}`,
                           severity: daysUntilDue === 0 ? 'warning' : 'info',
@@ -294,15 +354,7 @@ export default function NotificationsScreen({ route }) {
                       processedFarms += 1;
 
                       if (processedFarms === safeFarms.length) {
-                        setNotifications(nextNotifications.sort((left, right) => {
-                          const severityDifference = SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity];
-                          if (severityDifference !== 0) {
-                            return severityDifference;
-                          }
-
-                          return left.title.localeCompare(right.title);
-                        }));
-                        done && done();
+                        finalizeNotifications(nextNotifications, user?.role, done);
                       }
                     }
                   });
@@ -313,7 +365,8 @@ export default function NotificationsScreen({ route }) {
         });
       });
     });
-  }, [userId]);
+    });
+  }, [finalizeNotifications, userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -334,16 +387,6 @@ export default function NotificationsScreen({ route }) {
     return notifications.filter(item => item.severity === selectedSeverity);
   }, [notifications, selectedSeverity]);
 
-  const columns = [
-    { key: 'severity', title: 'Priority', width: 90 },
-    { key: 'type', title: 'Type', width: 120 },
-    { key: 'farmName', title: 'Farm', width: 130 },
-    { key: 'farmLocation', title: 'Location', width: 150 },
-    { key: 'batchLabel', title: 'Batch', width: 170 },
-    { key: 'title', title: 'Alert', width: 220 },
-    { key: 'detail', title: 'Details', width: 260 },
-  ];
-
   const summary = {
     total: notifications.length,
     critical: notifications.filter(item => item.severity === 'critical').length,
@@ -358,6 +401,11 @@ export default function NotificationsScreen({ route }) {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ffffff" />}
     >
       <Text style={styles.title}>Notifications</Text>
+      {currentUser?.role ? (
+        <Text style={styles.subtitle}>
+          Showing alerts for {currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1)} role
+        </Text>
+      ) : null}
 
       <View style={styles.summaryGrid}>
         <NotificationCard label="All Alerts" value={String(summary.total)} />
@@ -385,26 +433,21 @@ export default function NotificationsScreen({ route }) {
         })}
       </View>
 
-      <View style={styles.tableCard}>
-        <DataTable
-          columns={columns}
-          data={filteredNotifications}
-          keyExtractor={item => item.id}
-          emptyText="No notifications right now."
-          renderCell={(item, column) => {
-            const value = item[column.key];
-
-            if (column.key === 'severity') {
-              return (
-                <Text style={[styles.cellText, styles[`${item.severity}Text`]]}>
-                  {String(value || '').toUpperCase()}
-                </Text>
+      <View style={styles.listCard}>
+        {filteredNotifications.length ? filteredNotifications.map(item => (
+          <NotificationListItem
+            key={item.id}
+            item={item}
+            onPress={() => {
+              Alert.alert(
+                item.title,
+                `Priority: ${item.severity.toUpperCase()}\nType: ${item.type}\nBatch: ${item.batchLabel}\nFarm: ${item.farmName}\nLocation: ${item.farmLocation}\n\n${item.detail}`
               );
-            }
-
-            return <Text style={styles.cellText}>{String(value ?? 'N/A')}</Text>;
-          }}
-        />
+            }}
+          />
+        )) : (
+          <Text style={styles.emptyText}>No notifications right now.</Text>
+        )}
       </View>
     </ScreenBackground>
   );
@@ -419,6 +462,10 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#fff',
+    marginBottom: 8,
+  },
+  subtitle: {
+    color: '#e2e8f0',
     marginBottom: 16,
   },
   summaryGrid: {
@@ -462,16 +509,73 @@ const styles = StyleSheet.create({
   filterChipTextSelected: {
     color: '#166534',
   },
-  tableCard: {
+  listCard: {
     backgroundColor: 'rgba(15, 23, 42, 0.72)',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.12)',
   },
-  cellText: {
+  notificationItem: {
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+  },
+  notificationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  notificationHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  notificationDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+  },
+  criticalDot: {
+    backgroundColor: '#b91c1c',
+  },
+  warningDot: {
+    backgroundColor: '#b45309',
+  },
+  infoDot: {
+    backgroundColor: '#1d4ed8',
+  },
+  notificationSender: {
     color: '#0f172a',
     fontSize: 13,
+    fontWeight: '700',
+  },
+  notificationType: {
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  notificationMessage: {
+    color: '#0f172a',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  notificationPreview: {
+    color: '#475569',
+    fontSize: 14,
+    marginBottom: 6,
+  },
+  notificationMeta: {
+    color: '#64748b',
+    lineHeight: 18,
+  },
+  emptyText: {
+    color: '#e2e8f0',
+    textAlign: 'center',
+    paddingVertical: 12,
   },
   criticalText: {
     color: '#b91c1c',

@@ -1,7 +1,13 @@
 import React, { useCallback, useState } from 'react';
 import { Alert, Text, Button, StyleSheet } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { getBatchById, getUserById, updateBatchStatus } from '../database/db';
+import {
+  getBatchById,
+  getMortalityRecordsByBatchId,
+  getSalesByBatchId,
+  getUserById,
+  updateBatchStatus,
+} from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 
 export default function BatchDetailsScreen({ route, navigation }) {
@@ -36,6 +42,37 @@ export default function BatchDetailsScreen({ route, navigation }) {
   const batchStatus = batch?.status || 'active';
   const isCompleted = batchStatus === 'completed';
 
+  const canCompleteBatch = useCallback((callback) => {
+    if (!batchId) {
+      callback(false);
+      return;
+    }
+
+    getBatchById(batchId, batchRecord => {
+      if (!batchRecord) {
+        callback(false);
+        return;
+      }
+
+      getMortalityRecordsByBatchId(batchId, mortalityRecords => {
+        getSalesByBatchId(batchId, salesRecords => {
+          const initialChicks = Number(batchRecord.initial_chicks || 0);
+          const totalMortality = (mortalityRecords || []).reduce(
+            (sum, item) => sum + Number(item.number_dead || 0),
+            0
+          );
+          const totalBirdsSold = (salesRecords || []).reduce(
+            (sum, item) => sum + Number(item.birds_sold || 0),
+            0
+          );
+          const birdsAvailableForSale = Math.max(initialChicks - totalMortality - totalBirdsSold, 0);
+
+          callback(birdsAvailableForSale <= 0, birdsAvailableForSale);
+        });
+      });
+    });
+  }, [batchId]);
+
   const handleToggleBatchStatus = () => {
     if (!canManageBatchStatus) {
       Alert.alert('Access denied', 'Only owner and manager users can change batch status.');
@@ -49,6 +86,35 @@ export default function BatchDetailsScreen({ route, navigation }) {
 
     const nextStatus = isCompleted ? 'active' : 'completed';
     const actionLabel = isCompleted ? 'reactivate' : 'mark as completed';
+
+    if (!isCompleted) {
+      canCompleteBatch((allowed, birdsAvailableForSale = 0) => {
+        if (!allowed) {
+          Alert.alert(
+            'Cannot Complete Batch',
+            `${birdsAvailableForSale} bird(s) are still available for sale in this batch. Record the remaining sales before completing it.`
+          );
+          return;
+        }
+
+        Alert.alert(
+          'Update Batch Status',
+          `Are you sure you want to ${actionLabel} this batch?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Confirm',
+              onPress: () => {
+                updateBatchStatus(batchId, nextStatus);
+                setBatch(previous => (previous ? { ...previous, status: nextStatus } : previous));
+                Alert.alert('Success', `Batch status updated to ${nextStatus}.`);
+              },
+            },
+          ]
+        );
+      });
+      return;
+    }
 
     Alert.alert(
       'Update Batch Status',

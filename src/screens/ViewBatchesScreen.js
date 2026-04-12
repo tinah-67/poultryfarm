@@ -1,7 +1,14 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, Button, StyleSheet, TouchableOpacity, Alert, ScrollView, RefreshControl, TextInput } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { getBatches, deleteBatch, getUserById, updateBatchDetails } from '../database/db';
+import {
+    getBatches,
+    deleteBatch,
+    getMortalityRecordsByBatchId,
+    getSalesByBatchId,
+    getUserById,
+    updateBatchDetails,
+} from '../database/db';
 import DataTable from '../components/DataTable';
 
 export default function ViewBatchesScreen({ navigation, route }) {
@@ -50,6 +57,30 @@ export default function ViewBatchesScreen({ navigation, route }) {
     );
 
     const canManageBatches = ['owner', 'manager'].includes(currentUser?.role);
+
+    const canCompleteBatch = useCallback((batch, callback) => {
+        if (!batch?.batch_id) {
+            callback(false);
+            return;
+        }
+
+        getMortalityRecordsByBatchId(batch.batch_id, mortalityRecords => {
+            getSalesByBatchId(batch.batch_id, salesRecords => {
+                const initialChicks = Number(batch.initial_chicks || 0);
+                const totalMortality = (mortalityRecords || []).reduce(
+                    (sum, item) => sum + Number(item.number_dead || 0),
+                    0
+                );
+                const totalBirdsSold = (salesRecords || []).reduce(
+                    (sum, item) => sum + Number(item.birds_sold || 0),
+                    0
+                );
+                const birdsAvailableForSale = Math.max(initialChicks - totalMortality - totalBirdsSold, 0);
+
+                callback(birdsAvailableForSale <= 0, birdsAvailableForSale);
+            });
+        });
+    }, []);
 
     const columns = useMemo(() => [
         { key: 'batch_id', title: 'Batch ID', width: 100 },
@@ -104,13 +135,42 @@ export default function ViewBatchesScreen({ navigation, route }) {
             return;
         }
 
+        const nextStatus = editedStatus.trim() || 'active';
+        const batchBeingEdited = batches.find(item => item.batch_id === editingBatch);
+
+        if (nextStatus.toLowerCase() === 'completed') {
+            canCompleteBatch(batchBeingEdited, (allowed, birdsAvailableForSale = 0) => {
+                if (!allowed) {
+                    Alert.alert(
+                        'Cannot Complete Batch',
+                        `${birdsAvailableForSale} bird(s) are still available for sale in this batch. Record the remaining sales before completing it.`
+                    );
+                    return;
+                }
+
+                updateBatchDetails(
+                    editingBatch,
+                    editedStartDate.trim(),
+                    editedBreed.trim(),
+                    Number(editedInitialChicks),
+                    editedPurchaseCost.trim() === '' ? 0 : Number(editedPurchaseCost),
+                    nextStatus,
+                    () => {
+                        cancelEdit();
+                        loadBatches();
+                    }
+                );
+            });
+            return;
+        }
+
         updateBatchDetails(
             editingBatch,
             editedStartDate.trim(),
             editedBreed.trim(),
             Number(editedInitialChicks),
             editedPurchaseCost.trim() === '' ? 0 : Number(editedPurchaseCost),
-            editedStatus.trim() || 'active',
+            nextStatus,
             () => {
                 cancelEdit();
                 loadBatches();
