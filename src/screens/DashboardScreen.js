@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Alert, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, ImageBackground, View } from 'react-native';
+import { Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, ImageBackground, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearRememberedSession, getUserById } from '../database/db';
 import { syncPendingBackup } from '../services/backupSync';
@@ -9,7 +9,6 @@ export default function DashboardScreen({ navigation, route }) {
   const userId = route?.params?.userId;
   const [refreshing, setRefreshing] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const [syncingBackup, setSyncingBackup] = useState(false);
 
   console.log('DASHBOARD userId:', userId);
 
@@ -40,31 +39,6 @@ export default function DashboardScreen({ navigation, route }) {
     });
   }, []);
 
-  const handleManualBackupSync = useCallback(async () => {
-    if (syncingBackup) {
-      return;
-    }
-
-    setSyncingBackup(true);
-
-    try {
-      const results = await syncPendingBackup();
-      const syncedCount = results.reduce((total, item) => total + (item.syncedCount || 0), 0);
-
-      Alert.alert(
-        'Backup sync',
-        syncedCount > 0
-          ? `${syncedCount} record(s) synced successfully.`
-          : 'Everything is already backed up.'
-      );
-    } catch (error) {
-      console.log('Manual backup sync failed:', error);
-      Alert.alert('Backup sync failed', 'Could not sync right now. Please try again when the server is reachable.');
-    } finally {
-      setSyncingBackup(false);
-    }
-  }, [syncingBackup]);
-
   useFocusEffect(
     useCallback(() => {
       loadUser();
@@ -91,6 +65,7 @@ export default function DashboardScreen({ navigation, route }) {
 
   const roleLabel = currentUser?.role ? currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1) : null;
   const isOwner = currentUser?.role === 'owner';
+  const isWorker = currentUser?.role === 'worker';
 
   return (
     <ImageBackground
@@ -130,15 +105,17 @@ export default function DashboardScreen({ navigation, route }) {
             style={styles.card}
             onPress={() => navigation.navigate('ViewFarms', { userId })}
           >
-            <Text style={styles.cardText}>{isOwner ? 'Batch Management' : 'Farms'}</Text>
+            <Text style={styles.cardText}>Batch Management</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => navigation.navigate('FarmPerformanceSummary', { userId })}
-          >
-            <Text style={styles.cardText}>Farm Performance Summary</Text>
-          </TouchableOpacity>
+          {!isWorker ? (
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => navigation.navigate('FarmPerformanceSummary', { userId })}
+            >
+              <Text style={styles.cardText}>Farm Performance Summary</Text>
+            </TouchableOpacity>
+          ) : null}
 
           <TouchableOpacity
             style={styles.card}
@@ -152,14 +129,6 @@ export default function DashboardScreen({ navigation, route }) {
             onPress={() => navigation.navigate('Notifications', { userId })}
           >
             <Text style={styles.cardText}>Notifications</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.card, styles.syncCard, syncingBackup && styles.cardDisabled]}
-            onPress={handleManualBackupSync}
-            disabled={syncingBackup}
-          >
-            <Text style={styles.cardText}>{syncingBackup ? 'Syncing Backup...' : 'Sync Now'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -213,12 +182,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     textAlign: 'center',
-  },
-  syncCard: {
-    backgroundColor: 'rgba(2, 132, 199, 0.9)',
-  },
-  cardDisabled: {
-    opacity: 0.7,
   },
   logoutButton: {
     marginTop: 24,

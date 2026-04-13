@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenBackground from '../components/ScreenBackground';
 import DataTable from '../components/DataTable';
@@ -86,6 +86,18 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
 
     getUserById(userId, user => {
       setCurrentUser(user);
+
+      if (user?.role === 'worker') {
+        setFarmSummaries([]);
+        setOverallMetrics(createEmptyMetrics());
+        setSelectedFarmId('all');
+        setShowFarmDropdown(false);
+        Alert.alert('Access denied', 'Workers cannot view farm performance summaries.', [
+          { text: 'OK', onPress: () => navigation.goBack() },
+        ]);
+        done && done();
+        return;
+      }
 
       getAccessibleFarms(userId, farms => {
         const safeFarms = farms || [];
@@ -224,7 +236,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
         });
       });
     });
-  }, [userId]);
+  }, [navigation, userId]);
 
   useFocusEffect(
     useCallback(() => {

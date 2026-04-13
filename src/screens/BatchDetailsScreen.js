@@ -39,6 +39,7 @@ export default function BatchDetailsScreen({ route, navigation }) {
 
   const role = currentUser?.role;
   const canManageBatchStatus = role === 'owner' || role === 'manager';
+  const canAccessFinancialActions = role === 'owner' || role === 'manager';
   const batchStatus = batch?.status || 'active';
   const isCompleted = batchStatus === 'completed';
 
@@ -150,8 +151,12 @@ export default function BatchDetailsScreen({ route, navigation }) {
       <Button title="Feeds" onPress={() => navigation.navigate('Feed', { batchId, userId })} />
       <Button title="Mortality" onPress={() => navigation.navigate('Mortality', { batchId, userId })} />
       <Button title="Vaccination" onPress={() => navigation.navigate('Vaccination', { batchId, userId })} />
-      <Button title="Expenses" onPress={() => navigation.navigate('Expense', { batchId, userId })} />
-      <Button title="Sales" onPress={() => navigation.navigate('Sales', { batchId, userId })} />
+      {canAccessFinancialActions ? (
+        <Button title="Expenses" onPress={() => navigation.navigate('Expense', { batchId, userId })} />
+      ) : null}
+      {canAccessFinancialActions ? (
+        <Button title="Sales" onPress={() => navigation.navigate('Sales', { batchId, userId })} />
+      ) : null}
       <Button title="Batch Performance" onPress={() => navigation.navigate('BatchPerformance', { batchId, farmName, userId })} />
       {canManageBatchStatus ? (
         <Button title={isCompleted ? 'Reactivate Batch' : 'Complete Batch'} onPress={handleToggleBatchStatus} />

@@ -24,6 +24,8 @@ export default function ViewBatchesScreen({ navigation, route }) {
     const [editedInitialChicks, setEditedInitialChicks] = useState('');
     const [editedPurchaseCost, setEditedPurchaseCost] = useState('');
     const [editedStatus, setEditedStatus] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
     const [refreshing, setRefreshing] = useState(false);
 
     const loadBatches = useCallback((done) => {
@@ -90,6 +92,33 @@ export default function ViewBatchesScreen({ navigation, route }) {
         { key: 'status', title: 'Status', width: 120 },
         { key: 'actions', title: 'Actions', width: canManageBatches ? 310 : 140 },
     ], [canManageBatches]);
+
+    const filteredBatches = useMemo(() => {
+        const normalizedQuery = searchQuery.trim().toLowerCase();
+        return batches.filter(batch => {
+            const matchesStatus =
+                statusFilter === 'all' ||
+                String(batch.status || '').toLowerCase() === statusFilter;
+
+            if (!matchesStatus) {
+                return false;
+            }
+
+            if (!normalizedQuery) {
+                return true;
+            }
+
+            return [
+                batch.batch_id,
+                batch.start_date,
+                batch.breed,
+                batch.initial_chicks,
+                batch.status,
+            ]
+                .filter(value => value !== null && value !== undefined)
+                .some(value => String(value).toLowerCase().includes(normalizedQuery));
+        });
+    }, [batches, searchQuery, statusFilter]);
 
     const startEdit = (batch) => {
         if (!canManageBatches) {
@@ -220,6 +249,36 @@ export default function ViewBatchesScreen({ navigation, route }) {
                 : 'You can view batch details here.'}
         </Text>
 
+        <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            style={styles.searchInput}
+            placeholder="Search by batch ID, date, breed, chicks, or status"
+            placeholderTextColor="#64748b"
+        />
+
+        <View style={styles.filterRow}>
+            {['all', 'active', 'completed'].map(filter => (
+                <TouchableOpacity
+                    key={filter}
+                    style={[
+                        styles.filterChip,
+                        statusFilter === filter && styles.filterChipActive,
+                    ]}
+                    onPress={() => setStatusFilter(filter)}
+                >
+                    <Text
+                        style={[
+                            styles.filterChipText,
+                            statusFilter === filter && styles.filterChipTextActive,
+                        ]}
+                    >
+                        {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                    </Text>
+                </TouchableOpacity>
+            ))}
+        </View>
+
         {canManageBatches ? (
             <Button
                 title="Add Batch"
@@ -230,9 +289,13 @@ export default function ViewBatchesScreen({ navigation, route }) {
         <View style={styles.tableWrapper}>
         <DataTable
             columns={columns}
-            data={batches}
+            data={filteredBatches}
             keyExtractor={(item) => item.batch_id.toString()}
-                    emptyText="No batches yet. Add one for this farm."
+                    emptyText={
+                        searchQuery.trim() || statusFilter !== 'all'
+                            ? 'No batches match your search.'
+                            : 'No batches yet. Add one for this farm.'
+                    }
                     renderCell={(item, column) => {
                         if (editingBatch === item.batch_id && canManageBatches) {
                             if (column.key === 'batch_id') {
@@ -377,6 +440,37 @@ const styles = StyleSheet.create({
     title: { fontSize: 20, marginBottom: 10, color: '#0f172a', fontWeight: '700' },
     subtitle: { marginBottom: 6, color: '#475569' },
     helperText: { marginBottom: 12, color: '#64748b' },
+    searchInput: {
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        backgroundColor: '#fff',
+        color: '#0f172a',
+        marginBottom: 14,
+    },
+    filterRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginBottom: 8,
+    },
+    filterChip: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 999,
+        backgroundColor: '#e2e8f0',
+    },
+    filterChipActive: {
+        backgroundColor: '#1d4ed8',
+    },
+    filterChipText: {
+        color: '#334155',
+        fontWeight: '600',
+    },
+    filterChipTextActive: {
+        color: '#fff',
+    },
     tableWrapper: { marginTop: 16 },
     batchIdText: { color: '#0f172a', fontWeight: '700' },
     cellText: { color: '#334155' },
