@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { getRememberedSession, initDB } from './src/database/db';
+import { syncPendingBackup } from './src/services/backupSync';
 
 // IMPORT SCREENS
 import LoginScreen from './src/screens/LoginScreen';
@@ -38,6 +39,9 @@ export default function App() {
 
   useEffect(() => {
     initDB();
+    syncPendingBackup().catch(error => {
+      console.log('Initial backup sync skipped:', error);
+    });
 
     getRememberedSession((session: { user_id: number } | null) => {
       setInitialUserId(session?.user_id ?? null);

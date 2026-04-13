@@ -1,12 +1,15 @@
 import React, { useCallback, useState } from 'react';
-import { Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, ImageBackground, View } from 'react-native';
+import { Alert, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, ImageBackground, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearRememberedSession, getUserById } from '../database/db';
+import { syncPendingBackup } from '../services/backupSync';
+import { syncDeviceNotificationsForUser } from '../services/localNotifications';
 
 export default function DashboardScreen({ navigation, route }) {
   const userId = route?.params?.userId;
   const [refreshing, setRefreshing] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [syncingBackup, setSyncingBackup] = useState(false);
 
   console.log('DASHBOARD userId:', userId);
 
@@ -21,10 +24,53 @@ export default function DashboardScreen({ navigation, route }) {
     });
   }, [userId]);
 
+  const syncNotifications = useCallback(() => {
+    if (!userId) {
+      return;
+    }
+
+    syncDeviceNotificationsForUser(userId).catch(error => {
+      console.log('Error syncing device notifications', error);
+    });
+  }, [userId]);
+
+  const syncBackup = useCallback(() => {
+    syncPendingBackup().catch(error => {
+      console.log('Backup sync skipped:', error);
+    });
+  }, []);
+
+  const handleManualBackupSync = useCallback(async () => {
+    if (syncingBackup) {
+      return;
+    }
+
+    setSyncingBackup(true);
+
+    try {
+      const results = await syncPendingBackup();
+      const syncedCount = results.reduce((total, item) => total + (item.syncedCount || 0), 0);
+
+      Alert.alert(
+        'Backup sync',
+        syncedCount > 0
+          ? `${syncedCount} record(s) synced successfully.`
+          : 'Everything is already backed up.'
+      );
+    } catch (error) {
+      console.log('Manual backup sync failed:', error);
+      Alert.alert('Backup sync failed', 'Could not sync right now. Please try again when the server is reachable.');
+    } finally {
+      setSyncingBackup(false);
+    }
+  }, [syncingBackup]);
+
   useFocusEffect(
     useCallback(() => {
       loadUser();
-    }, [loadUser])
+      syncNotifications();
+      syncBackup();
+    }, [loadUser, syncNotifications, syncBackup])
   );
 
   const handleLogout = () => {
@@ -36,6 +82,8 @@ export default function DashboardScreen({ navigation, route }) {
   const handleRefresh = () => {
     setRefreshing(true);
     loadUser();
+    syncNotifications();
+    syncBackup();
     setTimeout(() => {
       setRefreshing(false);
     }, 600);
@@ -106,6 +154,14 @@ export default function DashboardScreen({ navigation, route }) {
             <Text style={styles.cardText}>Notifications</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={[styles.card, styles.syncCard, syncingBackup && styles.cardDisabled]}
+            onPress={handleManualBackupSync}
+            disabled={syncingBackup}
+          >
+            <Text style={styles.cardText}>{syncingBackup ? 'Syncing Backup...' : 'Sync Now'}</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
@@ -157,6 +213,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     textAlign: 'center',
+  },
+  syncCard: {
+    backgroundColor: 'rgba(2, 132, 199, 0.9)',
+  },
+  cardDisabled: {
+    opacity: 0.7,
   },
   logoutButton: {
     marginTop: 24,

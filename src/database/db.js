@@ -8,6 +8,8 @@ const db = SQLite.openDatabase(
   200000
 );
 
+const REMEMBERED_SESSION_TTL_MS = 30 * 60 * 1000;
+
 console.log("DB initialized");
 
 const rowsToArray = (rows) => {
@@ -25,6 +27,67 @@ const rowsToArray = (rows) => {
   }
 
   return items;
+};
+
+const getCurrentTimestamp = () => new Date().toISOString();
+
+const softDeleteBatchDescendants = (tx, batchId, deletedAt) => {
+  const childTables = [
+    { tableName: 'feed_records', idColumn: 'batch_id' },
+    { tableName: 'mortality_records', idColumn: 'batch_id' },
+    { tableName: 'vaccination_records', idColumn: 'batch_id' },
+    { tableName: 'expenses', idColumn: 'batch_id' },
+    { tableName: 'sales', idColumn: 'batch_id' },
+  ];
+
+  childTables.forEach(({ tableName, idColumn }) => {
+    tx.executeSql(
+      `UPDATE ${tableName}
+       SET deleted_at = ?, synced = 0
+       WHERE ${idColumn} = ?
+         AND deleted_at IS NULL`,
+      [deletedAt, batchId],
+      () => console.log(`${tableName} children marked deleted for batch`, batchId),
+      (_, error) => {
+        console.log(`Error cascading delete for ${tableName}`, error);
+        return false;
+      }
+    );
+  });
+};
+
+const softDeleteFarmDescendants = (tx, farmId, deletedAt) => {
+  tx.executeSql(
+    `SELECT batch_id
+     FROM batches
+     WHERE farm_id = ?
+       AND deleted_at IS NULL`,
+    [farmId],
+    (_, result) => {
+      const batches = rowsToArray(result.rows);
+
+      batches.forEach(batch => {
+        softDeleteBatchDescendants(tx, batch.batch_id, deletedAt);
+      });
+
+      tx.executeSql(
+        `UPDATE batches
+         SET deleted_at = ?, synced = 0
+         WHERE farm_id = ?
+           AND deleted_at IS NULL`,
+        [deletedAt, farmId],
+        () => console.log("Farm batches marked deleted", farmId),
+        (_, error) => {
+          console.log("Error cascading delete for batches", error);
+          return false;
+        }
+      );
+    },
+    (_, error) => {
+      console.log("Error loading farm batches for cascade delete", error);
+      return false;
+    }
+  );
 };
 
 const ensureColumnExists = (tx, tableName, columnName, definition) => {
@@ -86,9 +149,12 @@ export const initDB = () => {
         farm_name TEXT,
         location TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        deleted_at TEXT,
         synced INTEGER DEFAULT 0
       );
     `, [], () => console.log("Farms table created"), (_, err) => console.log("Farms table error", err));
+
+    ensureColumnExists(tx, 'farms', 'deleted_at', 'TEXT');
 
     // BATCHES
     tx.executeSql(`
@@ -100,11 +166,13 @@ export const initDB = () => {
         initial_chicks INTEGER,
         purchase_cost REAL DEFAULT 0,
         status TEXT,
+        deleted_at TEXT,
         synced INTEGER DEFAULT 0
       );
     `, [], () => console.log("Batches table created"), (_, err) => console.log("Batches table error", err));
 
     ensureColumnExists(tx, 'batches', 'purchase_cost', 'REAL DEFAULT 0');
+    ensureColumnExists(tx, 'batches', 'deleted_at', 'TEXT');
 
     // FEED RECORDS
     tx.executeSql(`
@@ -115,11 +183,13 @@ export const initDB = () => {
         feed_quantity REAL,
         feed_cost REAL,
         date_recorded TEXT,
+        deleted_at TEXT,
         synced INTEGER DEFAULT 0
       );
     `, [], () => console.log("Feed records table created"), (_, err) => console.log("Feed records table error", err));
 
     ensureColumnExists(tx, 'feed_records', 'feed_type', 'TEXT');
+    ensureColumnExists(tx, 'feed_records', 'deleted_at', 'TEXT');
 
     // MORTALITY
     tx.executeSql(`
@@ -129,9 +199,12 @@ export const initDB = () => {
         number_dead INTEGER,
         cause_of_death TEXT,
         date_recorded TEXT,
+        deleted_at TEXT,
         synced INTEGER DEFAULT 0
       );
     `, [], () => console.log("Mortality records table created"), (_, err) => console.log("Mortality records table error", err));
+
+    ensureColumnExists(tx, 'mortality_records', 'deleted_at', 'TEXT');
 
     // VACCINATION
     tx.executeSql(`
@@ -142,9 +215,12 @@ export const initDB = () => {
         vaccination_date TEXT,
         next_due_date TEXT,
         notes TEXT,
+        deleted_at TEXT,
         synced INTEGER DEFAULT 0
       );
     `, [], () => console.log("Vaccination records table created"), (_, err) => console.log("Vaccination records table error", err));
+
+    ensureColumnExists(tx, 'vaccination_records', 'deleted_at', 'TEXT');
 
     // EXPENSES
     tx.executeSql(`
@@ -154,9 +230,12 @@ export const initDB = () => {
         description TEXT,
         amount REAL,
         expense_date TEXT,
+        deleted_at TEXT,
         synced INTEGER DEFAULT 0
       );
     `, [], () => console.log("Expenses table created"), (_, err) => console.log("Expenses table error", err));
+
+    ensureColumnExists(tx, 'expenses', 'deleted_at', 'TEXT');
 
     // SALES
     tx.executeSql(`
@@ -167,16 +246,29 @@ export const initDB = () => {
         price_per_bird REAL,
         total_revenue REAL,
         sale_date TEXT,
+        deleted_at TEXT,
         synced INTEGER DEFAULT 0
       );
     `, [], () => console.log("Sales table created"), (_, err) => console.log("Sales table error", err));
 
+    ensureColumnExists(tx, 'sales', 'deleted_at', 'TEXT');
+
     tx.executeSql(`
       CREATE TABLE IF NOT EXISTS app_session (
         session_id INTEGER PRIMARY KEY CHECK (session_id = 1),
-        user_id INTEGER
+        user_id INTEGER,
+        remembered_at TEXT
       );
     `, [], () => console.log("App session table created"), (_, err) => console.log("App session table error", err));
+
+    ensureColumnExists(tx, 'app_session', 'remembered_at', 'TEXT');
+
+    tx.executeSql(`
+      CREATE TABLE IF NOT EXISTS notification_delivery_log (
+        notification_id TEXT PRIMARY KEY,
+        delivered_at TEXT NOT NULL
+      );
+    `, [], () => console.log("Notification delivery log table created"), (_, err) => console.log("Notification delivery log table error", err));
 
   });
 };
@@ -414,8 +506,8 @@ export const getFarms = (userId, callback) => {
   db.transaction(tx => {
     const query =
       normalizedUserId != null
-        ? "SELECT * FROM farms WHERE user_id = ?"
-        : "SELECT * FROM farms";
+        ? "SELECT * FROM farms WHERE user_id = ? AND deleted_at IS NULL"
+        : "SELECT * FROM farms WHERE deleted_at IS NULL";
 
     const params =
       normalizedUserId != null ? [normalizedUserId] : [];
@@ -441,7 +533,7 @@ export const getFarms = (userId, callback) => {
 export const updateFarm = (farm_id, farm_name, location) => {
   db.transaction(tx => {
     tx.executeSql(
-      `UPDATE farms SET farm_name = ?, location = ?, synced = 0 WHERE farm_id = ?`,
+      `UPDATE farms SET farm_name = ?, location = ?, deleted_at = NULL, synced = 0 WHERE farm_id = ?`,
       [farm_name, location, farm_id],
       () => console.log("Farm updated"),
       (_, error) => console.log("Update error", error)
@@ -452,10 +544,14 @@ export const updateFarm = (farm_id, farm_name, location) => {
 // DELETE FARM
 export const deleteFarm = (farm_id) => {
   db.transaction(tx => {
+    const deletedAt = getCurrentTimestamp();
+
+    softDeleteFarmDescendants(tx, farm_id, deletedAt);
+
     tx.executeSql(
-      `DELETE FROM farms WHERE farm_id = ?`,
-      [farm_id],
-      () => console.log("Farm deleted"),
+      `UPDATE farms SET deleted_at = ?, synced = 0 WHERE farm_id = ?`,
+      [deletedAt, farm_id],
+      () => console.log("Farm marked deleted"),
       (_, error) => console.log("Delete error", error)
     );
   });
@@ -486,7 +582,7 @@ export const createBatch = (farm_id, start_date, breed, initial_chicks, purchase
 export const getBatchesByFarmId = (farm_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      "SELECT * FROM batches WHERE farm_id = ?",
+      "SELECT * FROM batches WHERE farm_id = ? AND deleted_at IS NULL",
       [farm_id],
       (_, result) => {
         const data = rowsToArray(result.rows);
@@ -501,10 +597,12 @@ export const getBatchesByFarmId = (farm_id, callback) => {
 };
 
 export const saveRememberedSession = (userId, callback) => {
+  const rememberedAt = new Date().toISOString();
+
   db.transaction(tx => {
     tx.executeSql(
-      `INSERT OR REPLACE INTO app_session (session_id, user_id) VALUES (1, ?)`,
-      [userId],
+      `INSERT OR REPLACE INTO app_session (session_id, user_id, remembered_at) VALUES (1, ?, ?)`,
+      [userId, rememberedAt],
       () => {
         console.log("Remembered session saved");
         callback && callback();
@@ -534,6 +632,7 @@ export const getAccessibleFarms = (userId, callback) => {
           WHEN users.role = 'owner' THEN users.user_id
           ELSE users.owner_user_id
         END
+        AND farms.deleted_at IS NULL
         ORDER BY farms.created_at DESC, farms.farm_id DESC`,
         [normalizedUserId],
       (_, result) => {
@@ -568,14 +667,37 @@ export const clearRememberedSession = (callback) => {
 export const getRememberedSession = (callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      `SELECT user_id FROM app_session WHERE session_id = 1`,
+      `SELECT user_id, remembered_at FROM app_session WHERE session_id = 1`,
       [],
       (_, result) => {
-        if (result.rows.length > 0) {
-          callback(result.rows.item(0));
-        } else {
+        if (result.rows.length === 0) {
           callback(null);
+          return;
         }
+
+        const session = result.rows.item(0);
+        const rememberedAtMs = session.remembered_at ? Date.parse(session.remembered_at) : NaN;
+        const isExpired =
+          Number.isNaN(rememberedAtMs) ||
+          Date.now() - rememberedAtMs > REMEMBERED_SESSION_TTL_MS;
+
+        if (isExpired) {
+          tx.executeSql(
+            `DELETE FROM app_session WHERE session_id = 1`,
+            [],
+            () => {
+              console.log("Expired remembered session cleared");
+              callback(null);
+            },
+            () => {
+              callback(null);
+              return false;
+            }
+          );
+          return;
+        }
+
+        callback(session);
       },
       (_, error) => {
         console.log("Error fetching remembered session", error);
@@ -584,6 +706,65 @@ export const getRememberedSession = (callback) => {
       }
     );
   });
+};
+
+export const getNotificationDeliveryLog = (notificationIds, callback) => {
+  if (!notificationIds?.length) {
+    callback({});
+    return;
+  }
+
+  const placeholders = notificationIds.map(() => '?').join(', ');
+
+  db.transaction(tx => {
+    tx.executeSql(
+      `SELECT notification_id, delivered_at
+       FROM notification_delivery_log
+       WHERE notification_id IN (${placeholders})`,
+      notificationIds,
+      (_, result) => {
+        const entries = rowsToArray(result.rows).reduce((accumulator, row) => {
+          accumulator[row.notification_id] = row.delivered_at;
+          return accumulator;
+        }, {});
+
+        callback(entries);
+      },
+      (_, error) => {
+        console.log("Error fetching notification delivery log", error);
+        callback({});
+        return false;
+      }
+    );
+  });
+};
+
+export const saveNotificationDeliveries = (notificationIds, callback) => {
+  if (!notificationIds?.length) {
+    callback && callback();
+    return;
+  }
+
+  const deliveredAt = new Date().toISOString();
+
+  db.transaction(
+    tx => {
+      notificationIds.forEach(notificationId => {
+        tx.executeSql(
+          `INSERT OR REPLACE INTO notification_delivery_log (notification_id, delivered_at)
+           VALUES (?, ?)`,
+          [notificationId, deliveredAt]
+        );
+      });
+    },
+    error => {
+      console.log("Error saving notification deliveries", error);
+      callback && callback();
+    },
+    () => {
+      callback && callback();
+    }
+  );
 };
 
 export const markUserAsSynced = (userId) => {
@@ -602,7 +783,7 @@ export const getBatches = getBatchesByFarmId;
 export const getBatchById = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      `SELECT * FROM batches WHERE batch_id = ? LIMIT 1`,
+      `SELECT * FROM batches WHERE batch_id = ? AND deleted_at IS NULL LIMIT 1`,
       [batch_id],
       (_, result) => {
         if (result.rows.length > 0) {
@@ -624,7 +805,7 @@ export const updateBatchDetails = (batch_id, start_date, breed, initial_chicks, 
   db.transaction(tx => {
     tx.executeSql(
       `UPDATE batches
-        SET start_date = ?, breed = ?, initial_chicks = ?, purchase_cost = ?, status = ?, synced = 0
+        SET start_date = ?, breed = ?, initial_chicks = ?, purchase_cost = ?, status = ?, deleted_at = NULL, synced = 0
         WHERE batch_id = ?`,
       [start_date, breed, initial_chicks, purchase_cost, status, batch_id],
       () => {
@@ -643,7 +824,7 @@ export const updateBatchDetails = (batch_id, start_date, breed, initial_chicks, 
 export const updateBatchStatus = (batch_id, status) => {
   db.transaction(tx => {
     tx.executeSql(
-      `UPDATE batches SET status = ?, synced = 0 WHERE batch_id = ?`,
+      `UPDATE batches SET status = ?, deleted_at = NULL, synced = 0 WHERE batch_id = ?`,
       [status, batch_id],
       () => console.log("Batch status updated"),
       (_, error) => console.log("Update error", error)
@@ -654,10 +835,14 @@ export const updateBatchStatus = (batch_id, status) => {
 //DELETE BATCH
 export const deleteBatch = (batch_id) => {
   db.transaction(tx => {
+    const deletedAt = getCurrentTimestamp();
+
+    softDeleteBatchDescendants(tx, batch_id, deletedAt);
+
     tx.executeSql(
-      `DELETE FROM batches WHERE batch_id = ?`,
-      [batch_id],
-      () => console.log("Batch deleted"),
+      `UPDATE batches SET deleted_at = ?, synced = 0 WHERE batch_id = ?`,
+      [deletedAt, batch_id],
+      () => console.log("Batch marked deleted"),
       (_, error) => console.log("Delete error", error)
     );
   });
@@ -686,7 +871,7 @@ export const addFeedRecord = (batch_id, feed_type, feed_quantity, date_recorded,
 export const getFeedRecordsByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      "SELECT * FROM feed_records WHERE batch_id = ?",
+      "SELECT * FROM feed_records WHERE batch_id = ? AND deleted_at IS NULL",
       [batch_id],
       (_, result) => {
         const data = rowsToArray(result.rows);
@@ -706,7 +891,7 @@ export const getFeedRecordsByBatch = getFeedRecordsByBatchId;
 export const updateFeedRecord = (feed_id, feed_quantity, feed_cost, date_recorded) => {
   db.transaction(tx => {
     tx.executeSql(
-      `UPDATE feed_records SET feed_quantity = ?, feed_cost = ?, date_recorded = ?, synced = 0 WHERE feed_id = ?`,
+      `UPDATE feed_records SET feed_quantity = ?, feed_cost = ?, date_recorded = ?, deleted_at = NULL, synced = 0 WHERE feed_id = ?`,
       [feed_quantity, feed_cost, date_recorded, feed_id],
       () => console.log("Feed record updated"),
       (_, error) => console.log("Update error", error)
@@ -718,9 +903,9 @@ export const updateFeedRecord = (feed_id, feed_quantity, feed_cost, date_recorde
 export const deleteFeedRecord = (feed_id) => {
   db.transaction(tx => {
     tx.executeSql(
-      `DELETE FROM feed_records WHERE feed_id = ?`,
-      [feed_id],
-      () => console.log("Feed record deleted"),
+      `UPDATE feed_records SET deleted_at = ?, synced = 0 WHERE feed_id = ?`,
+      [getCurrentTimestamp(), feed_id],
+      () => console.log("Feed record marked deleted"),
       (_, error) => console.log("Delete error", error)
     );
   });
@@ -749,7 +934,7 @@ export const addMortalityRecord = (batch_id, number_dead, cause_of_death, date_r
 export const getMortalityRecordsByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      "SELECT * FROM mortality_records WHERE batch_id = ? ORDER BY date_recorded DESC, mortality_id DESC",
+      "SELECT * FROM mortality_records WHERE batch_id = ? AND deleted_at IS NULL ORDER BY date_recorded DESC, mortality_id DESC",
       [batch_id],
       (_, result) => {
         const data = rowsToArray(result.rows);
@@ -766,9 +951,9 @@ export const getMortalityRecordsByBatchId = (batch_id, callback) => {
 export const deleteMortalityRecord = (mortality_id) => {
   db.transaction(tx => {
     tx.executeSql(
-      `DELETE FROM mortality_records WHERE mortality_id = ?`,
-      [mortality_id],
-      () => console.log("Mortality record deleted"),
+      `UPDATE mortality_records SET deleted_at = ?, synced = 0 WHERE mortality_id = ?`,
+      [getCurrentTimestamp(), mortality_id],
+      () => console.log("Mortality record marked deleted"),
       (_, error) => console.log("Delete mortality error", error)
     );
   });
@@ -797,7 +982,7 @@ export const addVaccinationRecord = (batch_id, vaccine_name, vaccination_date, n
 export const getVaccinationRecordsByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      "SELECT * FROM vaccination_records WHERE batch_id = ? ORDER BY vaccination_date DESC, vaccination_id DESC",
+      "SELECT * FROM vaccination_records WHERE batch_id = ? AND deleted_at IS NULL ORDER BY vaccination_date DESC, vaccination_id DESC",
       [batch_id],
       (_, result) => {
         const data = rowsToArray(result.rows);
@@ -814,9 +999,9 @@ export const getVaccinationRecordsByBatchId = (batch_id, callback) => {
 export const deleteVaccinationRecord = (vaccination_id) => {
   db.transaction(tx => {
     tx.executeSql(
-      `DELETE FROM vaccination_records WHERE vaccination_id = ?`,
-      [vaccination_id],
-      () => console.log("Vaccination record deleted"),
+      `UPDATE vaccination_records SET deleted_at = ?, synced = 0 WHERE vaccination_id = ?`,
+      [getCurrentTimestamp(), vaccination_id],
+      () => console.log("Vaccination record marked deleted"),
       (_, error) => console.log("Delete vaccination error", error)
     );
   });
@@ -845,7 +1030,7 @@ export const addExpenseRecord = (batch_id, description, amount, expense_date, ca
 export const getExpensesByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      "SELECT * FROM expenses WHERE batch_id = ? ORDER BY expense_date DESC, expense_id DESC",
+      "SELECT * FROM expenses WHERE batch_id = ? AND deleted_at IS NULL ORDER BY expense_date DESC, expense_id DESC",
       [batch_id],
       (_, result) => {
         const data = rowsToArray(result.rows);
@@ -862,9 +1047,9 @@ export const getExpensesByBatchId = (batch_id, callback) => {
 export const deleteExpenseRecord = (expense_id) => {
   db.transaction(tx => {
     tx.executeSql(
-      `DELETE FROM expenses WHERE expense_id = ?`,
-      [expense_id],
-      () => console.log("Expense deleted"),
+      `UPDATE expenses SET deleted_at = ?, synced = 0 WHERE expense_id = ?`,
+      [getCurrentTimestamp(), expense_id],
+      () => console.log("Expense marked deleted"),
       (_, error) => console.log("Delete expense error", error)
     );
   });
@@ -895,7 +1080,7 @@ export const addSaleRecord = (batch_id, birds_sold, price_per_bird, sale_date, c
 export const getSalesByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      "SELECT * FROM sales WHERE batch_id = ? ORDER BY sale_date DESC, sale_id DESC",
+      "SELECT * FROM sales WHERE batch_id = ? AND deleted_at IS NULL ORDER BY sale_date DESC, sale_id DESC",
       [batch_id],
       (_, result) => {
         const data = rowsToArray(result.rows);
@@ -912,9 +1097,9 @@ export const getSalesByBatchId = (batch_id, callback) => {
 export const deleteSaleRecord = (sale_id) => {
   db.transaction(tx => {
     tx.executeSql(
-      `DELETE FROM sales WHERE sale_id = ?`,
-      [sale_id],
-      () => console.log("Sale deleted"),
+      `UPDATE sales SET deleted_at = ?, synced = 0 WHERE sale_id = ?`,
+      [getCurrentTimestamp(), sale_id],
+      () => console.log("Sale marked deleted"),
       (_, error) => console.log("Delete sale error", error)
     );
   });
@@ -952,6 +1137,179 @@ export const syncFeedRecords = async () => {
     );
   });
 };
+
+const executeTransactionSteps = (tx, steps) =>
+  new Promise((resolve, reject) => {
+    const runStep = index => {
+      if (index >= steps.length) {
+        resolve();
+        return;
+      }
+
+      const step = steps[index];
+
+      tx.executeSql(
+        step.sql,
+        step.params,
+        () => runStep(index + 1),
+        (_transaction, error) => {
+          reject(error);
+          return false;
+        }
+      );
+    };
+
+    runStep(0);
+  });
+
+export const importBootstrapData = (authenticatedUser, bootstrapData) =>
+  new Promise((resolve, reject) => {
+    const safeData = bootstrapData || {};
+    const importedUsers = (safeData.users || []).map(user => ({
+      user_id: user.user_id,
+      first_name: user.first_name || '',
+      last_name: user.last_name || '',
+      email: String(user.email || '').trim().toLowerCase(),
+      password: user.user_id === authenticatedUser.user_id ? authenticatedUser.password : '',
+      role: user.role || '',
+      owner_user_id: user.owner_user_id ?? null,
+      created_at: user.created_at ?? null,
+    }));
+
+    const steps = [
+      ...importedUsers.map(user => ({
+        sql: `
+          INSERT OR REPLACE INTO users
+          (user_id, first_name, last_name, email, password, role, owner_user_id, created_at, synced)
+          VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), 1)
+        `,
+        params: [
+          user.user_id,
+          user.first_name,
+          user.last_name,
+          user.email,
+          user.password,
+          user.role,
+          user.owner_user_id,
+          user.created_at,
+        ],
+      })),
+      ...(safeData.farms || []).map(farm => ({
+        sql: `
+          INSERT OR REPLACE INTO farms
+          (farm_id, user_id, farm_name, location, created_at, deleted_at, synced)
+          VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, 1)
+        `,
+        params: [farm.farm_id, farm.user_id, farm.farm_name, farm.location, farm.created_at, farm.deleted_at ?? null],
+      })),
+      ...(safeData.batches || []).map(batch => ({
+        sql: `
+          INSERT OR REPLACE INTO batches
+          (batch_id, farm_id, start_date, breed, initial_chicks, purchase_cost, status, deleted_at, synced)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+        `,
+        params: [
+          batch.batch_id,
+          batch.farm_id,
+          batch.start_date,
+          batch.breed,
+          batch.initial_chicks,
+          batch.purchase_cost ?? 0,
+          batch.status,
+          batch.deleted_at ?? null,
+        ],
+      })),
+      ...(safeData.feed_records || []).map(record => ({
+        sql: `
+          INSERT OR REPLACE INTO feed_records
+          (feed_id, batch_id, feed_type, feed_quantity, feed_cost, date_recorded, deleted_at, synced)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        `,
+        params: [
+          record.feed_id,
+          record.batch_id,
+          record.feed_type,
+          record.feed_quantity,
+          record.feed_cost,
+          record.date_recorded,
+          record.deleted_at ?? null,
+        ],
+      })),
+      ...(safeData.mortality_records || []).map(record => ({
+        sql: `
+          INSERT OR REPLACE INTO mortality_records
+          (mortality_id, batch_id, number_dead, cause_of_death, date_recorded, deleted_at, synced)
+          VALUES (?, ?, ?, ?, ?, ?, 1)
+        `,
+        params: [
+          record.mortality_id,
+          record.batch_id,
+          record.number_dead,
+          record.cause_of_death,
+          record.date_recorded,
+          record.deleted_at ?? null,
+        ],
+      })),
+      ...(safeData.vaccination_records || []).map(record => ({
+        sql: `
+          INSERT OR REPLACE INTO vaccination_records
+          (vaccination_id, batch_id, vaccine_name, vaccination_date, next_due_date, notes, deleted_at, synced)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        `,
+        params: [
+          record.vaccination_id,
+          record.batch_id,
+          record.vaccine_name,
+          record.vaccination_date,
+          record.next_due_date,
+          record.notes,
+          record.deleted_at ?? null,
+        ],
+      })),
+      ...(safeData.expenses || []).map(record => ({
+        sql: `
+          INSERT OR REPLACE INTO expenses
+          (expense_id, batch_id, description, amount, expense_date, deleted_at, synced)
+          VALUES (?, ?, ?, ?, ?, ?, 1)
+        `,
+        params: [
+          record.expense_id,
+          record.batch_id,
+          record.description,
+          record.amount,
+          record.expense_date,
+          record.deleted_at ?? null,
+        ],
+      })),
+      ...(safeData.sales || []).map(record => ({
+        sql: `
+          INSERT OR REPLACE INTO sales
+          (sale_id, batch_id, birds_sold, price_per_bird, total_revenue, sale_date, deleted_at, synced)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        `,
+        params: [
+          record.sale_id,
+          record.batch_id,
+          record.birds_sold,
+          record.price_per_bird,
+          record.total_revenue,
+          record.sale_date,
+          record.deleted_at ?? null,
+        ],
+      })),
+    ];
+
+    db.transaction(
+      tx => {
+        executeTransactionSteps(tx, steps)
+          .then(() => resolve(authenticatedUser))
+          .catch(reject);
+      },
+      error => {
+        reject(error);
+      }
+    );
+  });
 
 // Export DB
 export default db;

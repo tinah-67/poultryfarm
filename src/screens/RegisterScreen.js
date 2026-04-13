@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, Button, Alert, TouchableOpacity, StyleSheet } from 'react-native';
-import { createUser, getUserByEmail, markUserAsSynced } from '../database/db';
+import { createUser, getUserByEmail } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
+import { syncPendingBackup } from '../services/backupSync';
 
 const getValidationMessage = ({
   firstName,
@@ -126,7 +127,7 @@ export default function RegisterScreen({ navigation, route }) {
       }
 
       try {
-        const result = await createUser(
+        await createUser(
           firstName.trim(),
           lastName.trim(),
           normalizedEmail,
@@ -135,43 +136,25 @@ export default function RegisterScreen({ navigation, route }) {
           isOwnerCreatingStaff ? ownerUserId : null
         );
 
+        let backupSucceeded = false;
+
         try {
-          const response = await fetch('http://192.168.100.26:3000/users', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              first_name: firstName.trim(),
-              last_name: lastName.trim(),
-              email: normalizedEmail,
-              password,
-              role: targetRole,
-              owner_user_id: isOwnerCreatingStaff ? ownerUserId : null,
-            }),
-          });
-
-          if (response.ok && result?.insertId) {
-            markUserAsSynced(result.insertId);
-          }
-
-          Alert.alert(
-            'Success',
-            response.ok
-              ? isOwnerCreatingStaff
-                ? 'Staff account created and backed up to cloud'
-                : 'Owner account created and backed up to cloud'
-              : isOwnerCreatingStaff
-                ? 'Staff account created locally (backup pending)'
-                : 'Owner account created locally (backup pending)'
-          );
+          const syncResults = await syncPendingBackup();
+          backupSucceeded = syncResults.some(item => item.key === 'users' && item.syncedCount > 0);
         } catch (error) {
-          console.log(error);
-          Alert.alert(
-            'Success',
-            isOwnerCreatingStaff
-              ? 'Staff account created locally (offline mode)'
-              : 'Owner account created locally (offline mode)'
-          );
+          console.log('Backup pending after local registration', error);
         }
+
+        Alert.alert(
+          'Success',
+          backupSucceeded
+            ? isOwnerCreatingStaff
+              ? 'Staff account created and backed up to cloud'
+              : 'Owner account created and backed up to cloud'
+            : isOwnerCreatingStaff
+              ? 'Staff account created locally (backup pending)'
+              : 'Owner account created locally (backup pending)'
+        );
 
         if (isOwnerCreatingStaff) {
           navigation.goBack();

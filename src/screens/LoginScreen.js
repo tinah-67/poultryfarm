@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, Button, Alert, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { clearRememberedSession, loginUser, saveRememberedSession } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
+import { bootstrapDeviceLogin } from '../services/bootstrapLogin';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -16,27 +17,42 @@ export default function LoginScreen({ navigation }) {
       return;
     }
 
-    loginUser(email.trim().toLowerCase(), password, user => {
-      if (!user) {
-        Alert.alert('Error', 'User not found');
-        return;
-      }
+    const normalizedEmail = email.trim().toLowerCase();
 
+    const finishLogin = user => {
       if (user.role !== 'owner' && !user.owner_user_id) {
         Alert.alert('Access denied', 'This staff account is not linked to an owner yet.');
         return;
       }
 
-      const finishLogin = () => {
+      const complete = () => {
         Alert.alert('Success', 'Login successful');
         navigation.replace('Home', { userId: user.user_id });
       };
 
       if (rememberMe) {
-        saveRememberedSession(user.user_id, finishLogin);
+        saveRememberedSession(user.user_id, complete);
       } else {
-        clearRememberedSession(finishLogin);
+        clearRememberedSession(complete);
       }
+    };
+
+    loginUser(normalizedEmail, password, async user => {
+      if (!user) {
+        try {
+          const bootstrappedUser = await bootstrapDeviceLogin(normalizedEmail, password);
+          finishLogin(bootstrappedUser);
+        } catch (error) {
+          console.log('Bootstrap login failed', error);
+          Alert.alert(
+            'Error',
+            'User not found on this device. Connect to the internet once to restore this account from backup.'
+          );
+        }
+        return;
+      }
+
+      finishLogin(user);
     });
   };
 
