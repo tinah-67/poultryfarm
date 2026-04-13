@@ -1,6 +1,6 @@
 import { importBootstrapData } from '../database/db';
 
-const BACKUP_BASE_URL = 'http://192.168.100.26:3000';
+const BACKUP_BASE_URL = 'https://broilerhub.onrender.com';
 
 export const bootstrapDeviceLogin = async (email, password) => {
   const response = await fetch(`${BACKUP_BASE_URL}/bootstrap/login`, {

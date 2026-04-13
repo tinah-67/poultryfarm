@@ -365,7 +365,7 @@ export const syncUsers = async () => {
 
         for (let user of users) {
           try {
-            await fetch('http://192.168.100.26:3000/users', {
+            await fetch('https://broilerhub.onrender.com/users', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1101,39 +1101,6 @@ export const deleteSaleRecord = (sale_id) => {
       [getCurrentTimestamp(), sale_id],
       () => console.log("Sale marked deleted"),
       (_, error) => console.log("Delete sale error", error)
-    );
-  });
-};
-
-//SYNC FEED RECORDS
-export const syncFeedRecords = async () => {
-  db.transaction(tx => {
-    tx.executeSql(
-      "SELECT * FROM feed_records WHERE synced = 0",
-      [],
-      async (_, results) => {
-        const records = results.rows.raw();
-
-        for (let record of records) {
-          try {
-            await fetch('http://192.168.100.26:3000/feed', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(record),
-            });
-
-            db.transaction(tx2 => {
-              tx2.executeSql(
-                "UPDATE feed_records SET synced = 1 WHERE feed_id = ?",
-                [record.feed_id]
-              );
-            });
-
-          } catch (err) {
-            console.log("Feed sync failed", err);
-          }
-        }
-      }
     );
   });
 };

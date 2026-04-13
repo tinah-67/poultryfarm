@@ -1,6 +1,6 @@
 import db from '../database/db';
 
-const BACKUP_BASE_URL = 'http://192.168.100.26:3000';
+const BACKUP_BASE_URL = 'https://broilerhub.onrender.com';
 
 const tableConfigs = [
   {
