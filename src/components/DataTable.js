@@ -45,8 +45,10 @@ export default function DataTable({
 const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
+    minWidth: '100%',
   },
   table: {
+    minWidth: '100%',
     borderWidth: 1,
     borderColor: '#d5dce5',
     borderRadius: 10,

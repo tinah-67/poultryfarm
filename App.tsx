@@ -1,15 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, View, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import { getRememberedSession, initDB } from './src/database/db';
+import { clearRememberedSession, getRememberedSession, initDB } from './src/database/db';
 import { syncPendingBackup } from './src/services/backupSync';
 
 // IMPORT SCREENS
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
+import FarmManagementScreen from './src/screens/FarmManagementScreen';
 import FarmScreen from './src/screens/FarmScreen';
 import ViewFarmsScreen from './src/screens/ViewFarmsScreen';
 import FarmPerformanceSummaryScreen from './src/screens/FarmPerformanceSummaryScreen';
@@ -36,6 +37,7 @@ const Stack = createNativeStackNavigator();
 export default function App() {
   const [isReady, setIsReady] = useState(false);
   const [initialUserId, setInitialUserId] = useState<number | null>(null);
+  const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
     initDB();
@@ -47,6 +49,23 @@ export default function App() {
       setInitialUserId(session?.user_id ?? null);
       setIsReady(true);
     });
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      const previousAppState = appStateRef.current;
+      appStateRef.current = nextAppState;
+
+      if (previousAppState === 'active' && nextAppState.match(/inactive|background/)) {
+        clearRememberedSession(() => {
+          console.log('Remembered session cleared after app exit/background');
+        });
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   if (!isReady) {
@@ -83,8 +102,14 @@ export default function App() {
           options={{ title: 'Dashboard' }}
         />
         <Stack.Screen
-          name="Farm"
+          name="FarmManagement"
+          component={FarmManagementScreen}
+          options={{ title: 'Farm Management' }}
+        />
+        <Stack.Screen
+          name="AddFarm"
           component={FarmScreen}
+          options={{ title: 'Add Farm' }}
         />
 
         <Stack.Screen

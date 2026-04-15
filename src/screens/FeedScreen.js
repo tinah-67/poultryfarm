@@ -14,6 +14,7 @@ export default function FeedScreen({ route, navigation }) {
     const [quantityError, setQuantityError] = useState('');
     const [currentUser, setCurrentUser] = useState(null);
     const [batch, setBatch] = useState(null);
+    const formatCurrency = value => `KES ${Number(value || 0).toFixed(2)}`;
 
     useEffect(() => {
         if (userId) {
@@ -37,7 +38,7 @@ export default function FeedScreen({ route, navigation }) {
     }, [batchId]);
 
     const canRecordFeed = ['owner', 'worker'].includes(currentUser?.role);
-
+    const isBatchCompleted = String(batch?.status || 'active').toLowerCase() === 'completed';
     const parseLocalDate = dateString => {
         const [year, month, day] = (dateString || '').split('-').map(Number);
 
@@ -101,6 +102,11 @@ export default function FeedScreen({ route, navigation }) {
         return;
         }
 
+        if (isBatchCompleted) {
+        Alert.alert('Batch completed', 'Feed entries are disabled for completed batches. You can still view past feed records.');
+        return;
+        }
+
         if (!feedType || !quantity) {
         Alert.alert('Error', 'Choose feed type and enter quantity');
         return;
@@ -136,12 +142,18 @@ export default function FeedScreen({ route, navigation }) {
         feedType,
         quantityValue,
         new Date().toISOString(),
-        () => {
+        result => {
             setFeedType('starter');
             setShowFeedTypeDropdown(false);
             setQuantity('');
             setQuantityError('');
-            Alert.alert('Success', 'Feed record added');
+            Alert.alert(
+                'Success',
+                `Feed record added. Cost: ${formatCurrency(result?.feed_cost)} at ${formatCurrency(result?.unit_cost)} per kg.`
+            );
+        },
+        error => {
+            Alert.alert('Feed cost unavailable', error?.message || 'Record the farm feed purchase first.');
         }
         );
     };
@@ -149,13 +161,21 @@ export default function FeedScreen({ route, navigation }) {
     return (
         <ScreenBackground contentContainerStyle={styles.container}>
         <Text style={styles.title}>Record Feed</Text>
+        {isBatchCompleted ? (
+            <Text style={styles.lockedNote}>
+            This batch is completed. New feed entries are disabled, but you can still view the existing records.
+            </Text>
+        ) : null}
         {recommendedFeedType ? (
             <Text style={styles.ageNote}>
             Batch age: {ageInDays} day(s) ({ageInWeeks} weeks). Recommended feed: {recommendedFeedType.charAt(0).toUpperCase() + recommendedFeedType.slice(1)}.
             </Text>
         ) : null}
+        <Text style={styles.noteText}>
+        Feed cost is calculated automatically from farm feed purchases recorded under farm expenses.
+        </Text>
 
-        {canRecordFeed ? (
+        {canRecordFeed && !isBatchCompleted ? (
             <>
             <View style={styles.dropdownContainer}>
                 <TouchableOpacity
@@ -206,7 +226,7 @@ export default function FeedScreen({ route, navigation }) {
 
             <Button title="Add Feed" onPress={handleAdd} />
             </>
-        ) : (
+        ) : isBatchCompleted ? null : (
             <Text style={styles.noteText}>You can review feed records, but only owners and workers can add feed entries.</Text>
         )}
 
@@ -230,6 +250,10 @@ export default function FeedScreen({ route, navigation }) {
     },
     noteText: {
         color: '#cbd5e1',
+        marginBottom: 12,
+    },
+    lockedNote: {
+        color: '#fecaca',
         marginBottom: 12,
     },
     ageNote: {

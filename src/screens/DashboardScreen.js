@@ -65,7 +65,6 @@ export default function DashboardScreen({ navigation, route }) {
 
   const roleLabel = currentUser?.role ? currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1) : null;
   const isOwner = currentUser?.role === 'owner';
-  const isWorker = currentUser?.role === 'worker';
 
   return (
     <ImageBackground
@@ -80,17 +79,15 @@ export default function DashboardScreen({ navigation, route }) {
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ffffff" />
           }
         >
-          <Text style={styles.title}>Poultry Farm Dashboard</Text>
+          <Text style={styles.title}>BroilerHub Dashboard</Text>
           {roleLabel ? <Text style={styles.subtitle}>Signed in as {roleLabel}</Text> : null}
 
-          {isOwner ? (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() => navigation.navigate('Farm', { userId })}
-            >
-              <Text style={styles.cardText}>Add Farm</Text>
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => navigation.navigate('FarmManagement', { userId })}
+          >
+            <Text style={styles.cardText}>Farm Management</Text>
+          </TouchableOpacity>
 
           {isOwner ? (
             <TouchableOpacity
@@ -107,15 +104,6 @@ export default function DashboardScreen({ navigation, route }) {
           >
             <Text style={styles.cardText}>Batch Management</Text>
           </TouchableOpacity>
-
-          {!isWorker ? (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() => navigation.navigate('FarmPerformanceSummary', { userId })}
-            >
-              <Text style={styles.cardText}>Farm Performance Summary</Text>
-            </TouchableOpacity>
-          ) : null}
 
           <TouchableOpacity
             style={styles.card}

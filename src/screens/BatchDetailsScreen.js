@@ -12,6 +12,7 @@ import ScreenBackground from '../components/ScreenBackground';
 
 export default function BatchDetailsScreen({ route, navigation }) {
   const batchId = route?.params?.batchId;
+  const farmId = route?.params?.farmId;
   const farmName = route?.params?.farmName;
   const userId = route?.params?.userId;
   const [currentUser, setCurrentUser] = useState(null);
@@ -85,53 +86,36 @@ export default function BatchDetailsScreen({ route, navigation }) {
       return;
     }
 
-    const nextStatus = isCompleted ? 'active' : 'completed';
-    const actionLabel = isCompleted ? 'reactivate' : 'mark as completed';
-
-    if (!isCompleted) {
-      canCompleteBatch((allowed, birdsAvailableForSale = 0) => {
-        if (!allowed) {
-          Alert.alert(
-            'Cannot Complete Batch',
-            `${birdsAvailableForSale} bird(s) are still available for sale in this batch. Record the remaining sales before completing it.`
-          );
-          return;
-        }
-
-        Alert.alert(
-          'Update Batch Status',
-          `Are you sure you want to ${actionLabel} this batch?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Confirm',
-              onPress: () => {
-                updateBatchStatus(batchId, nextStatus);
-                setBatch(previous => (previous ? { ...previous, status: nextStatus } : previous));
-                Alert.alert('Success', `Batch status updated to ${nextStatus}.`);
-              },
-            },
-          ]
-        );
-      });
+    if (isCompleted) {
+      Alert.alert('Batch Completed', 'Completed batches stay locked. Their records can still be viewed.');
       return;
     }
 
-    Alert.alert(
-      'Update Batch Status',
-      `Are you sure you want to ${actionLabel} this batch?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: () => {
-            updateBatchStatus(batchId, nextStatus);
-            setBatch(previous => (previous ? { ...previous, status: nextStatus } : previous));
-            Alert.alert('Success', `Batch status updated to ${nextStatus}.`);
+    canCompleteBatch((allowed, birdsAvailableForSale = 0) => {
+      if (!allowed) {
+        Alert.alert(
+          'Cannot Complete Batch',
+          `${birdsAvailableForSale} bird(s) are still available for sale in this batch. Record the remaining sales before completing it.`
+        );
+        return;
+      }
+
+      Alert.alert(
+        'Update Batch Status',
+        'Are you sure you want to mark this batch as completed?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Confirm',
+            onPress: () => {
+              updateBatchStatus(batchId, 'completed');
+              setBatch(previous => (previous ? { ...previous, status: 'completed' } : previous));
+              Alert.alert('Success', 'Batch status updated to completed.');
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    });
   };
 
   return (
@@ -152,14 +136,14 @@ export default function BatchDetailsScreen({ route, navigation }) {
       <Button title="Mortality" onPress={() => navigation.navigate('Mortality', { batchId, userId })} />
       <Button title="Vaccination" onPress={() => navigation.navigate('Vaccination', { batchId, userId })} />
       {canAccessFinancialActions ? (
-        <Button title="Expenses" onPress={() => navigation.navigate('Expense', { batchId, userId })} />
+        <Button title="Expenses" onPress={() => navigation.navigate('Expense', { batchId, farmId, farmName, userId })} />
       ) : null}
       {canAccessFinancialActions ? (
         <Button title="Sales" onPress={() => navigation.navigate('Sales', { batchId, userId })} />
       ) : null}
       <Button title="Batch Performance" onPress={() => navigation.navigate('BatchPerformance', { batchId, farmName, userId })} />
-      {canManageBatchStatus ? (
-        <Button title={isCompleted ? 'Reactivate Batch' : 'Complete Batch'} onPress={handleToggleBatchStatus} />
+      {canManageBatchStatus && !isCompleted ? (
+        <Button title="Complete Batch" onPress={handleToggleBatchStatus} />
       ) : null}
     </ScreenBackground>
   );

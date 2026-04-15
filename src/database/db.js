@@ -30,6 +30,12 @@ const rowsToArray = (rows) => {
 };
 
 const getCurrentTimestamp = () => new Date().toISOString();
+const roundCurrency = value => Number(Number(value || 0).toFixed(2));
+const normalizeFeedType = value => String(value || '').trim().toLowerCase();
+const parseNumber = value => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 const softDeleteBatchDescendants = (tx, batchId, deletedAt) => {
   const childTables = [
@@ -57,6 +63,19 @@ const softDeleteBatchDescendants = (tx, batchId, deletedAt) => {
 };
 
 const softDeleteFarmDescendants = (tx, farmId, deletedAt) => {
+  tx.executeSql(
+    `UPDATE expenses
+     SET deleted_at = ?, synced = 0
+     WHERE farm_id = ?
+       AND deleted_at IS NULL`,
+    [deletedAt, farmId],
+    () => console.log("Farm expenses marked deleted", farmId),
+    (_, error) => {
+      console.log("Error cascading delete for farm expenses", error);
+      return false;
+    }
+  );
+
   tx.executeSql(
     `SELECT batch_id
      FROM batches
@@ -214,6 +233,7 @@ export const initDB = () => {
         vaccine_name TEXT,
         vaccination_date TEXT,
         next_due_date TEXT,
+        due_completed_at TEXT,
         notes TEXT,
         deleted_at TEXT,
         synced INTEGER DEFAULT 0
@@ -221,20 +241,29 @@ export const initDB = () => {
     `, [], () => console.log("Vaccination records table created"), (_, err) => console.log("Vaccination records table error", err));
 
     ensureColumnExists(tx, 'vaccination_records', 'deleted_at', 'TEXT');
+    ensureColumnExists(tx, 'vaccination_records', 'due_completed_at', 'TEXT');
 
     // EXPENSES
     tx.executeSql(`
       CREATE TABLE IF NOT EXISTS expenses (
         expense_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        farm_id INTEGER,
         batch_id INTEGER,
         description TEXT,
         amount REAL,
         expense_date TEXT,
+        expense_scope TEXT DEFAULT 'batch',
+        feed_type TEXT,
+        quantity_bought REAL,
         deleted_at TEXT,
         synced INTEGER DEFAULT 0
       );
     `, [], () => console.log("Expenses table created"), (_, err) => console.log("Expenses table error", err));
 
+    ensureColumnExists(tx, 'expenses', 'farm_id', 'INTEGER');
+    ensureColumnExists(tx, 'expenses', 'expense_scope', `TEXT DEFAULT 'batch'`);
+    ensureColumnExists(tx, 'expenses', 'feed_type', 'TEXT');
+    ensureColumnExists(tx, 'expenses', 'quantity_bought', 'REAL');
     ensureColumnExists(tx, 'expenses', 'deleted_at', 'TEXT');
 
     // SALES
@@ -365,7 +394,7 @@ export const syncUsers = async () => {
 
         for (let user of users) {
           try {
-            await fetch('https://broilerhub.onrender.com/users', {
+            await fetch('http://192.168.137.1:3000/users', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -849,18 +878,154 @@ export const deleteBatch = (batch_id) => {
 };
 
 //ADD FEED RECORD
-export const addFeedRecord = (batch_id, feed_type, feed_quantity, date_recorded, callback) => {
+export const addFeedRecord = (batch_id, feed_type, feed_quantity, date_recorded, callback, errorCallback) => {
+  const normalizedFeedType = normalizeFeedType(feed_type);
+  const quantityValue = parseNumber(feed_quantity);
+
   db.transaction(tx => {
     tx.executeSql(
-      `INSERT INTO feed_records (batch_id, feed_type, feed_quantity, feed_cost, date_recorded, synced)
-        VALUES (?, ?, ?, ?, ?, 0)`,
-      [batch_id, feed_type, feed_quantity, 0, date_recorded],
-      (_, result) => {
-        console.log("Feed record added", result.insertId);
-        callback && callback();
+      `SELECT farm_id
+       FROM batches
+       WHERE batch_id = ?
+         AND deleted_at IS NULL
+       LIMIT 1`,
+      [batch_id],
+      (_, batchResult) => {
+        const batchRows = rowsToArray(batchResult.rows);
+        const farmId = batchRows[0]?.farm_id;
+
+        if (!farmId || !normalizedFeedType || quantityValue <= 0) {
+          errorCallback && errorCallback(new Error('A valid batch, feed type, and quantity are required.'));
+          return false;
+        }
+
+        tx.executeSql(
+          `SELECT COALESCE(SUM(amount), 0) AS total_cost,
+                  COALESCE(SUM(quantity_bought), 0) AS total_quantity
+           FROM expenses
+           WHERE farm_id = ?
+             AND COALESCE(expense_scope, 'batch') = 'farm'
+             AND deleted_at IS NULL
+             AND LOWER(TRIM(COALESCE(feed_type, ''))) = ?
+             AND quantity_bought IS NOT NULL
+             AND quantity_bought > 0`,
+          [farmId, normalizedFeedType],
+          (_, purchaseResult) => {
+            const purchaseRows = rowsToArray(purchaseResult.rows);
+            const totalCost = parseNumber(purchaseRows[0]?.total_cost);
+            const totalQuantity = parseNumber(purchaseRows[0]?.total_quantity);
+
+            if (totalQuantity <= 0 || totalCost <= 0) {
+              errorCallback && errorCallback(new Error(`No farm feed purchase found for ${normalizedFeedType}. Record it first under farm expenses.`));
+              return false;
+            }
+
+            tx.executeSql(
+              `SELECT COALESCE(SUM(feed_records.feed_quantity), 0) AS used_quantity
+               FROM feed_records
+               JOIN batches ON batches.batch_id = feed_records.batch_id
+               WHERE batches.farm_id = ?
+                 AND feed_records.deleted_at IS NULL
+                 AND LOWER(TRIM(COALESCE(feed_records.feed_type, ''))) = ?`,
+              [farmId, normalizedFeedType],
+              (_, usageResult) => {
+                const usageRows = rowsToArray(usageResult.rows);
+                const usedQuantity = parseNumber(usageRows[0]?.used_quantity);
+                const availableQuantity = Math.max(totalQuantity - usedQuantity, 0);
+
+                if (quantityValue > availableQuantity) {
+                  errorCallback && errorCallback(new Error(`Only ${availableQuantity.toFixed(2)} kg of ${normalizedFeedType} is available from recorded farm purchases.`));
+                  return false;
+                }
+
+                const unitCost = totalCost / totalQuantity;
+                const feedCost = roundCurrency(quantityValue * unitCost);
+
+                tx.executeSql(
+                  `INSERT INTO feed_records (batch_id, feed_type, feed_quantity, feed_cost, date_recorded, synced)
+                   VALUES (?, ?, ?, ?, ?, 0)`,
+                  [batch_id, normalizedFeedType, quantityValue, feedCost, date_recorded],
+                  (_, result) => {
+                    console.log("Feed record added", result.insertId);
+                    callback && callback({
+                      feed_id: result.insertId,
+                      feed_cost: feedCost,
+                      unit_cost: roundCurrency(unitCost),
+                      available_quantity: roundCurrency(availableQuantity - quantityValue),
+                    });
+                  },
+                  (_, error) => {
+                    console.log("Error adding feed record", error);
+                    errorCallback && errorCallback(error);
+                    return false;
+                  }
+                );
+              },
+              (_, error) => {
+                console.log("Error calculating used feed quantity", error);
+                errorCallback && errorCallback(error);
+                return false;
+              }
+            );
+          },
+          (_, error) => {
+            console.log("Error calculating feed purchase totals", error);
+            errorCallback && errorCallback(error);
+            return false;
+          }
+        );
       },
       (_, error) => {
-        console.log("Error adding feed record", error);
+        console.log("Error loading batch farm for feed record", error);
+        errorCallback && errorCallback(error);
+        return false;
+      }
+    );
+  });
+};
+
+const buildExpenseRecordValues = record => {
+  const expenseScope = record.expense_scope || (record.farm_id != null && record.batch_id == null ? 'farm' : 'batch');
+  const normalizedFeedType = record.feed_type ? normalizeFeedType(record.feed_type) : null;
+  const quantityBought = record.quantity_bought == null || record.quantity_bought === ''
+    ? null
+    : parseNumber(record.quantity_bought);
+
+  return [
+    record.farm_id ?? null,
+    record.batch_id ?? null,
+    record.description,
+    record.amount,
+    record.expense_date,
+    expenseScope,
+    normalizedFeedType,
+    quantityBought,
+  ];
+};
+
+// ADD EXPENSE
+export const addExpenseRecord = (input, description, amount, expense_date, callback) => {
+  const record = typeof input === 'object' && input !== null
+    ? input
+    : {
+        batch_id: input,
+        description,
+        amount,
+        expense_date,
+      };
+
+  db.transaction(tx => {
+    tx.executeSql(
+      `INSERT INTO expenses (farm_id, batch_id, description, amount, expense_date, expense_scope, feed_type, quantity_bought, synced)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      buildExpenseRecordValues(record),
+      (_, result) => {
+        console.log("Expense added", result.insertId);
+        const nextCallback = typeof input === 'object' && input !== null ? description : callback;
+        nextCallback && nextCallback();
+      },
+      (_, error) => {
+        console.log("Error adding expense", error);
         return false;
       }
     );
@@ -963,8 +1128,8 @@ export const deleteMortalityRecord = (mortality_id) => {
 export const addVaccinationRecord = (batch_id, vaccine_name, vaccination_date, next_due_date, notes, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      `INSERT INTO vaccination_records (batch_id, vaccine_name, vaccination_date, next_due_date, notes, synced)
-      VALUES (?, ?, ?, ?, ?, 0)`,
+      `INSERT INTO vaccination_records (batch_id, vaccine_name, vaccination_date, next_due_date, due_completed_at, notes, synced)
+      VALUES (?, ?, ?, ?, NULL, ?, 0)`,
       [batch_id, vaccine_name, vaccination_date, next_due_date, notes],
       (_, result) => {
         console.log("Vaccination record added", result.insertId);
@@ -972,6 +1137,25 @@ export const addVaccinationRecord = (batch_id, vaccine_name, vaccination_date, n
       },
       (_, error) => {
         console.log("Error adding vaccination record", error);
+        return false;
+      }
+    );
+  });
+};
+
+export const markVaccinationDueCompleted = (vaccination_id, completedAt, callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `UPDATE vaccination_records
+       SET due_completed_at = ?, synced = 0
+       WHERE vaccination_id = ?`,
+      [completedAt, vaccination_id],
+      () => {
+        console.log("Vaccination due marked completed", vaccination_id);
+        callback && callback();
+      },
+      (_, error) => {
+        console.log("Error marking vaccination due completed", error);
         return false;
       }
     );
@@ -1007,30 +1191,16 @@ export const deleteVaccinationRecord = (vaccination_id) => {
   });
 };
 
-// ADD EXPENSE
-export const addExpenseRecord = (batch_id, description, amount, expense_date, callback) => {
-  db.transaction(tx => {
-    tx.executeSql(
-      `INSERT INTO expenses (batch_id, description, amount, expense_date, synced)
-      VALUES (?, ?, ?, ?, 0)`,
-      [batch_id, description, amount, expense_date],
-      (_, result) => {
-        console.log("Expense added", result.insertId);
-        callback && callback();
-      },
-      (_, error) => {
-        console.log("Error adding expense", error);
-        return false;
-      }
-    );
-  });
-};
-
 // GET EXPENSES BY BATCH ID
 export const getExpensesByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      "SELECT * FROM expenses WHERE batch_id = ? AND deleted_at IS NULL ORDER BY expense_date DESC, expense_id DESC",
+      `SELECT *,
+              COALESCE(expense_scope, 'batch') AS expense_scope
+       FROM expenses
+       WHERE batch_id = ?
+         AND deleted_at IS NULL
+       ORDER BY expense_date DESC, expense_id DESC`,
       [batch_id],
       (_, result) => {
         const data = rowsToArray(result.rows);
@@ -1039,6 +1209,29 @@ export const getExpensesByBatchId = (batch_id, callback) => {
       },
       (_, error) => {
         console.log("Error fetching expenses", error);
+      }
+    );
+  });
+};
+
+export const getExpensesByFarmId = (farm_id, callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `SELECT *,
+              COALESCE(expense_scope, 'batch') AS expense_scope
+       FROM expenses
+       WHERE farm_id = ?
+         AND COALESCE(expense_scope, 'batch') = 'farm'
+         AND deleted_at IS NULL
+       ORDER BY expense_date DESC, expense_id DESC`,
+      [farm_id],
+      (_, result) => {
+        const data = rowsToArray(result.rows);
+        console.log("Farm expenses for farm:", farm_id, data);
+        callback(data);
+      },
+      (_, error) => {
+        console.log("Error fetching farm expenses", error);
       }
     );
   });
@@ -1220,8 +1413,8 @@ export const importBootstrapData = (authenticatedUser, bootstrapData) =>
       ...(safeData.vaccination_records || []).map(record => ({
         sql: `
           INSERT OR REPLACE INTO vaccination_records
-          (vaccination_id, batch_id, vaccine_name, vaccination_date, next_due_date, notes, deleted_at, synced)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+          (vaccination_id, batch_id, vaccine_name, vaccination_date, next_due_date, due_completed_at, notes, deleted_at, synced)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
         `,
         params: [
           record.vaccination_id,
@@ -1229,6 +1422,7 @@ export const importBootstrapData = (authenticatedUser, bootstrapData) =>
           record.vaccine_name,
           record.vaccination_date,
           record.next_due_date,
+          record.due_completed_at ?? null,
           record.notes,
           record.deleted_at ?? null,
         ],
@@ -1236,15 +1430,19 @@ export const importBootstrapData = (authenticatedUser, bootstrapData) =>
       ...(safeData.expenses || []).map(record => ({
         sql: `
           INSERT OR REPLACE INTO expenses
-          (expense_id, batch_id, description, amount, expense_date, deleted_at, synced)
-          VALUES (?, ?, ?, ?, ?, ?, 1)
+          (expense_id, farm_id, batch_id, description, amount, expense_date, expense_scope, feed_type, quantity_bought, deleted_at, synced)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         `,
         params: [
           record.expense_id,
+          record.farm_id ?? null,
           record.batch_id,
           record.description,
           record.amount,
           record.expense_date,
+          record.expense_scope ?? (record.farm_id != null && record.batch_id == null ? 'farm' : 'batch'),
+          record.feed_type ? normalizeFeedType(record.feed_type) : null,
+          record.quantity_bought ?? null,
           record.deleted_at ?? null,
         ],
       })),

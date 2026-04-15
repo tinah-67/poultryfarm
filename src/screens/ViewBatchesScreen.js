@@ -4,8 +4,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import {
     getBatches,
     deleteBatch,
-    getMortalityRecordsByBatchId,
-    getSalesByBatchId,
     getUserById,
     updateBatchDetails,
 } from '../database/db';
@@ -23,7 +21,6 @@ export default function ViewBatchesScreen({ navigation, route }) {
     const [editedBreed, setEditedBreed] = useState('');
     const [editedInitialChicks, setEditedInitialChicks] = useState('');
     const [editedPurchaseCost, setEditedPurchaseCost] = useState('');
-    const [editedStatus, setEditedStatus] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [refreshing, setRefreshing] = useState(false);
@@ -59,30 +56,6 @@ export default function ViewBatchesScreen({ navigation, route }) {
     );
 
     const canManageBatches = ['owner', 'manager'].includes(currentUser?.role);
-
-    const canCompleteBatch = useCallback((batch, callback) => {
-        if (!batch?.batch_id) {
-            callback(false);
-            return;
-        }
-
-        getMortalityRecordsByBatchId(batch.batch_id, mortalityRecords => {
-            getSalesByBatchId(batch.batch_id, salesRecords => {
-                const initialChicks = Number(batch.initial_chicks || 0);
-                const totalMortality = (mortalityRecords || []).reduce(
-                    (sum, item) => sum + Number(item.number_dead || 0),
-                    0
-                );
-                const totalBirdsSold = (salesRecords || []).reduce(
-                    (sum, item) => sum + Number(item.birds_sold || 0),
-                    0
-                );
-                const birdsAvailableForSale = Math.max(initialChicks - totalMortality - totalBirdsSold, 0);
-
-                callback(birdsAvailableForSale <= 0, birdsAvailableForSale);
-            });
-        });
-    }, []);
 
     const columns = useMemo(() => [
         { key: 'batch_id', title: 'Batch ID', width: 100 },
@@ -131,7 +104,6 @@ export default function ViewBatchesScreen({ navigation, route }) {
         setEditedBreed(batch.breed || '');
         setEditedInitialChicks(String(batch.initial_chicks ?? ''));
         setEditedPurchaseCost(String(batch.purchase_cost ?? '0'));
-        setEditedStatus(batch.status || 'active');
     };
 
     const cancelEdit = () => {
@@ -140,7 +112,6 @@ export default function ViewBatchesScreen({ navigation, route }) {
         setEditedBreed('');
         setEditedInitialChicks('');
         setEditedPurchaseCost('');
-        setEditedStatus('');
     };
 
     const saveEdit = () => {
@@ -164,34 +135,8 @@ export default function ViewBatchesScreen({ navigation, route }) {
             return;
         }
 
-        const nextStatus = editedStatus.trim() || 'active';
         const batchBeingEdited = batches.find(item => item.batch_id === editingBatch);
-
-        if (nextStatus.toLowerCase() === 'completed') {
-            canCompleteBatch(batchBeingEdited, (allowed, birdsAvailableForSale = 0) => {
-                if (!allowed) {
-                    Alert.alert(
-                        'Cannot Complete Batch',
-                        `${birdsAvailableForSale} bird(s) are still available for sale in this batch. Record the remaining sales before completing it.`
-                    );
-                    return;
-                }
-
-                updateBatchDetails(
-                    editingBatch,
-                    editedStartDate.trim(),
-                    editedBreed.trim(),
-                    Number(editedInitialChicks),
-                    editedPurchaseCost.trim() === '' ? 0 : Number(editedPurchaseCost),
-                    nextStatus,
-                    () => {
-                        cancelEdit();
-                        loadBatches();
-                    }
-                );
-            });
-            return;
-        }
+        const nextStatus = batchBeingEdited?.status || 'active';
 
         updateBatchDetails(
             editingBatch,
@@ -346,12 +291,9 @@ export default function ViewBatchesScreen({ navigation, route }) {
                                         keyboardType="numeric"
                                         style={styles.input}
                                     />
-                                    <TextInput
-                                        value={editedStatus}
-                                        onChangeText={setEditedStatus}
-                                        placeholder="Status"
-                                        style={styles.input}
-                                    />
+                                    <Text style={styles.statusHelperText}>
+                                        Status changes are handled from Batch Details. Completed batches cannot be reactivated.
+                                    </Text>
                                     </View>
                                 );
                             }
@@ -484,6 +426,11 @@ const styles = StyleSheet.create({
     },
     editFields: {
         gap: 8,
+    },
+    statusHelperText: {
+        color: '#475569',
+        fontSize: 12,
+        lineHeight: 18,
     },
     statusText: { color: '#0f766e', fontWeight: '600', textTransform: 'capitalize' },
     actionRow: {

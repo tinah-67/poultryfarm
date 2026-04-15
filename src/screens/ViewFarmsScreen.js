@@ -6,6 +6,7 @@ import DataTable from '../components/DataTable';
 
 export default function ViewFarmsScreen({ navigation, route }) {
   const userId = route?.params?.userId ?? route?.params?.user_Id;
+  const selectionMode = route?.params?.selectionMode;
   const [farms, setFarms] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
@@ -39,6 +40,8 @@ export default function ViewFarmsScreen({ navigation, route }) {
   );
 
   const isOwner = currentUser?.role === 'owner';
+  const canViewFarmPerformance = currentUser?.role !== 'worker';
+  const isExpenseSelectionMode = selectionMode === 'expense';
 
   const handleDelete = (id) => {
     if (!isOwner) {
@@ -97,12 +100,16 @@ export default function ViewFarmsScreen({ navigation, route }) {
       { key: 'batches', title: 'Batches', width: 140 },
     ];
 
-    if (isOwner) {
-      return [...baseColumns, { key: 'actions', title: 'Actions', width: 260 }];
+    if (isExpenseSelectionMode) {
+      return [...baseColumns, { key: 'actions', title: 'Actions', width: 180 }];
     }
 
-    return [...baseColumns, { key: 'actions', title: 'Actions', width: 160 }];
-  }, [isOwner]);
+    if (isOwner) {
+      return [...baseColumns, { key: 'actions', title: 'Actions', width: 480 }];
+    }
+
+    return [...baseColumns, { key: 'actions', title: 'Actions', width: canViewFarmPerformance ? 360 : 260 }];
+  }, [canViewFarmPerformance, isExpenseSelectionMode, isOwner]);
 
   const filteredFarms = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -124,17 +131,27 @@ export default function ViewFarmsScreen({ navigation, route }) {
       contentContainerStyle={styles.contentContainer}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
     >
-      {isOwner ? (
+      {isOwner && !isExpenseSelectionMode ? (
         <Button
           title="Add New Farm"
-          onPress={() => navigation.navigate('Farm', userId ? { userId } : { user_Id: route?.params?.user_Id })}
+          onPress={() => navigation.navigate('AddFarm', userId ? { userId } : { user_Id: route?.params?.user_Id })}
         />
+      ) : null}
+      {canViewFarmPerformance && !isExpenseSelectionMode ? (
+        <View style={styles.topAction}>
+          <Button
+            title="View Farm Performance Summary"
+            onPress={() => navigation.navigate('FarmPerformanceSummary', { userId })}
+          />
+        </View>
       ) : null}
 
       <Text style={styles.title}>Registered Farms</Text>
       <Text style={styles.helperText}>
-        {isOwner
-          ? 'Tap a row action to open batches, edit the farm, or remove it.'
+        {isExpenseSelectionMode
+          ? 'Select a farm by name and location to record a farm expense.'
+          : isOwner
+          ? 'Select a farm to manage batches, farm expenses, or farm performance.'
           : 'These farms are linked to the owner account that created your login.'}
       </Text>
 
@@ -212,6 +229,25 @@ export default function ViewFarmsScreen({ navigation, route }) {
           }
 
           if (column.key === 'actions') {
+            if (isExpenseSelectionMode) {
+              return (
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={styles.primaryAction}
+                    onPress={() =>
+                      navigation.navigate('Expense', {
+                        farmId: item.farm_id,
+                        farmName: item.farm_name,
+                        userId,
+                      })
+                    }
+                  >
+                    <Text style={styles.primaryActionText}>Select Farm</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            }
+
             return (
               <View style={styles.actionRow}>
                 <TouchableOpacity
@@ -226,6 +262,31 @@ export default function ViewFarmsScreen({ navigation, route }) {
                 >
                   <Text style={styles.primaryActionText}>View Batches</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.secondaryAction}
+                  onPress={() =>
+                    navigation.navigate('ViewExpenses', {
+                      farmId: item.farm_id,
+                      farmName: item.farm_name,
+                      userId,
+                    })
+                  }
+                >
+                  <Text style={styles.secondaryActionText}>Expenses</Text>
+                </TouchableOpacity>
+                {canViewFarmPerformance ? (
+                  <TouchableOpacity
+                    style={styles.secondaryAction}
+                    onPress={() =>
+                      navigation.navigate('FarmPerformanceSummary', {
+                        userId,
+                        initialFarmId: item.farm_id,
+                      })
+                    }
+                  >
+                    <Text style={styles.secondaryActionText}>Performance</Text>
+                  </TouchableOpacity>
+                ) : null}
 
                 {isOwner ? (
                   <TouchableOpacity style={styles.secondaryAction} onPress={() => startEdit(item)}>
@@ -252,6 +313,7 @@ export default function ViewFarmsScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f1f5f9' },
   contentContainer: { padding: 20 },
+  topAction: { marginTop: 10, marginBottom: 6 },
   title: { fontSize: 20, fontWeight: 'bold', marginVertical: 10, color: '#0f172a' },
   helperText: {
     color: '#475569',

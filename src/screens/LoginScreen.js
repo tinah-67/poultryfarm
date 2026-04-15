@@ -44,9 +44,24 @@ export default function LoginScreen({ navigation }) {
           finishLogin(bootstrappedUser);
         } catch (error) {
           console.log('Bootstrap login failed', error);
+          const message = String(error?.message || '');
+
+          if (message.toLowerCase().includes('user not found')) {
+            Alert.alert(
+              'Account not in backup',
+              'This device is online, but this account was not found in the backup server. It may not have been backed up before the app was uninstalled.'
+            );
+            return;
+          }
+
+          if (message.toLowerCase().includes('invalid password')) {
+            Alert.alert('Error', 'The password is incorrect for the backup account.');
+            return;
+          }
+
           Alert.alert(
             'Error',
-            'User not found on this device. Connect to the internet once to restore this account from backup.'
+            'User not found on this device, and the backup restore could not complete. Please try again shortly.'
           );
         }
         return;

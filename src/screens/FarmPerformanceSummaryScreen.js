@@ -6,6 +6,7 @@ import DataTable from '../components/DataTable';
 import {
   getAccessibleFarms,
   getBatchesByFarmId,
+  getExpensesByFarmId,
   getExpensesByBatchId,
   getFeedRecordsByBatchId,
   getMortalityRecordsByBatchId,
@@ -67,6 +68,7 @@ const calculateMetricsFromTotals = totals => {
 
 export default function FarmPerformanceSummaryScreen({ navigation, route }) {
   const userId = route?.params?.userId;
+  const initialFarmId = route?.params?.initialFarmId;
 
   const [currentUser, setCurrentUser] = useState(null);
   const [farmSummaries, setFarmSummaries] = useState([]);
@@ -112,47 +114,77 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
         }
 
         const summaryResults = [];
-        let processedFarms = 0;
+        const totalFarmOperations = safeFarms.length * 2;
+        let completedFarmOperations = 0;
+
+        const finalizeFarmSummaryLoad = () => {
+          completedFarmOperations += 1;
+
+          if (completedFarmOperations !== totalFarmOperations) {
+            return;
+          }
+
+          const overallTotals = summaryResults.reduce((accumulator, item) => ({
+            initialChicks: accumulator.initialChicks + item.metrics.initialChicks,
+            birdsAlive: accumulator.birdsAlive + item.metrics.birdsAlive,
+            totalMortality: accumulator.totalMortality + item.metrics.totalMortality,
+            mortalityRate: 0,
+            totalFeedUsed: accumulator.totalFeedUsed + item.metrics.totalFeedUsed,
+            totalFeedCost: accumulator.totalFeedCost + item.metrics.totalFeedCost,
+            otherExpenses: accumulator.otherExpenses + item.metrics.otherExpenses,
+            totalExpenses: 0,
+            birdsSold: accumulator.birdsSold + item.metrics.birdsSold,
+            revenue: accumulator.revenue + item.metrics.revenue,
+            profit: 0,
+            fcr: null,
+            batchCount: accumulator.batchCount + item.metrics.batchCount,
+          }), createEmptyMetrics());
+
+          setFarmSummaries(
+            summaryResults.sort((left, right) => left.farm_name.localeCompare(right.farm_name))
+          );
+          setOverallMetrics(calculateMetricsFromTotals(overallTotals));
+          setSelectedFarmId(previous =>
+            previous !== 'all' && summaryResults.some(item => String(item.farm_id) === String(previous))
+              ? previous
+              : initialFarmId != null && summaryResults.some(item => String(item.farm_id) === String(initialFarmId))
+                ? String(initialFarmId)
+                : 'all'
+          );
+          done && done();
+        };
 
         safeFarms.forEach(farm => {
           getBatchesByFarmId(farm.farm_id, batches => {
             const safeBatches = batches || [];
             const farmTotals = createEmptyMetrics();
             farmTotals.batchCount = safeBatches.length;
+            let farmExpensesLoaded = false;
+            let batchMetricsLoaded = false;
 
-            if (safeBatches.length === 0) {
+            const maybeFinalizeFarm = () => {
+              if (!farmExpensesLoaded || !batchMetricsLoaded) {
+                return;
+              }
+
               const metrics = calculateMetricsFromTotals(farmTotals);
               summaryResults.push({ ...farm, metrics });
-              processedFarms += 1;
+              finalizeFarmSummaryLoad();
+            };
 
-              if (processedFarms === safeFarms.length) {
-                const overallTotals = summaryResults.reduce((accumulator, item) => ({
-                  initialChicks: accumulator.initialChicks + item.metrics.initialChicks,
-                  birdsAlive: accumulator.birdsAlive + item.metrics.birdsAlive,
-                  totalMortality: accumulator.totalMortality + item.metrics.totalMortality,
-                  mortalityRate: 0,
-                  totalFeedUsed: accumulator.totalFeedUsed + item.metrics.totalFeedUsed,
-                  totalFeedCost: accumulator.totalFeedCost + item.metrics.totalFeedCost,
-                  otherExpenses: accumulator.otherExpenses + item.metrics.otherExpenses,
-                  totalExpenses: 0,
-                  birdsSold: accumulator.birdsSold + item.metrics.birdsSold,
-                  revenue: accumulator.revenue + item.metrics.revenue,
-                  profit: 0,
-                  fcr: null,
-                  batchCount: accumulator.batchCount + item.metrics.batchCount,
-                }), createEmptyMetrics());
+            getExpensesByFarmId(farm.farm_id, expenseRecords => {
+              farmTotals.otherExpenses += (expenseRecords || []).reduce(
+                (sum, item) => sum + Number(item.amount || 0),
+                0
+              );
 
-                setFarmSummaries(
-                  summaryResults.sort((left, right) => left.farm_name.localeCompare(right.farm_name))
-                );
-                setOverallMetrics(calculateMetricsFromTotals(overallTotals));
-                setSelectedFarmId(previous =>
-                  previous === 'all' || summaryResults.some(item => String(item.farm_id) === String(previous))
-                    ? previous
-                    : 'all'
-                );
-                done && done();
-              }
+              farmExpensesLoaded = true;
+              maybeFinalizeFarm();
+            });
+
+            if (safeBatches.length === 0) {
+              batchMetricsLoaded = true;
+              maybeFinalizeFarm();
 
               return;
             }
@@ -194,38 +226,8 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
                       processedBatches += 1;
 
                       if (processedBatches === safeBatches.length) {
-                        const metrics = calculateMetricsFromTotals(farmTotals);
-                        summaryResults.push({ ...farm, metrics });
-                        processedFarms += 1;
-
-                        if (processedFarms === safeFarms.length) {
-                          const overallTotals = summaryResults.reduce((accumulator, item) => ({
-                            initialChicks: accumulator.initialChicks + item.metrics.initialChicks,
-                            birdsAlive: accumulator.birdsAlive + item.metrics.birdsAlive,
-                            totalMortality: accumulator.totalMortality + item.metrics.totalMortality,
-                            mortalityRate: 0,
-                            totalFeedUsed: accumulator.totalFeedUsed + item.metrics.totalFeedUsed,
-                            totalFeedCost: accumulator.totalFeedCost + item.metrics.totalFeedCost,
-                            otherExpenses: accumulator.otherExpenses + item.metrics.otherExpenses,
-                            totalExpenses: 0,
-                            birdsSold: accumulator.birdsSold + item.metrics.birdsSold,
-                            revenue: accumulator.revenue + item.metrics.revenue,
-                            profit: 0,
-                            fcr: null,
-                            batchCount: accumulator.batchCount + item.metrics.batchCount,
-                          }), createEmptyMetrics());
-
-                          setFarmSummaries(
-                            summaryResults.sort((left, right) => left.farm_name.localeCompare(right.farm_name))
-                          );
-                          setOverallMetrics(calculateMetricsFromTotals(overallTotals));
-                          setSelectedFarmId(previous =>
-                            previous === 'all' || summaryResults.some(item => String(item.farm_id) === String(previous))
-                              ? previous
-                              : 'all'
-                          );
-                          done && done();
-                        }
+                        batchMetricsLoaded = true;
+                        maybeFinalizeFarm();
                       }
                     });
                   });
@@ -236,7 +238,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
         });
       });
     });
-  }, [navigation, userId]);
+  }, [initialFarmId, navigation, userId]);
 
   useFocusEffect(
     useCallback(() => {

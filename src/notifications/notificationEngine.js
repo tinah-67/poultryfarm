@@ -273,8 +273,9 @@ export const loadNotificationsForUser = async userId => {
 
           safeVaccinationRecords.forEach(record => {
             const nextDueDate = parseLocalDate(record.next_due_date);
+            const dueCompletedAt = parseLocalDate(record.due_completed_at);
 
-            if (!isActive || !nextDueDate) {
+            if (!isActive || !nextDueDate || dueCompletedAt) {
               return;
             }
 

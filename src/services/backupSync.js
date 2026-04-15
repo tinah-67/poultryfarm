@@ -1,6 +1,6 @@
 import db from '../database/db';
 
-const BACKUP_BASE_URL = 'https://broilerhub.onrender.com';
+const BACKUP_BASE_URL = 'http://192.168.137.1:3000';
 
 const tableConfigs = [
   {
@@ -77,7 +77,7 @@ const tableConfigs = [
     idColumn: 'vaccination_id',
     endpoint: 'vaccination-records',
     selectSql: `
-      SELECT vaccination_records.vaccination_id, vaccination_records.batch_id, vaccination_records.vaccine_name, vaccination_records.vaccination_date, vaccination_records.next_due_date, vaccination_records.notes, vaccination_records.deleted_at
+      SELECT vaccination_records.vaccination_id, vaccination_records.batch_id, vaccination_records.vaccine_name, vaccination_records.vaccination_date, vaccination_records.next_due_date, vaccination_records.due_completed_at, vaccination_records.notes, vaccination_records.deleted_at
       FROM vaccination_records
       JOIN batches ON batches.batch_id = vaccination_records.batch_id
       WHERE vaccination_records.synced = 0
@@ -91,11 +91,36 @@ const tableConfigs = [
     idColumn: 'expense_id',
     endpoint: 'expenses',
     selectSql: `
-      SELECT expenses.expense_id, expenses.batch_id, expenses.description, expenses.amount, expenses.expense_date, expenses.deleted_at
+      SELECT expenses.expense_id,
+             expenses.farm_id,
+             expenses.batch_id,
+             expenses.description,
+             expenses.amount,
+             expenses.expense_date,
+             COALESCE(expenses.expense_scope, 'batch') AS expense_scope,
+             expenses.feed_type,
+             expenses.quantity_bought,
+             expenses.deleted_at
       FROM expenses
-      JOIN batches ON batches.batch_id = expenses.batch_id
       WHERE expenses.synced = 0
-        AND batches.synced = 1
+        AND (
+          (
+            COALESCE(expenses.expense_scope, 'batch') = 'farm'
+            AND expenses.farm_id IN (
+              SELECT farm_id
+              FROM farms
+              WHERE synced = 1
+            )
+          )
+          OR (
+            COALESCE(expenses.expense_scope, 'batch') = 'batch'
+            AND expenses.batch_id IN (
+              SELECT batch_id
+              FROM batches
+              WHERE synced = 1
+            )
+          )
+        )
       ORDER BY expense_id
     `,
   },
