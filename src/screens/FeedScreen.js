@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity } from 'react-native';
-import { addFeedRecord, getBatchById, getUserById } from '../database/db';
+import { addFeedRecord, getBatchById, getFeedAvailability, getUserById } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 
 export default function FeedScreen({ route, navigation }) {
@@ -12,6 +12,8 @@ export default function FeedScreen({ route, navigation }) {
     const [showFeedTypeDropdown, setShowFeedTypeDropdown] = useState(false);
     const [quantity, setQuantity] = useState('');
     const [quantityError, setQuantityError] = useState('');
+    const [remainingFeed, setRemainingFeed] = useState(null);
+    const [remainingFeedMessage, setRemainingFeedMessage] = useState('');
     const [currentUser, setCurrentUser] = useState(null);
     const [batch, setBatch] = useState(null);
     const formatCurrency = value => `KES ${Number(value || 0).toFixed(2)}`;
@@ -36,6 +38,33 @@ export default function FeedScreen({ route, navigation }) {
         setBatch(batchRecord);
         });
     }, [batchId]);
+
+    useEffect(() => {
+        if (!batchId || !feedType) {
+        setRemainingFeed(null);
+        setRemainingFeedMessage('');
+        return;
+        }
+
+        getFeedAvailability(
+        batchId,
+        feedType,
+        availability => {
+            if (!availability || availability.total_quantity <= 0) {
+            setRemainingFeed(null);
+            setRemainingFeedMessage(`No ${feedType} feed purchase has been recorded yet.`);
+            return;
+            }
+
+            setRemainingFeed(availability.available_quantity);
+            setRemainingFeedMessage('');
+        },
+        () => {
+            setRemainingFeed(null);
+            setRemainingFeedMessage(`No ${feedType} feed purchase has been recorded yet.`);
+        }
+        );
+    }, [batchId, feedType]);
 
     const canRecordFeed = ['owner', 'worker'].includes(currentUser?.role);
     const isBatchCompleted = String(batch?.status || 'active').toLowerCase() === 'completed';
@@ -147,9 +176,10 @@ export default function FeedScreen({ route, navigation }) {
             setShowFeedTypeDropdown(false);
             setQuantity('');
             setQuantityError('');
+            setRemainingFeed(result?.available_quantity ?? null);
             Alert.alert(
                 'Success',
-                `Feed record added. Cost: ${formatCurrency(result?.feed_cost)} at ${formatCurrency(result?.unit_cost)} per kg.`
+                `Feed record added. Cost: ${formatCurrency(result?.feed_cost)} at ${formatCurrency(result?.unit_cost)} per kg. Remaining ${feedType}: ${Number(result?.available_quantity || 0).toFixed(2)} kg.`
             );
         },
         error => {
@@ -214,6 +244,14 @@ export default function FeedScreen({ route, navigation }) {
                 ) : null}
             </View>
 
+            {remainingFeedMessage ? (
+                <Text style={styles.remainingFeedWarning}>{remainingFeedMessage}</Text>
+            ) : (
+                <Text style={styles.remainingFeedText}>
+                Remaining {feedType}: {Number(remainingFeed || 0).toFixed(2)} kg
+                </Text>
+            )}
+
             <TextInput
                 placeholder="Quantity (kg)"
                 placeholderTextColor="#666"
@@ -259,6 +297,16 @@ export default function FeedScreen({ route, navigation }) {
     ageNote: {
         color: '#bfdbfe',
         marginBottom: 12,
+    },
+    remainingFeedText: {
+        color: '#dcfce7',
+        marginBottom: 12,
+        fontWeight: '600',
+    },
+    remainingFeedWarning: {
+        color: '#fde68a',
+        marginBottom: 12,
+        fontWeight: '600',
     },
     input: {
         borderWidth: 1,

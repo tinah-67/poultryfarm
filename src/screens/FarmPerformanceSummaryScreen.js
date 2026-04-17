@@ -69,12 +69,13 @@ const calculateMetricsFromTotals = totals => {
 export default function FarmPerformanceSummaryScreen({ navigation, route }) {
   const userId = route?.params?.userId;
   const initialFarmId = route?.params?.initialFarmId;
+  const targetFarmId = initialFarmId != null ? String(initialFarmId) : 'all';
 
   const [currentUser, setCurrentUser] = useState(null);
   const [farmSummaries, setFarmSummaries] = useState([]);
   const [overallMetrics, setOverallMetrics] = useState(createEmptyMetrics());
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedFarmId, setSelectedFarmId] = useState('all');
+  const [selectedFarmId, setSelectedFarmId] = useState(targetFarmId);
   const [showFarmDropdown, setShowFarmDropdown] = useState(false);
 
   const loadSummary = useCallback((done) => {
@@ -103,18 +104,21 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
 
       getAccessibleFarms(userId, farms => {
         const safeFarms = farms || [];
+        const scopedFarms = targetFarmId === 'all'
+          ? safeFarms
+          : safeFarms.filter(farm => String(farm.farm_id) === targetFarmId);
 
-        if (safeFarms.length === 0) {
+        if (scopedFarms.length === 0) {
           setFarmSummaries([]);
           setOverallMetrics(createEmptyMetrics());
-          setSelectedFarmId('all');
+          setSelectedFarmId(targetFarmId === 'all' ? 'all' : targetFarmId);
           setShowFarmDropdown(false);
           done && done();
           return;
         }
 
         const summaryResults = [];
-        const totalFarmOperations = safeFarms.length * 2;
+        const totalFarmOperations = scopedFarms.length;
         let completedFarmOperations = 0;
 
         const finalizeFarmSummaryLoad = () => {
@@ -147,14 +151,14 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
           setSelectedFarmId(previous =>
             previous !== 'all' && summaryResults.some(item => String(item.farm_id) === String(previous))
               ? previous
-              : initialFarmId != null && summaryResults.some(item => String(item.farm_id) === String(initialFarmId))
-                ? String(initialFarmId)
+              : targetFarmId !== 'all' && summaryResults.some(item => String(item.farm_id) === targetFarmId)
+                ? targetFarmId
                 : 'all'
           );
           done && done();
         };
 
-        safeFarms.forEach(farm => {
+        scopedFarms.forEach(farm => {
           getBatchesByFarmId(farm.farm_id, batches => {
             const safeBatches = batches || [];
             const farmTotals = createEmptyMetrics();
@@ -238,7 +242,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
         });
       });
     });
-  }, [initialFarmId, navigation, userId]);
+  }, [navigation, targetFarmId, userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -399,8 +403,8 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
         />
       </View>
 
-      {!selectedFarmSummary ? <Text style={styles.sectionTitle}>By Farm</Text> : null}
-      {!selectedFarmSummary && farmSummaries.length > 0 ? (
+      {!selectedFarmSummary && targetFarmId === 'all' ? <Text style={styles.sectionTitle}>By Farm</Text> : null}
+      {!selectedFarmSummary && targetFarmId === 'all' && farmSummaries.length > 0 ? (
         <View style={styles.farmTableCard}>
           <DataTable
             columns={farmColumns}
@@ -426,7 +430,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
           />
         </View>
       ) : (
-        !selectedFarmSummary ? (
+        !selectedFarmSummary && targetFarmId === 'all' ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No farms to report yet</Text>
             <Text style={styles.emptyText}>Add a farm and record batch activity to see farm-level performance here.</Text>

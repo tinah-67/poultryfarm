@@ -45,6 +45,56 @@ const formatCurrency = value => {
   return numericValue.toFixed(2);
 };
 
+const normalizeFeedType = value => String(value || '').trim().toLowerCase();
+
+const buildFeedRecordsWithRemaining = (feedRecords, expenseRecords) => {
+  const purchaseTotals = new Map();
+
+  expenseRecords.forEach(record => {
+    const isFarmFeedPurchase = (record.expense_scope_label === 'Farm' || record.expense_scope === 'farm')
+      && normalizeFeedType(record.feed_type)
+      && Number(record.quantity_bought || 0) > 0;
+
+    if (!isFarmFeedPurchase) {
+      return;
+    }
+
+    const key = `${record.farm_id}:${normalizeFeedType(record.feed_type)}`;
+    const runningTotal = purchaseTotals.get(key) || 0;
+    purchaseTotals.set(key, runningTotal + Number(record.quantity_bought || 0));
+  });
+
+  const usageByFeedId = new Map();
+  const cumulativeUsage = new Map();
+
+  [...feedRecords]
+    .sort((left, right) => {
+      const dateCompare = String(left.date_recorded || '').localeCompare(String(right.date_recorded || ''));
+
+      if (dateCompare !== 0) {
+        return dateCompare;
+      }
+
+      return Number(left.feed_id || 0) - Number(right.feed_id || 0);
+    })
+    .forEach(record => {
+      const key = `${record.farm_id}:${normalizeFeedType(record.feed_type)}`;
+      const nextUsedQuantity = (cumulativeUsage.get(key) || 0) + Number(record.feed_quantity || 0);
+      cumulativeUsage.set(key, nextUsedQuantity);
+      usageByFeedId.set(
+        record.feed_id,
+        Math.max((purchaseTotals.get(key) || 0) - nextUsedQuantity, 0)
+      );
+    });
+
+  return feedRecords.map(record => ({
+    ...record,
+    remaining_feed: usageByFeedId.has(record.feed_id)
+      ? usageByFeedId.get(record.feed_id)
+      : Math.max((purchaseTotals.get(`${record.farm_id}:${normalizeFeedType(record.feed_type)}`) || 0) - Number(record.feed_quantity || 0), 0),
+  }));
+};
+
 const createEmptyData = () => ({
   farms: [],
   batches: [],
@@ -169,12 +219,14 @@ export default function ReportsScreen({ route }) {
           return;
         }
 
+        const feedWithRemaining = buildFeedRecordsWithRemaining(nextData.feed, nextData.expenses);
+
         setReportData({
           ...nextData,
           batches: nextData.batches.sort((left, right) => String(right.start_date).localeCompare(String(left.start_date))),
           sales: nextData.sales.sort((left, right) => String(right.sale_date).localeCompare(String(left.sale_date))),
           expenses: nextData.expenses.sort((left, right) => String(right.expense_date).localeCompare(String(left.expense_date))),
-          feed: nextData.feed.sort((left, right) => String(right.date_recorded).localeCompare(String(left.date_recorded))),
+          feed: feedWithRemaining.sort((left, right) => String(right.date_recorded).localeCompare(String(left.date_recorded))),
           mortality: nextData.mortality.sort((left, right) => String(right.date_recorded).localeCompare(String(left.date_recorded))),
           vaccinations: nextData.vaccinations.sort((left, right) => String(right.vaccination_date).localeCompare(String(left.vaccination_date))),
         });
@@ -566,6 +618,7 @@ export default function ReportsScreen({ route }) {
           { key: 'batch_id', title: 'Batch ID', width: 90 },
           { key: 'feed_type', title: 'Feed Type', width: 120 },
           { key: 'feed_quantity', title: 'Quantity (kg)', width: 120 },
+          { key: 'remaining_feed', title: 'Remaining (kg)', width: 130 },
           { key: 'feed_cost', title: 'Cost', width: 100 },
           { key: 'date_recorded', title: 'Date', width: 120 },
           { key: 'batch_status', title: 'Batch Status', width: 120 },
@@ -879,7 +932,7 @@ export default function ReportsScreen({ route }) {
                 return <Text style={styles.cellText}>{formatCurrency(value)}</Text>;
               }
 
-              if (['feed_quantity', 'feed_used'].includes(column.key)) {
+              if (['feed_quantity', 'feed_used', 'remaining_feed'].includes(column.key)) {
                 return <Text style={styles.cellText}>{formatNumber(value)}</Text>;
               }
 

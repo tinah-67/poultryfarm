@@ -42,6 +42,7 @@ export default function ViewFarmsScreen({ navigation, route }) {
   const isOwner = currentUser?.role === 'owner';
   const canViewFarmPerformance = currentUser?.role !== 'worker';
   const isExpenseSelectionMode = selectionMode === 'expense';
+  const isBatchSelectionMode = selectionMode === 'batch';
 
   const handleDelete = (id) => {
     if (!isOwner) {
@@ -104,12 +105,16 @@ export default function ViewFarmsScreen({ navigation, route }) {
       return [...baseColumns, { key: 'actions', title: 'Actions', width: 180 }];
     }
 
+    if (isBatchSelectionMode) {
+      return [...baseColumns, { key: 'actions', title: 'Actions', width: 180 }];
+    }
+
     if (isOwner) {
       return [...baseColumns, { key: 'actions', title: 'Actions', width: 480 }];
     }
 
     return [...baseColumns, { key: 'actions', title: 'Actions', width: canViewFarmPerformance ? 360 : 260 }];
-  }, [canViewFarmPerformance, isExpenseSelectionMode, isOwner]);
+  }, [canViewFarmPerformance, isBatchSelectionMode, isExpenseSelectionMode, isOwner]);
 
   const filteredFarms = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -131,13 +136,13 @@ export default function ViewFarmsScreen({ navigation, route }) {
       contentContainerStyle={styles.contentContainer}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
     >
-      {isOwner && !isExpenseSelectionMode ? (
+      {isOwner && !isExpenseSelectionMode && !isBatchSelectionMode ? (
         <Button
           title="Add New Farm"
           onPress={() => navigation.navigate('AddFarm', userId ? { userId } : { user_Id: route?.params?.user_Id })}
         />
       ) : null}
-      {canViewFarmPerformance && !isExpenseSelectionMode ? (
+      {canViewFarmPerformance && !isExpenseSelectionMode && !isBatchSelectionMode ? (
         <View style={styles.topAction}>
           <Button
             title="View Farm Performance Summary"
@@ -150,6 +155,8 @@ export default function ViewFarmsScreen({ navigation, route }) {
       <Text style={styles.helperText}>
         {isExpenseSelectionMode
           ? 'Select a farm by name and location to record a farm expense.'
+          : isBatchSelectionMode
+          ? 'Select a farm by name and location to open its batch records.'
           : isOwner
           ? 'Select a farm to manage batches, farm expenses, or farm performance.'
           : 'These farms are linked to the owner account that created your login.'}
@@ -243,6 +250,25 @@ export default function ViewFarmsScreen({ navigation, route }) {
                     }
                   >
                     <Text style={styles.primaryActionText}>Select Farm</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            }
+
+            if (isBatchSelectionMode) {
+              return (
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={styles.primaryAction}
+                    onPress={() =>
+                      navigation.navigate('ViewBatches', {
+                        farmId: item.farm_id,
+                        farmName: item.farm_name,
+                        userId,
+                      })
+                    }
+                  >
+                    <Text style={styles.primaryActionText}>View Batches</Text>
                   </TouchableOpacity>
                 </View>
               );

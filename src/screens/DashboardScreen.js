@@ -100,7 +100,7 @@ export default function DashboardScreen({ navigation, route }) {
 
           <TouchableOpacity
             style={styles.card}
-            onPress={() => navigation.navigate('ViewFarms', { userId })}
+            onPress={() => navigation.navigate('ViewFarms', { userId, selectionMode: 'batch' })}
           >
             <Text style={styles.cardText}>Batch Management</Text>
           </TouchableOpacity>

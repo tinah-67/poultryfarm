@@ -877,109 +877,141 @@ export const deleteBatch = (batch_id) => {
   });
 };
 
+const loadFeedAvailabilityForTransaction = (tx, batch_id, feed_type, callback, errorCallback) => {
+  const normalizedFeedType = normalizeFeedType(feed_type);
+
+  tx.executeSql(
+    `SELECT farm_id
+     FROM batches
+     WHERE batch_id = ?
+       AND deleted_at IS NULL
+     LIMIT 1`,
+    [batch_id],
+    (_, batchResult) => {
+      const batchRows = rowsToArray(batchResult.rows);
+      const farmId = batchRows[0]?.farm_id;
+
+      if (!farmId || !normalizedFeedType) {
+        errorCallback && errorCallback(new Error('A valid batch and feed type are required.'));
+        return false;
+      }
+
+      tx.executeSql(
+        `SELECT COALESCE(SUM(amount), 0) AS total_cost,
+                COALESCE(SUM(quantity_bought), 0) AS total_quantity
+         FROM expenses
+         WHERE farm_id = ?
+           AND COALESCE(expense_scope, 'batch') = 'farm'
+           AND deleted_at IS NULL
+           AND LOWER(TRIM(COALESCE(feed_type, ''))) = ?
+           AND quantity_bought IS NOT NULL
+           AND quantity_bought > 0`,
+        [farmId, normalizedFeedType],
+        (_, purchaseResult) => {
+          const purchaseRows = rowsToArray(purchaseResult.rows);
+          const totalCost = parseNumber(purchaseRows[0]?.total_cost);
+          const totalQuantity = parseNumber(purchaseRows[0]?.total_quantity);
+
+          tx.executeSql(
+            `SELECT COALESCE(SUM(feed_records.feed_quantity), 0) AS used_quantity
+             FROM feed_records
+             JOIN batches ON batches.batch_id = feed_records.batch_id
+             WHERE batches.farm_id = ?
+               AND feed_records.deleted_at IS NULL
+               AND LOWER(TRIM(COALESCE(feed_records.feed_type, ''))) = ?`,
+            [farmId, normalizedFeedType],
+            (_, usageResult) => {
+              const usageRows = rowsToArray(usageResult.rows);
+              const usedQuantity = parseNumber(usageRows[0]?.used_quantity);
+
+              callback && callback({
+                farm_id: farmId,
+                feed_type: normalizedFeedType,
+                total_cost: roundCurrency(totalCost),
+                total_quantity: roundCurrency(totalQuantity),
+                used_quantity: roundCurrency(usedQuantity),
+                available_quantity: roundCurrency(Math.max(totalQuantity - usedQuantity, 0)),
+                unit_cost: totalQuantity > 0 && totalCost > 0
+                  ? roundCurrency(totalCost / totalQuantity)
+                  : 0,
+              });
+            },
+            (_, error) => {
+              console.log("Error calculating used feed quantity", error);
+              errorCallback && errorCallback(error);
+              return false;
+            }
+          );
+        },
+        (_, error) => {
+          console.log("Error calculating feed purchase totals", error);
+          errorCallback && errorCallback(error);
+          return false;
+        }
+      );
+    },
+    (_, error) => {
+      console.log("Error loading batch farm for feed availability", error);
+      errorCallback && errorCallback(error);
+      return false;
+    }
+  );
+};
+
+export const getFeedAvailability = (batch_id, feed_type, callback, errorCallback) => {
+  db.transaction(tx => {
+    loadFeedAvailabilityForTransaction(tx, batch_id, feed_type, callback, errorCallback);
+  });
+};
+
 //ADD FEED RECORD
 export const addFeedRecord = (batch_id, feed_type, feed_quantity, date_recorded, callback, errorCallback) => {
-  const normalizedFeedType = normalizeFeedType(feed_type);
   const quantityValue = parseNumber(feed_quantity);
 
   db.transaction(tx => {
-    tx.executeSql(
-      `SELECT farm_id
-       FROM batches
-       WHERE batch_id = ?
-         AND deleted_at IS NULL
-       LIMIT 1`,
-      [batch_id],
-      (_, batchResult) => {
-        const batchRows = rowsToArray(batchResult.rows);
-        const farmId = batchRows[0]?.farm_id;
-
-        if (!farmId || !normalizedFeedType || quantityValue <= 0) {
+    loadFeedAvailabilityForTransaction(
+      tx,
+      batch_id,
+      feed_type,
+      availability => {
+        if (!availability?.farm_id || !availability?.feed_type || quantityValue <= 0) {
           errorCallback && errorCallback(new Error('A valid batch, feed type, and quantity are required.'));
           return false;
         }
 
+        if (availability.total_quantity <= 0 || availability.total_cost <= 0) {
+          errorCallback && errorCallback(new Error(`No farm feed purchase found for ${availability.feed_type}. Record it first under farm expenses.`));
+          return false;
+        }
+
+        if (quantityValue > availability.available_quantity) {
+          errorCallback && errorCallback(new Error(`Only ${availability.available_quantity.toFixed(2)} kg of ${availability.feed_type} is available from recorded farm purchases.`));
+          return false;
+        }
+
+        const feedCost = roundCurrency(quantityValue * availability.unit_cost);
+
         tx.executeSql(
-          `SELECT COALESCE(SUM(amount), 0) AS total_cost,
-                  COALESCE(SUM(quantity_bought), 0) AS total_quantity
-           FROM expenses
-           WHERE farm_id = ?
-             AND COALESCE(expense_scope, 'batch') = 'farm'
-             AND deleted_at IS NULL
-             AND LOWER(TRIM(COALESCE(feed_type, ''))) = ?
-             AND quantity_bought IS NOT NULL
-             AND quantity_bought > 0`,
-          [farmId, normalizedFeedType],
-          (_, purchaseResult) => {
-            const purchaseRows = rowsToArray(purchaseResult.rows);
-            const totalCost = parseNumber(purchaseRows[0]?.total_cost);
-            const totalQuantity = parseNumber(purchaseRows[0]?.total_quantity);
-
-            if (totalQuantity <= 0 || totalCost <= 0) {
-              errorCallback && errorCallback(new Error(`No farm feed purchase found for ${normalizedFeedType}. Record it first under farm expenses.`));
-              return false;
-            }
-
-            tx.executeSql(
-              `SELECT COALESCE(SUM(feed_records.feed_quantity), 0) AS used_quantity
-               FROM feed_records
-               JOIN batches ON batches.batch_id = feed_records.batch_id
-               WHERE batches.farm_id = ?
-                 AND feed_records.deleted_at IS NULL
-                 AND LOWER(TRIM(COALESCE(feed_records.feed_type, ''))) = ?`,
-              [farmId, normalizedFeedType],
-              (_, usageResult) => {
-                const usageRows = rowsToArray(usageResult.rows);
-                const usedQuantity = parseNumber(usageRows[0]?.used_quantity);
-                const availableQuantity = Math.max(totalQuantity - usedQuantity, 0);
-
-                if (quantityValue > availableQuantity) {
-                  errorCallback && errorCallback(new Error(`Only ${availableQuantity.toFixed(2)} kg of ${normalizedFeedType} is available from recorded farm purchases.`));
-                  return false;
-                }
-
-                const unitCost = totalCost / totalQuantity;
-                const feedCost = roundCurrency(quantityValue * unitCost);
-
-                tx.executeSql(
-                  `INSERT INTO feed_records (batch_id, feed_type, feed_quantity, feed_cost, date_recorded, synced)
-                   VALUES (?, ?, ?, ?, ?, 0)`,
-                  [batch_id, normalizedFeedType, quantityValue, feedCost, date_recorded],
-                  (_, result) => {
-                    console.log("Feed record added", result.insertId);
-                    callback && callback({
-                      feed_id: result.insertId,
-                      feed_cost: feedCost,
-                      unit_cost: roundCurrency(unitCost),
-                      available_quantity: roundCurrency(availableQuantity - quantityValue),
-                    });
-                  },
-                  (_, error) => {
-                    console.log("Error adding feed record", error);
-                    errorCallback && errorCallback(error);
-                    return false;
-                  }
-                );
-              },
-              (_, error) => {
-                console.log("Error calculating used feed quantity", error);
-                errorCallback && errorCallback(error);
-                return false;
-              }
-            );
+          `INSERT INTO feed_records (batch_id, feed_type, feed_quantity, feed_cost, date_recorded, synced)
+           VALUES (?, ?, ?, ?, ?, 0)`,
+          [batch_id, availability.feed_type, quantityValue, feedCost, date_recorded],
+          (_, result) => {
+            console.log("Feed record added", result.insertId);
+            callback && callback({
+              feed_id: result.insertId,
+              feed_cost: feedCost,
+              unit_cost: availability.unit_cost,
+              available_quantity: roundCurrency(availability.available_quantity - quantityValue),
+            });
           },
           (_, error) => {
-            console.log("Error calculating feed purchase totals", error);
+            console.log("Error adding feed record", error);
             errorCallback && errorCallback(error);
             return false;
           }
         );
       },
-      (_, error) => {
-        console.log("Error loading batch farm for feed record", error);
-        errorCallback && errorCallback(error);
-        return false;
-      }
+      errorCallback
     );
   });
 };
