@@ -3,6 +3,7 @@ import { Alert, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenBackground from '../components/ScreenBackground';
 import DataTable from '../components/DataTable';
+import { exportReportToExcel } from '../services/reportExport';
 import {
   getAccessibleFarms,
   getBatchesByFarmId,
@@ -18,7 +19,7 @@ const formatNumber = (value, digits = 2) => {
   const numericValue = Number(value || 0);
 
   if (!Number.isFinite(numericValue)) {
-    return 'N/A';
+    return Number(0).toFixed(digits);
   }
 
   return numericValue.toFixed(digits);
@@ -28,7 +29,7 @@ const formatCurrency = value => {
   const numericValue = Number(value || 0);
 
   if (!Number.isFinite(numericValue)) {
-    return 'N/A';
+    return '0.00';
   }
 
   return numericValue.toFixed(2);
@@ -46,7 +47,6 @@ const createEmptyMetrics = () => ({
   birdsSold: 0,
   revenue: 0,
   profit: 0,
-  fcr: null,
   batchCount: 0,
 });
 
@@ -54,7 +54,6 @@ const calculateMetricsFromTotals = totals => {
   const mortalityRate = totals.initialChicks > 0 ? (totals.totalMortality / totals.initialChicks) * 100 : 0;
   const totalExpenses = totals.totalFeedCost + totals.otherExpenses;
   const profit = totals.revenue - totalExpenses;
-  const fcr = totals.birdsSold > 0 ? totals.totalFeedUsed / totals.birdsSold : null;
 
   return {
     ...totals,
@@ -62,7 +61,6 @@ const calculateMetricsFromTotals = totals => {
     mortalityRate,
     totalExpenses,
     profit,
-    fcr,
   };
 };
 
@@ -77,6 +75,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedFarmId, setSelectedFarmId] = useState(targetFarmId);
   const [showFarmDropdown, setShowFarmDropdown] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const loadSummary = useCallback((done) => {
     if (!userId) {
@@ -140,7 +139,6 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
             birdsSold: accumulator.birdsSold + item.metrics.birdsSold,
             revenue: accumulator.revenue + item.metrics.revenue,
             profit: 0,
-            fcr: null,
             batchCount: accumulator.batchCount + item.metrics.batchCount,
           }), createEmptyMetrics());
 
@@ -266,7 +264,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
   const summaryMeta = selectedFarmSummary
     ? `Location: ${selectedFarmSummary.location || 'N/A'} | Batches: ${selectedFarmSummary.metrics.batchCount}`
     : `Farms: ${farmSummaries.length} | Batches: ${overallMetrics.batchCount}`;
-  const summaryRows = [
+  const summaryRows = useMemo(() => [
     {
       metric: 'Birds Alive',
       value: String(activeMetrics.birdsAlive),
@@ -290,7 +288,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
     {
       metric: 'Feed Used',
       value: `${formatNumber(activeMetrics.totalFeedUsed)} kg`,
-      note: `FCR: ${activeMetrics.fcr == null ? 'N/A' : formatNumber(activeMetrics.fcr)}`,
+      note: `Feed cost: ${formatCurrency(activeMetrics.totalFeedCost)}`,
     },
     {
       metric: 'Expenses',
@@ -307,13 +305,13 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
       value: formatCurrency(activeMetrics.profit),
       note: activeMetrics.profit >= 0 ? 'Revenue minus expenses' : 'Currently running at a loss',
     },
-  ];
-  const summaryColumns = [
+  ], [activeMetrics]);
+  const summaryColumns = useMemo(() => [
     { key: 'metric', title: 'Metric', width: 170 },
     { key: 'value', title: 'Value', width: 140 },
     { key: 'note', title: 'Note', width: 240 },
-  ];
-  const farmColumns = [
+  ], []);
+  const farmColumns = useMemo(() => [
     { key: 'farm_name', title: 'Farm', width: 140 },
     { key: 'location', title: 'Location', width: 140 },
     { key: 'batchCount', title: 'Batches', width: 90 },
@@ -325,7 +323,68 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
     { key: 'totalExpenses', title: 'Expenses', width: 120 },
     { key: 'revenue', title: 'Revenue', width: 120 },
     { key: 'profit', title: 'Profit', width: 120 },
-  ];
+  ], []);
+
+  const handleExport = useCallback(async () => {
+    if (exporting) {
+      return;
+    }
+
+    const report = {
+      title: selectedFarmSummary ? `${selectedFarmSummary.farm_name} Farm Performance` : 'Farm Performance Summary',
+      summary: [
+        { label: 'Scope', value: selectedFarmSummary ? 'Single farm' : 'All accessible farms' },
+        { label: 'Farm', value: selectedFarmSummary?.farm_name || 'All farms' },
+        { label: 'Location', value: selectedFarmSummary?.location || 'N/A' },
+        { label: 'Batches', value: String(activeMetrics.batchCount) },
+        { label: 'Birds Alive', value: String(activeMetrics.birdsAlive) },
+        { label: 'Total Dead', value: String(activeMetrics.totalMortality) },
+        { label: 'Total Sold', value: String(activeMetrics.birdsSold) },
+        { label: 'Mortality Rate', value: `${formatNumber(activeMetrics.mortalityRate)}%` },
+        { label: 'Feed Used', value: `${formatNumber(activeMetrics.totalFeedUsed)} kg` },
+        { label: 'Feed Cost', value: formatCurrency(activeMetrics.totalFeedCost) },
+        { label: 'Expenses', value: formatCurrency(activeMetrics.totalExpenses) },
+        { label: 'Revenue', value: formatCurrency(activeMetrics.revenue) },
+        { label: 'Profit', value: formatCurrency(activeMetrics.profit) },
+      ],
+      columns: selectedFarmSummary
+        ? summaryColumns
+        : farmColumns,
+      data: selectedFarmSummary
+        ? summaryRows
+        : farmSummaries.map(farm => ({
+            farm_name: farm.farm_name,
+            location: farm.location || 'N/A',
+            batchCount: farm.metrics.batchCount,
+            birdsAlive: farm.metrics.birdsAlive,
+            totalMortality: farm.metrics.totalMortality,
+            birdsSold: farm.metrics.birdsSold,
+            mortalityRate: `${formatNumber(farm.metrics.mortalityRate)}%`,
+            totalFeedUsed: formatNumber(farm.metrics.totalFeedUsed),
+            totalExpenses: formatCurrency(farm.metrics.totalExpenses),
+            revenue: formatCurrency(farm.metrics.revenue),
+            profit: formatCurrency(farm.metrics.profit),
+          })),
+    };
+
+    try {
+      setExporting(true);
+      const filePath = await exportReportToExcel({
+        reportType: 'farm-performance',
+        report,
+      });
+
+      Alert.alert(
+        'Export complete',
+        `Saved Farm Performance as an Excel file.\n\nPath: ${filePath}`
+      );
+    } catch (error) {
+      console.log('Farm performance export failed', error);
+      Alert.alert('Export failed', 'Could not create the farm performance report right now.');
+    } finally {
+      setExporting(false);
+    }
+  }, [activeMetrics, exporting, farmColumns, farmSummaries, selectedFarmSummary, summaryColumns, summaryRows]);
 
   return (
     <ScreenBackground
@@ -337,6 +396,16 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
       <Text style={styles.subtitle}>
         {selectedFarmSummary ? `${roleLabel} view for ${selectedFarmSummary.farm_name}` : `${roleLabel} view across accessible farms`}
       </Text>
+      <TouchableOpacity
+        style={[styles.exportButton, exporting ? styles.exportButtonDisabled : null]}
+        activeOpacity={0.85}
+        onPress={handleExport}
+        disabled={exporting}
+      >
+        <Text style={styles.exportButtonText}>
+          {exporting ? 'Exporting Excel...' : 'Download Farm Performance'}
+        </Text>
+      </TouchableOpacity>
 
       <View style={styles.filterCard}>
         <Text style={styles.filterLabel}>Choose farm</Text>
@@ -441,8 +510,8 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
       <View style={styles.noteCard}>
         <Text style={styles.noteTitle}>Report Note</Text>
         <Text style={styles.noteText}>
-          This summary is grouped by accessible farms, then rolled up across all their batches. FCR is currently calculated
-          as total feed used divided by birds sold.
+          This summary is grouped by accessible farms, then rolled up across all their batches using the saved feed,
+          mortality, expense, and sales records.
         </Text>
       </View>
     </ScreenBackground>
@@ -463,6 +532,21 @@ const styles = StyleSheet.create({
   subtitle: {
     color: '#e2e8f0',
     marginBottom: 16,
+  },
+  exportButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  exportButtonDisabled: {
+    opacity: 0.7,
+  },
+  exportButtonText: {
+    color: '#166534',
+    fontWeight: '700',
   },
   filterCard: {
     backgroundColor: 'rgba(15, 23, 42, 0.72)',

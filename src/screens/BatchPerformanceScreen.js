@@ -1,7 +1,8 @@
 import React, { useCallback, useState } from 'react';
-import { RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Alert, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenBackground from '../components/ScreenBackground';
+import { exportReportToExcel } from '../services/reportExport';
 import {
   getBatchById,
   getFeedRecordsByBatchId,
@@ -14,7 +15,7 @@ const formatNumber = (value, digits = 2) => {
   const numericValue = Number(value || 0);
 
   if (!Number.isFinite(numericValue)) {
-    return 'N/A';
+    return Number(0).toFixed(digits);
   }
 
   return numericValue.toFixed(digits);
@@ -24,7 +25,7 @@ const formatCurrency = value => {
   const numericValue = Number(value || 0);
 
   if (!Number.isFinite(numericValue)) {
-    return 'N/A';
+    return '0.00';
   }
 
   return numericValue.toFixed(2);
@@ -45,6 +46,7 @@ export default function BatchPerformanceScreen({ route }) {
   const [batch, setBatch] = useState(null);
   const [metrics, setMetrics] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const loadPerformance = useCallback((done) => {
     if (!batchId) {
@@ -76,6 +78,32 @@ export default function BatchPerformanceScreen({ route }) {
                 (sum, item) => sum + Number(item.feed_quantity || 0),
                 0
               );
+              const feedUsedByType = (feedRecords || []).reduce((totals, item) => {
+                const feedType = String(item.feed_type || '').trim().toLowerCase();
+                const feedQuantity = Number(item.feed_quantity || 0);
+
+                if (!feedType) {
+                  return totals;
+                }
+
+                return {
+                  ...totals,
+                  [feedType]: Number(totals[feedType] || 0) + feedQuantity,
+                };
+              }, {});
+              const feedCostByType = (feedRecords || []).reduce((totals, item) => {
+                const feedType = String(item.feed_type || '').trim().toLowerCase();
+                const feedCost = Number(item.feed_cost || 0);
+
+                if (!feedType) {
+                  return totals;
+                }
+
+                return {
+                  ...totals,
+                  [feedType]: Number(totals[feedType] || 0) + feedCost,
+                };
+              }, {});
               const totalFeedCost = (feedRecords || []).reduce(
                 (sum, item) => sum + Number(item.feed_cost || 0),
                 0
@@ -98,19 +126,18 @@ export default function BatchPerformanceScreen({ route }) {
               const mortalityRate = initialChicks > 0 ? (totalMortality / initialChicks) * 100 : 0;
               const totalExpenses = totalFeedCost + otherExpenses + purchaseCost;
               const profit = totalRevenue - totalExpenses;
-              const fcr = totalBirdsSold > 0 ? totalFeedUsed / totalBirdsSold : null;
-
               setMetrics({
                 totalBirdsAlive,
                 mortalityRate,
                 totalFeedUsed,
-                fcr,
                 totalExpenses,
                 totalRevenue,
                 profit,
                 totalMortality,
                 totalBirdsSold,
                 totalFeedCost,
+                feedUsedByType,
+                feedCostByType,
                 otherExpenses,
                 purchaseCost,
               });
@@ -133,6 +160,66 @@ export default function BatchPerformanceScreen({ route }) {
     loadPerformance(() => setRefreshing(false));
   };
 
+  const handleExport = useCallback(async () => {
+    if (!batch || !metrics || exporting) {
+      return;
+    }
+
+    const report = {
+      title: `${farmName ? `${farmName} ` : ''}Batch ${batchId} Performance`,
+      summary: [
+        { label: 'Farm', value: farmName || 'N/A' },
+        { label: 'Batch ID', value: String(batchId || 'N/A') },
+        { label: 'Breed', value: batch.breed || 'N/A' },
+        { label: 'Start Date', value: batch.start_date || 'N/A' },
+        { label: 'Birds Alive', value: String(metrics.totalBirdsAlive) },
+        { label: 'Total Dead', value: String(metrics.totalMortality) },
+        { label: 'Total Sold', value: String(metrics.totalBirdsSold) },
+        { label: 'Mortality Rate', value: `${formatNumber(metrics.mortalityRate)}%` },
+        { label: 'Total Feed Used', value: `${formatNumber(metrics.totalFeedUsed)} kg` },
+        { label: 'Total Feed Cost', value: formatCurrency(metrics.totalFeedCost) },
+        { label: 'Total Expenses', value: formatCurrency(metrics.totalExpenses) },
+        { label: 'Revenue', value: formatCurrency(metrics.totalRevenue) },
+        { label: 'Profit', value: formatCurrency(metrics.profit) },
+      ],
+      columns: [
+        { key: 'metric', title: 'Metric' },
+        { key: 'value', title: 'Value' },
+        { key: 'note', title: 'Note' },
+      ],
+      data: [
+        { metric: 'Birds Alive', value: String(metrics.totalBirdsAlive), note: `Initial chicks: ${batch.initial_chicks ?? 0}` },
+        { metric: 'Total Dead', value: String(metrics.totalMortality), note: `Mortality rate: ${formatNumber(metrics.mortalityRate)}%` },
+        { metric: 'Total Sold', value: String(metrics.totalBirdsSold), note: 'Birds sold from this batch' },
+        { metric: 'Total Feed Used', value: `${formatNumber(metrics.totalFeedUsed)} kg`, note: `Feed cost: ${formatCurrency(metrics.totalFeedCost)}` },
+        { metric: 'Starter Feed Cost', value: formatCurrency(metrics.feedCostByType?.starter || 0), note: `Feed used: ${formatNumber(metrics.feedUsedByType?.starter || 0)} kg` },
+        { metric: 'Grower Feed Cost', value: formatCurrency(metrics.feedCostByType?.grower || 0), note: `Feed used: ${formatNumber(metrics.feedUsedByType?.grower || 0)} kg` },
+        { metric: 'Finisher Feed Cost', value: formatCurrency(metrics.feedCostByType?.finisher || 0), note: `Feed used: ${formatNumber(metrics.feedUsedByType?.finisher || 0)} kg` },
+        { metric: 'Total Expenses', value: formatCurrency(metrics.totalExpenses), note: `Chick purchase: ${formatCurrency(metrics.purchaseCost)}` },
+        { metric: 'Revenue', value: formatCurrency(metrics.totalRevenue), note: 'Total sales revenue' },
+        { metric: 'Profit', value: formatCurrency(metrics.profit), note: metrics.profit >= 0 ? 'Revenue minus expenses' : 'This batch is currently at a loss' },
+      ],
+    };
+
+    try {
+      setExporting(true);
+      const filePath = await exportReportToExcel({
+        reportType: 'batch-performance',
+        report,
+      });
+
+      Alert.alert(
+        'Export complete',
+        `Saved Batch Performance as an Excel file.\n\nPath: ${filePath}`
+      );
+    } catch (error) {
+      console.log('Batch performance export failed', error);
+      Alert.alert('Export failed', 'Could not create the batch performance report right now.');
+    } finally {
+      setExporting(false);
+    }
+  }, [batch, batchId, exporting, farmName, metrics]);
+
   return (
     <ScreenBackground
       scroll
@@ -140,6 +227,16 @@ export default function BatchPerformanceScreen({ route }) {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ffffff" />}
     >
       <Text style={styles.title}>Batch Performance</Text>
+      <TouchableOpacity
+        style={[styles.exportButton, exporting ? styles.exportButtonDisabled : null]}
+        activeOpacity={0.85}
+        onPress={handleExport}
+        disabled={exporting || !metrics}
+      >
+        <Text style={styles.exportButtonText}>
+          {exporting ? 'Exporting Excel...' : 'Download Batch Performance'}
+        </Text>
+      </TouchableOpacity>
       <Text style={styles.subtitle}>Batch ID: {batchId ?? 'N/A'}</Text>
       {farmName ? <Text style={styles.subtitle}>Farm: {farmName}</Text> : null}
       {batch ? (
@@ -158,7 +255,21 @@ export default function BatchPerformanceScreen({ route }) {
             <MetricCard label="Total Sold" value={String(metrics.totalBirdsSold)} />
             <MetricCard label="Mortality Rate" value={`${formatNumber(metrics.mortalityRate)}%`} helper={`Based on ${batch?.initial_chicks ?? 0} initial chicks`} />
             <MetricCard label="Total Feed Used" value={`${formatNumber(metrics.totalFeedUsed)} kg`} helper={`Feed cost: ${formatCurrency(metrics.totalFeedCost)}`} />
-            <MetricCard label="FCR" value={metrics.fcr == null ? 'N/A' : formatNumber(metrics.fcr)} helper={metrics.fcr == null ? 'Needs birds sold to calculate' : `Birds sold: ${metrics.totalBirdsSold}`} />
+            <MetricCard
+              label="Starter Feed Cost"
+              value={formatCurrency(metrics.feedCostByType?.starter || 0)}
+              helper={`Feed used: ${formatNumber(metrics.feedUsedByType?.starter || 0)} kg`}
+            />
+            <MetricCard
+              label="Grower Feed Cost"
+              value={formatCurrency(metrics.feedCostByType?.grower || 0)}
+              helper={`Feed used: ${formatNumber(metrics.feedUsedByType?.grower || 0)} kg`}
+            />
+            <MetricCard
+              label="Finisher Feed Cost"
+              value={formatCurrency(metrics.feedCostByType?.finisher || 0)}
+              helper={`Feed used: ${formatNumber(metrics.feedUsedByType?.finisher || 0)} kg`}
+            />
             <MetricCard label="Total Expenses" value={formatCurrency(metrics.totalExpenses)} helper={`Chick purchase: ${formatCurrency(metrics.purchaseCost)}`} />
             <MetricCard label="Revenue" value={formatCurrency(metrics.totalRevenue)} />
             <MetricCard label="Profit" value={formatCurrency(metrics.profit)} helper={metrics.profit >= 0 ? 'Revenue minus expenses' : 'This batch is currently at a loss'} />
@@ -167,8 +278,7 @@ export default function BatchPerformanceScreen({ route }) {
           <View style={styles.noteCard}>
             <Text style={styles.noteTitle}>Report Note</Text>
             <Text style={styles.noteText}>
-              FCR in this first version is calculated as total feed used divided by birds sold. For a more complete broiler FCR,
-              we can later add live-weight tracking.
+              Feed use, feed cost, expenses, revenue, and profit are shown here based on the records saved for this batch.
             </Text>
           </View>
         </>
@@ -187,6 +297,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
     marginBottom: 8,
+  },
+  exportButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  exportButtonDisabled: {
+    opacity: 0.7,
+  },
+  exportButtonText: {
+    color: '#166534',
+    fontWeight: '700',
   },
   subtitle: {
     color: '#e2e8f0',

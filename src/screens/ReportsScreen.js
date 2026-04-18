@@ -95,6 +95,37 @@ const buildFeedRecordsWithRemaining = (feedRecords, expenseRecords) => {
   }));
 };
 
+const getFeedSummaryRemainingByType = feedRecords => {
+  const latestByFarmAndType = new Map();
+
+  feedRecords.forEach(record => {
+    const key = `${record.farm_id}:${normalizeFeedType(record.feed_type)}`;
+    const currentRecord = latestByFarmAndType.get(key);
+    const recordKey = `${record.date_recorded || ''}|${String(record.feed_id || 0).padStart(12, '0')}`;
+    const currentKey = currentRecord
+      ? `${currentRecord.date_recorded || ''}|${String(currentRecord.feed_id || 0).padStart(12, '0')}`
+      : '';
+
+    if (!currentRecord || recordKey > currentKey) {
+      latestByFarmAndType.set(key, record);
+    }
+  });
+
+  return Array.from(latestByFarmAndType.values()).reduce((totals, record) => {
+    const feedType = normalizeFeedType(record.feed_type);
+    const remainingAmount = Number(record.remaining_feed || 0);
+
+    if (!feedType) {
+      return totals;
+    }
+
+    return {
+      ...totals,
+      [feedType]: Number(totals[feedType] || 0) + remainingAmount,
+    };
+  }, {});
+};
+
 const createEmptyData = () => ({
   farms: [],
   batches: [],
@@ -239,6 +270,7 @@ export default function ReportsScreen({ route }) {
             nextData.expenses.push({
               ...record,
               farm_name: farm.farm_name,
+              location: farm.location,
               breed: 'Farm-wide',
               batch_status: 'farm bill',
               batch_id: record.batch_id ?? 'Farm',
@@ -295,8 +327,10 @@ export default function ReportsScreen({ route }) {
 
                       nextData.batches.push({
                         batch_id: batch.batch_id,
+                        batch_name: batch.breed || `Batch ${batch.batch_id}`,
                         farm_id: farm.farm_id,
                         farm_name: farm.farm_name,
+                        location: farm.location,
                         breed: batch.breed,
                         start_date: batch.start_date,
                         status: batch.status || 'active',
@@ -312,8 +346,10 @@ export default function ReportsScreen({ route }) {
                       safeSaleRecords.forEach(record => {
                         nextData.sales.push({
                           ...record,
+                          batch_name: batch.breed || `Batch ${batch.batch_id}`,
                           farm_id: farm.farm_id,
                           farm_name: farm.farm_name,
+                          location: farm.location,
                           breed: batch.breed,
                           batch_status: batch.status || 'active',
                         });
@@ -322,8 +358,10 @@ export default function ReportsScreen({ route }) {
                       safeExpenseRecords.forEach(record => {
                         nextData.expenses.push({
                           ...record,
+                          batch_name: batch.breed || `Batch ${batch.batch_id}`,
                           farm_id: farm.farm_id,
                           farm_name: farm.farm_name,
+                          location: farm.location,
                           breed: batch.breed,
                           batch_status: batch.status || 'active',
                           expense_scope_label: 'Batch',
@@ -333,8 +371,10 @@ export default function ReportsScreen({ route }) {
                       safeFeedRecords.forEach(record => {
                         nextData.feed.push({
                           ...record,
+                          batch_name: batch.breed || `Batch ${batch.batch_id}`,
                           farm_id: farm.farm_id,
                           farm_name: farm.farm_name,
+                          location: farm.location,
                           breed: batch.breed,
                           batch_status: batch.status || 'active',
                         });
@@ -343,8 +383,10 @@ export default function ReportsScreen({ route }) {
                       safeMortalityRecords.forEach(record => {
                         nextData.mortality.push({
                           ...record,
+                          batch_name: batch.breed || `Batch ${batch.batch_id}`,
                           farm_id: farm.farm_id,
                           farm_name: farm.farm_name,
+                          location: farm.location,
                           breed: batch.breed,
                           batch_status: batch.status || 'active',
                         });
@@ -353,8 +395,10 @@ export default function ReportsScreen({ route }) {
                       safeVaccinationRecords.forEach(record => {
                         nextData.vaccinations.push({
                           ...record,
+                          batch_name: batch.breed || `Batch ${batch.batch_id}`,
                           farm_id: farm.farm_id,
                           farm_name: farm.farm_name,
+                          location: farm.location,
                           breed: batch.breed,
                           batch_status: batch.status || 'active',
                         });
@@ -537,6 +581,7 @@ export default function ReportsScreen({ route }) {
     const salesTotal = salesData.reduce((sum, item) => sum + Number(item.total_revenue || 0), 0);
     const expenseTotal = expenseData.reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const feedTotalKg = feedData.reduce((sum, item) => sum + Number(item.feed_quantity || 0), 0);
+    const remainingFeedByType = getFeedSummaryRemainingByType(feedData);
     const mortalityTotal = mortalityData.reduce((sum, item) => sum + Number(item.number_dead || 0), 0);
     const dueVaccinations = vaccinationData.filter(item => !!item.next_due_date).length;
 
@@ -551,7 +596,9 @@ export default function ReportsScreen({ route }) {
         ],
         columns: [
           { key: 'farm_name', title: 'Farm', width: 130 },
+          { key: 'location', title: 'Location', width: 140 },
           { key: 'batch_id', title: 'Batch ID', width: 90 },
+          { key: 'batch_name', title: 'Batch Name', width: 130 },
           { key: 'breed', title: 'Breed', width: 110 },
           { key: 'status', title: 'Status', width: 100 },
           { key: 'start_date', title: 'Start Date', width: 120 },
@@ -575,7 +622,9 @@ export default function ReportsScreen({ route }) {
         ],
         columns: [
           { key: 'farm_name', title: 'Farm', width: 130 },
+          { key: 'location', title: 'Location', width: 140 },
           { key: 'batch_id', title: 'Batch ID', width: 90 },
+          { key: 'batch_name', title: 'Batch Name', width: 130 },
           { key: 'birds_sold', title: 'Birds Sold', width: 100 },
           { key: 'price_per_bird', title: 'Price/Bird', width: 110 },
           { key: 'total_revenue', title: 'Revenue', width: 110 },
@@ -595,8 +644,10 @@ export default function ReportsScreen({ route }) {
         ],
         columns: [
           { key: 'farm_name', title: 'Farm', width: 130 },
+          { key: 'location', title: 'Location', width: 140 },
           { key: 'expense_scope_label', title: 'Scope', width: 100 },
           { key: 'batch_id', title: 'Batch ID', width: 90 },
+          { key: 'batch_name', title: 'Batch Name', width: 130 },
           { key: 'description', title: 'Description', width: 180 },
           { key: 'amount', title: 'Amount', width: 110 },
           { key: 'expense_date', title: 'Date', width: 120 },
@@ -610,12 +661,17 @@ export default function ReportsScreen({ route }) {
         summary: [
           { label: 'Feed Entries', value: String(feedData.length) },
           { label: 'Feed Used', value: `${formatNumber(feedTotalKg)} kg` },
+          { label: 'Starter Left', value: `${formatNumber(remainingFeedByType.starter || 0)} kg` },
+          { label: 'Grower Left', value: `${formatNumber(remainingFeedByType.grower || 0)} kg` },
+          { label: 'Finisher Left', value: `${formatNumber(remainingFeedByType.finisher || 0)} kg` },
           { label: 'Feed Cost', value: formatCurrency(feedData.reduce((sum, item) => sum + Number(item.feed_cost || 0), 0)) },
           { label: 'Farms Covered', value: String(getUniqueFarmCount(feedData)) },
         ],
         columns: [
           { key: 'farm_name', title: 'Farm', width: 130 },
+          { key: 'location', title: 'Location', width: 140 },
           { key: 'batch_id', title: 'Batch ID', width: 90 },
+          { key: 'batch_name', title: 'Batch Name', width: 130 },
           { key: 'feed_type', title: 'Feed Type', width: 120 },
           { key: 'feed_quantity', title: 'Quantity (kg)', width: 120 },
           { key: 'remaining_feed', title: 'Remaining (kg)', width: 130 },
@@ -636,7 +692,9 @@ export default function ReportsScreen({ route }) {
         ],
         columns: [
           { key: 'farm_name', title: 'Farm', width: 130 },
+          { key: 'location', title: 'Location', width: 140 },
           { key: 'batch_id', title: 'Batch ID', width: 90 },
+          { key: 'batch_name', title: 'Batch Name', width: 130 },
           { key: 'number_dead', title: 'Number Dead', width: 110 },
           { key: 'cause_of_death', title: 'Cause', width: 180 },
           { key: 'date_recorded', title: 'Date', width: 120 },
@@ -655,7 +713,9 @@ export default function ReportsScreen({ route }) {
         ],
         columns: [
           { key: 'farm_name', title: 'Farm', width: 130 },
+          { key: 'location', title: 'Location', width: 140 },
           { key: 'batch_id', title: 'Batch ID', width: 90 },
+          { key: 'batch_name', title: 'Batch Name', width: 130 },
           { key: 'vaccine_name', title: 'Vaccine', width: 140 },
           { key: 'vaccination_date', title: 'Given On', width: 120 },
           { key: 'next_due_date', title: 'Next Due', width: 120 },

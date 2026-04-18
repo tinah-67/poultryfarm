@@ -150,7 +150,12 @@ export default function ExpenseScreen({ route, navigation }) {
         expense_date: new Date().toISOString(),
         expense_scope: isFarmExpense ? 'farm' : 'batch',
         feed_type: isFarmExpense && isFeedPurchase ? feedType : null,
-        quantity_bought: isFarmExpense && isFeedPurchase ? quantityBoughtValue : null,
+        vaccine_name: isFarmExpense && isVaccinePurchase ? vaccineType : null,
+        quantity_bought: isFarmExpense && isFeedPurchase
+          ? quantityBoughtValue
+          : isFarmExpense && isVaccinePurchase
+            ? vaccineQuantityValue
+            : null,
       },
       () => {
         setDescription('');

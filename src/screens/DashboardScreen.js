@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, ImageBackground, View } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { Alert, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, ImageBackground, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearRememberedSession, getUserById } from '../database/db';
 import { syncPendingBackup } from '../services/backupSync';
@@ -9,6 +9,8 @@ export default function DashboardScreen({ navigation, route }) {
   const userId = route?.params?.userId;
   const [refreshing, setRefreshing] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [syncingBackup, setSyncingBackup] = useState(false);
+  const syncingBackupRef = useRef(false);
 
   console.log('DASHBOARD userId:', userId);
 
@@ -33,10 +35,34 @@ export default function DashboardScreen({ navigation, route }) {
     });
   }, [userId]);
 
-  const syncBackup = useCallback(() => {
-    syncPendingBackup().catch(error => {
+  const syncBackup = useCallback(async ({ showFeedback = false } = {}) => {
+    if (syncingBackupRef.current) {
+      return [];
+    }
+
+    try {
+      syncingBackupRef.current = true;
+      setSyncingBackup(true);
+      const results = await syncPendingBackup();
+
+      if (showFeedback) {
+        const syncedCount = results.reduce((sum, item) => sum + Number(item.syncedCount || 0), 0);
+        Alert.alert('Sync complete', `${syncedCount} record(s) synced to backup.`);
+      }
+
+      return results;
+    } catch (error) {
       console.log('Backup sync skipped:', error);
-    });
+
+      if (showFeedback) {
+        Alert.alert('Sync failed', error?.message || 'Could not sync backup right now.');
+      }
+
+      return [];
+    } finally {
+      syncingBackupRef.current = false;
+      setSyncingBackup(false);
+    }
   }, []);
 
   useFocusEffect(
@@ -57,10 +83,9 @@ export default function DashboardScreen({ navigation, route }) {
     setRefreshing(true);
     loadUser();
     syncNotifications();
-    syncBackup();
-    setTimeout(() => {
+    Promise.resolve(syncBackup()).finally(() => {
       setRefreshing(false);
-    }, 600);
+    });
   };
 
   const roleLabel = currentUser?.role ? currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1) : null;
@@ -81,6 +106,7 @@ export default function DashboardScreen({ navigation, route }) {
         >
           <Text style={styles.title}>BroilerHub Dashboard</Text>
           {roleLabel ? <Text style={styles.subtitle}>Signed in as {roleLabel}</Text> : null}
+          {syncingBackup ? <Text style={styles.syncStatus}>Syncing backup...</Text> : null}
 
           <TouchableOpacity
             style={styles.card}
@@ -158,6 +184,12 @@ const styles = StyleSheet.create({
     color: '#e2e8f0',
     marginBottom: 16,
     textAlign: 'center',
+  },
+  syncStatus: {
+    color: '#bfdbfe',
+    marginBottom: 12,
+    textAlign: 'center',
+    fontWeight: '600',
   },
   card: {
     width: '100%',

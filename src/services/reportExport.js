@@ -48,7 +48,7 @@ const formatCellValue = (columnKey, value) => {
     return String(value || 'N/A');
   }
 
-  return String(value || 'N/A');
+  return String(value ?? 'N/A');
 };
 
 const sanitizeName = value =>

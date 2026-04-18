@@ -254,6 +254,7 @@ export const initDB = () => {
         expense_date TEXT,
         expense_scope TEXT DEFAULT 'batch',
         feed_type TEXT,
+        vaccine_name TEXT,
         quantity_bought REAL,
         deleted_at TEXT,
         synced INTEGER DEFAULT 0
@@ -263,6 +264,7 @@ export const initDB = () => {
     ensureColumnExists(tx, 'expenses', 'farm_id', 'INTEGER');
     ensureColumnExists(tx, 'expenses', 'expense_scope', `TEXT DEFAULT 'batch'`);
     ensureColumnExists(tx, 'expenses', 'feed_type', 'TEXT');
+    ensureColumnExists(tx, 'expenses', 'vaccine_name', 'TEXT');
     ensureColumnExists(tx, 'expenses', 'quantity_bought', 'REAL');
     ensureColumnExists(tx, 'expenses', 'deleted_at', 'TEXT');
 
@@ -394,7 +396,7 @@ export const syncUsers = async () => {
 
         for (let user of users) {
           try {
-            await fetch('http://192.168.137.1:3000/users', {
+            await fetch('http://192.168.100.26:3000/users', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1019,6 +1021,7 @@ export const addFeedRecord = (batch_id, feed_type, feed_quantity, date_recorded,
 const buildExpenseRecordValues = record => {
   const expenseScope = record.expense_scope || (record.farm_id != null && record.batch_id == null ? 'farm' : 'batch');
   const normalizedFeedType = record.feed_type ? normalizeFeedType(record.feed_type) : null;
+  const normalizedVaccineName = record.vaccine_name ? String(record.vaccine_name).trim() : null;
   const quantityBought = record.quantity_bought == null || record.quantity_bought === ''
     ? null
     : parseNumber(record.quantity_bought);
@@ -1031,6 +1034,7 @@ const buildExpenseRecordValues = record => {
     record.expense_date,
     expenseScope,
     normalizedFeedType,
+    normalizedVaccineName,
     quantityBought,
   ];
 };
@@ -1048,8 +1052,8 @@ export const addExpenseRecord = (input, description, amount, expense_date, callb
 
   db.transaction(tx => {
     tx.executeSql(
-      `INSERT INTO expenses (farm_id, batch_id, description, amount, expense_date, expense_scope, feed_type, quantity_bought, synced)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      `INSERT INTO expenses (farm_id, batch_id, description, amount, expense_date, expense_scope, feed_type, vaccine_name, quantity_bought, synced)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       buildExpenseRecordValues(record),
       (_, result) => {
         console.log("Expense added", result.insertId);
@@ -1064,6 +1068,92 @@ export const addExpenseRecord = (input, description, amount, expense_date, callb
   });
 };
 
+const resolveFeedRecordCosts = (tx, batch_id, records, callback) => {
+  const safeRecords = records || [];
+
+  if (!batch_id || safeRecords.length === 0) {
+    callback(safeRecords);
+    return;
+  }
+
+  tx.executeSql(
+    `SELECT farm_id
+     FROM batches
+     WHERE batch_id = ?
+       AND deleted_at IS NULL
+     LIMIT 1`,
+    [batch_id],
+    (_, batchResult) => {
+      const batchRows = rowsToArray(batchResult.rows);
+      const farmId = batchRows[0]?.farm_id;
+
+      if (!farmId) {
+        callback(safeRecords);
+        return;
+      }
+
+      tx.executeSql(
+        `SELECT LOWER(TRIM(COALESCE(feed_type, ''))) AS feed_type,
+                COALESCE(SUM(amount), 0) AS total_cost,
+                COALESCE(SUM(quantity_bought), 0) AS total_quantity
+         FROM expenses
+         WHERE farm_id = ?
+           AND COALESCE(expense_scope, 'batch') = 'farm'
+           AND deleted_at IS NULL
+           AND quantity_bought IS NOT NULL
+           AND quantity_bought > 0
+         GROUP BY LOWER(TRIM(COALESCE(feed_type, '')))`,
+        [farmId],
+        (_, purchaseResult) => {
+          const purchaseRows = rowsToArray(purchaseResult.rows);
+          const unitCostByType = purchaseRows.reduce((totals, row) => {
+            const feedType = normalizeFeedType(row.feed_type);
+            const totalQuantity = parseNumber(row.total_quantity);
+            const totalCost = parseNumber(row.total_cost);
+
+            if (!feedType || totalQuantity <= 0 || totalCost <= 0) {
+              return totals;
+            }
+
+            return {
+              ...totals,
+              [feedType]: roundCurrency(totalCost / totalQuantity),
+            };
+          }, {});
+
+          callback(
+            safeRecords.map(record => {
+              const existingFeedCost = parseNumber(record.feed_cost);
+              const normalizedFeedType = normalizeFeedType(record.feed_type);
+              const fallbackUnitCost = unitCostByType[normalizedFeedType] || 0;
+              const resolvedFeedCost = existingFeedCost > 0
+                ? roundCurrency(existingFeedCost)
+                : roundCurrency(parseNumber(record.feed_quantity) * fallbackUnitCost);
+
+              return {
+                ...record,
+                feed_cost: resolvedFeedCost,
+                stored_feed_cost: existingFeedCost,
+                feed_cost_source: existingFeedCost > 0 ? 'stored' : 'fallback',
+              };
+            })
+          );
+        },
+        (_, error) => {
+          console.log("Error resolving fallback feed costs", error);
+          callback(safeRecords);
+          return false;
+        }
+      );
+    },
+    (_, error) => {
+      console.log("Error loading batch for feed cost resolution", error);
+      callback(safeRecords);
+      return false;
+    }
+  );
+};
+
 //GET FEED RECORDS BY BATCH ID
 export const getFeedRecordsByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
@@ -1073,7 +1163,7 @@ export const getFeedRecordsByBatchId = (batch_id, callback) => {
       (_, result) => {
         const data = rowsToArray(result.rows);
         console.log("Feed records for batch:", batch_id, data);
-        callback(data);
+        resolveFeedRecordCosts(tx, batch_id, data, callback);
       },
       (_, error) => {
         console.log("Error fetching feed records", error);
@@ -1462,8 +1552,8 @@ export const importBootstrapData = (authenticatedUser, bootstrapData) =>
       ...(safeData.expenses || []).map(record => ({
         sql: `
           INSERT OR REPLACE INTO expenses
-          (expense_id, farm_id, batch_id, description, amount, expense_date, expense_scope, feed_type, quantity_bought, deleted_at, synced)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+          (expense_id, farm_id, batch_id, description, amount, expense_date, expense_scope, feed_type, vaccine_name, quantity_bought, deleted_at, synced)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         `,
         params: [
           record.expense_id,
@@ -1474,6 +1564,7 @@ export const importBootstrapData = (authenticatedUser, bootstrapData) =>
           record.expense_date,
           record.expense_scope ?? (record.farm_id != null && record.batch_id == null ? 'farm' : 'batch'),
           record.feed_type ? normalizeFeedType(record.feed_type) : null,
+          record.vaccine_name ?? null,
           record.quantity_bought ?? null,
           record.deleted_at ?? null,
         ],
