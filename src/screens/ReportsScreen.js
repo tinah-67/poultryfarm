@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Platform, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenBackground from '../components/ScreenBackground';
@@ -12,6 +12,7 @@ import {
   getFeedRecordsByBatchId,
   getMortalityRecordsByBatchId,
   getSalesByBatchId,
+  getUserById,
   getVaccinationRecordsByBatchId,
 } from '../database/db';
 
@@ -23,6 +24,7 @@ try {
 }
 
 const REPORT_TYPES = ['batches', 'sales', 'expenses', 'feed', 'mortality', 'vaccinations'];
+const WORKER_REPORT_TYPES = ['feed', 'mortality', 'vaccinations'];
 const ZERO_DEFAULT_KEYS = ['birds_alive', 'birds_sold', 'total_mortality', 'number_dead'];
 
 const formatNumber = (value, digits = 2) => {
@@ -205,6 +207,7 @@ export default function ReportsScreen({ route }) {
   const userId = route?.params?.userId;
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const [reportData, setReportData] = useState(createEmptyData());
   const [activeReport, setActiveReport] = useState('batches');
   const [fromDate, setFromDate] = useState('');
@@ -214,6 +217,21 @@ export default function ReportsScreen({ route }) {
   const [selectedBatchId, setSelectedBatchId] = useState('all');
   const [showFarmDropdown, setShowFarmDropdown] = useState(false);
   const [showBatchDropdown, setShowBatchDropdown] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId) {
+        setCurrentUser(null);
+        return undefined;
+      }
+
+      getUserById(userId, user => {
+        setCurrentUser(user);
+      });
+
+      return undefined;
+    }, [userId])
+  );
 
   const loadReports = useCallback((done) => {
     if (!userId) {
@@ -425,6 +443,18 @@ export default function ReportsScreen({ route }) {
       loadReports();
     }, [loadReports])
   );
+
+  const availableReportTypes = useMemo(() => (
+    currentUser?.role === 'worker' ? WORKER_REPORT_TYPES : REPORT_TYPES
+  ), [currentUser?.role]);
+
+  useEffect(() => {
+    if (availableReportTypes.includes(activeReport)) {
+      return;
+    }
+
+    setActiveReport(availableReportTypes[0] || 'feed');
+  }, [activeReport, availableReportTypes]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -664,8 +694,10 @@ export default function ReportsScreen({ route }) {
           { label: 'Starter Left', value: `${formatNumber(remainingFeedByType.starter || 0)} kg` },
           { label: 'Grower Left', value: `${formatNumber(remainingFeedByType.grower || 0)} kg` },
           { label: 'Finisher Left', value: `${formatNumber(remainingFeedByType.finisher || 0)} kg` },
-          { label: 'Feed Cost', value: formatCurrency(feedData.reduce((sum, item) => sum + Number(item.feed_cost || 0), 0)) },
           { label: 'Farms Covered', value: String(getUniqueFarmCount(feedData)) },
+          ...(currentUser?.role === 'worker'
+            ? []
+            : [{ label: 'Feed Cost', value: formatCurrency(feedData.reduce((sum, item) => sum + Number(item.feed_cost || 0), 0)) }]),
         ],
         columns: [
           { key: 'farm_name', title: 'Farm', width: 130 },
@@ -675,7 +707,7 @@ export default function ReportsScreen({ route }) {
           { key: 'feed_type', title: 'Feed Type', width: 120 },
           { key: 'feed_quantity', title: 'Quantity (kg)', width: 120 },
           { key: 'remaining_feed', title: 'Remaining (kg)', width: 130 },
-          { key: 'feed_cost', title: 'Cost', width: 100 },
+          ...(currentUser?.role === 'worker' ? [] : [{ key: 'feed_cost', title: 'Cost', width: 100 }]),
           { key: 'date_recorded', title: 'Date', width: 120 },
           { key: 'batch_status', title: 'Batch Status', width: 120 },
         ],
@@ -726,9 +758,9 @@ export default function ReportsScreen({ route }) {
         emptyText: 'No vaccination records found yet.',
       },
     };
-  }, [filteredReportData]);
+  }, [currentUser?.role, filteredReportData]);
 
-  const currentReport = reportConfig[activeReport];
+  const currentReport = reportConfig[activeReport] || reportConfig[availableReportTypes[0]];
 
   const handleExport = useCallback(async () => {
     if (exporting) {
@@ -924,7 +956,7 @@ export default function ReportsScreen({ route }) {
         </TouchableOpacity>
       </View>
       <View style={styles.reportPicker}>
-        {REPORT_TYPES.map(reportType => {
+        {availableReportTypes.map(reportType => {
           const isSelected = activeReport === reportType;
           const label = reportType.charAt(0).toUpperCase() + reportType.slice(1);
 

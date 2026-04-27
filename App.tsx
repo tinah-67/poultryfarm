@@ -1,21 +1,25 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, View, StyleSheet } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { clearRememberedSession, getRememberedSession, initDB } from './src/database/db';
 import { syncPendingBackup } from './src/services/backupSync';
+import { consumePendingNotificationOpen } from './src/services/localNotifications';
 
 // IMPORT SCREENS
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
-import DashboardScreen from './src/screens/DashboardScreen';
+import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
+import HomeShellScreen from './src/screens/HomeShellScreen';
 import FarmManagementScreen from './src/screens/FarmManagementScreen';
 import FarmScreen from './src/screens/FarmScreen';
 import ViewFarmsScreen from './src/screens/ViewFarmsScreen';
 import FarmPerformanceSummaryScreen from './src/screens/FarmPerformanceSummaryScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
+import HelpScreen from './src/screens/HelpScreen';
+import RecoveryQuestionScreen from './src/screens/RecoveryQuestionScreen';
 import CreateBatchScreen from './src/screens/CreateBatchScreen';
 import ViewBatchesScreen from './src/screens/ViewBatchesScreen';
 import BatchDetailsScreen from './src/screens/BatchDetailsScreen';
@@ -33,11 +37,41 @@ import ViewSalesScreen from './src/screens/ViewSalesScreen';
 
 // CREATE STACK
 const Stack = createNativeStackNavigator();
+const navigationRef = createNavigationContainerRef<any>();
 
 export default function App() {
   const [isReady, setIsReady] = useState(false);
   const [initialUserId, setInitialUserId] = useState<number | null>(null);
   const appStateRef = useRef(AppState.currentState);
+  const currentUserIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    currentUserIdRef.current = initialUserId;
+  }, [initialUserId]);
+
+  const openNotificationsFromIntent = useCallback(async () => {
+    if (!isReady || !navigationRef.isReady()) {
+      return;
+    }
+
+    const shouldOpenNotifications = await consumePendingNotificationOpen();
+
+    if (!shouldOpenNotifications) {
+      return;
+    }
+
+    const currentRoute = navigationRef.getCurrentRoute();
+    const routeUserId = Number(currentRoute?.params?.userId);
+    const targetUserId = Number.isFinite(routeUserId) && routeUserId > 0
+      ? routeUserId
+      : currentUserIdRef.current;
+
+    if (!targetUserId) {
+      return;
+    }
+
+    navigationRef.navigate('Home', { userId: targetUserId, activeTab: 'notifications' });
+  }, [isReady]);
 
   useEffect(() => {
     initDB();
@@ -52,9 +86,21 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!isReady) {
+      return;
+    }
+
+    openNotificationsFromIntent();
+  }, [isReady, openNotificationsFromIntent]);
+
+  useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
       const previousAppState = appStateRef.current;
       appStateRef.current = nextAppState;
+
+      if (nextAppState === 'active') {
+        openNotificationsFromIntent();
+      }
 
       if (previousAppState === 'active' && nextAppState.match(/inactive|background/)) {
         clearRememberedSession(() => {
@@ -66,7 +112,7 @@ export default function App() {
     return () => {
       subscription.remove();
     };
-  }, []);
+  }, [openNotificationsFromIntent]);
 
   if (!isReady) {
     return (
@@ -77,7 +123,18 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={openNotificationsFromIntent}
+      onStateChange={() => {
+        const route = navigationRef.getCurrentRoute();
+        const routeUserId = Number(route?.params?.userId);
+
+        if (Number.isFinite(routeUserId) && routeUserId > 0) {
+          currentUserIdRef.current = routeUserId;
+        }
+      }}
+    >
       <Stack.Navigator initialRouteName={initialUserId ? 'Home' : 'Login'}>
 
         {/* LOGIN */}
@@ -93,13 +150,18 @@ export default function App() {
           component={RegisterScreen}
           options={{ title: 'Register' }}
         />
+        <Stack.Screen
+          name="ForgotPassword"
+          component={ForgotPasswordScreen}
+          options={{ title: 'Forgot Password' }}
+        />
 
         {/* DASHBOARD */}
         <Stack.Screen
           name="Home"
-          component={DashboardScreen}
+          component={HomeShellScreen}
           initialParams={initialUserId ? { userId: initialUserId } : undefined}
-          options={{ title: 'Dashboard' }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="FarmManagement"
@@ -131,6 +193,16 @@ export default function App() {
           name="Reports"
           component={ReportsScreen}
           options={{ title: 'Reports' }}
+        />
+        <Stack.Screen
+          name="Help"
+          component={HelpScreen}
+          options={{ title: 'Help' }}
+        />
+        <Stack.Screen
+          name="RecoveryQuestion"
+          component={RecoveryQuestionScreen}
+          options={{ title: 'Recovery Question' }}
         />
 
         <Stack.Screen name="CreateBatch"

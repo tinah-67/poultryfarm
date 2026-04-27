@@ -37,8 +37,18 @@ export default function LoginScreen({ navigation }) {
       }
     };
 
-    loginUser(normalizedEmail, password, async user => {
-      if (!user) {
+    loginUser(normalizedEmail, password, async ({ status, user }) => {
+      if (status === 'wrong_password') {
+        Alert.alert('Error', 'The password is incorrect for this account. Check the password and try again.');
+        return;
+      }
+
+      if (status === 'error') {
+        Alert.alert('Error', 'Login could not be completed right now. Please try again.');
+        return;
+      }
+
+      if (status === 'not_found') {
         try {
           const bootstrappedUser = await bootstrapDeviceLogin(normalizedEmail, password);
           finishLogin(bootstrappedUser);
@@ -64,6 +74,11 @@ export default function LoginScreen({ navigation }) {
             'User not found on this device, and the backup restore could not complete. Please try again shortly.'
           );
         }
+        return;
+      }
+
+      if (!user) {
+        Alert.alert('Error', 'Login could not be completed right now. Please try again.');
         return;
       }
 
@@ -123,6 +138,18 @@ export default function LoginScreen({ navigation }) {
       </TouchableOpacity>
 
       <Button title="Login" onPress={handleLogin} />
+
+      <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+        <Text style={styles.forgotPasswordLink}>
+          Forgot Password?
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => navigation.navigate('Help', { mode: 'login' })}>
+        <Text style={styles.helpLink}>
+          Need help signing in?
+        </Text>
+      </TouchableOpacity>
 
       <TouchableOpacity onPress={() => navigation.navigate('Register')}>
         <Text style={styles.registerLink}>
@@ -210,5 +237,17 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: '#bfdbfe',
     textAlign: 'center',
+  },
+  forgotPasswordLink: {
+    marginTop: 14,
+    color: '#fde68a',
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  helpLink: {
+    marginTop: 10,
+    color: '#d1fae5',
+    textAlign: 'center',
+    fontWeight: '600',
   },
 });

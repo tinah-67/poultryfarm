@@ -1,9 +1,24 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { getUserById } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 
 export default function FarmManagementScreen({ navigation, route }) {
   const userId = route?.params?.userId ?? route?.params?.user_Id;
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    if (!userId) {
+      setCurrentUser(null);
+      return;
+    }
+
+    getUserById(userId, user => {
+      setCurrentUser(user);
+    });
+  }, [userId]);
+
+  const canAddFarm = currentUser?.role === 'owner';
 
   return (
     <ScreenBackground contentContainerStyle={styles.container}>
@@ -12,13 +27,15 @@ export default function FarmManagementScreen({ navigation, route }) {
         Choose what you want to manage at farm level.
       </Text>
 
-      <TouchableOpacity
-        style={styles.card}
-        activeOpacity={0.85}
-        onPress={() => navigation.navigate('AddFarm', { userId })}
-      >
-        <Text style={styles.cardText}>Add Farm</Text>
-      </TouchableOpacity>
+      {canAddFarm ? (
+        <TouchableOpacity
+          style={styles.card}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('AddFarm', { userId })}
+        >
+          <Text style={styles.cardText}>Add Farm</Text>
+        </TouchableOpacity>
+      ) : null}
 
       <TouchableOpacity
         style={styles.card}

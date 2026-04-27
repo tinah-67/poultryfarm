@@ -1,6 +1,7 @@
 import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
 import {
   getNotificationDeliveryLog,
+  saveNotificationInboxItems,
   saveNotificationDeliveries,
 } from '../database/db';
 import { loadNotificationsForUser } from '../notifications/notificationEngine';
@@ -21,6 +22,11 @@ const getNotificationDeliveryLogAsync = notificationIds =>
 const saveNotificationDeliveriesAsync = notificationIds =>
   new Promise(resolve => {
     saveNotificationDeliveries(notificationIds, resolve);
+  });
+
+const saveNotificationInboxItemsAsync = (userId, items) =>
+  new Promise(resolve => {
+    saveNotificationInboxItems(userId, items, resolve);
   });
 
 const canUseLocalNotificationModule = () =>
@@ -52,7 +58,9 @@ export const initializeLocalNotifications = async () => {
   return result === PermissionsAndroid.RESULTS.GRANTED;
 };
 
-export const syncDeviceNotificationsForUser = async userId => {
+export const syncDeviceNotificationsForUser = async (userId, options = {}) => {
+  const { force = false } = options;
+
   if (!userId || !canUseLocalNotificationModule()) {
     return [];
   }
@@ -72,7 +80,7 @@ export const syncDeviceNotificationsForUser = async userId => {
 
   const deliveryLog = await getNotificationDeliveryLogAsync(candidateNotifications.map(item => item.id));
   const now = Date.now();
-  const deliverableNotifications = candidateNotifications.filter(item => {
+  const deliverableNotifications = force ? candidateNotifications : candidateNotifications.filter(item => {
     const deliveredAt = deliveryLog[item.id];
 
     if (!deliveredAt) {
@@ -100,7 +108,21 @@ export const syncDeviceNotificationsForUser = async userId => {
     );
   });
 
+  await saveNotificationInboxItemsAsync(userId, deliverableNotifications);
   await saveNotificationDeliveriesAsync(deliverableNotifications.map(item => item.id));
 
   return deliverableNotifications;
+};
+
+export const consumePendingNotificationOpen = async () => {
+  if (!canUseLocalNotificationModule() || typeof localNotificationModule.consumeNotificationOpen !== 'function') {
+    return false;
+  }
+
+  try {
+    return await localNotificationModule.consumeNotificationOpen();
+  } catch (error) {
+    console.log('Error consuming notification open intent', error);
+    return false;
+  }
 };

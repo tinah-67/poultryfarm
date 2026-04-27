@@ -32,6 +32,8 @@ const rowsToArray = (rows) => {
 const getCurrentTimestamp = () => new Date().toISOString();
 const roundCurrency = value => Number(Number(value || 0).toFixed(2));
 const normalizeFeedType = value => String(value || '').trim().toLowerCase();
+const normalizeRecoveryQuestion = value => String(value || '').trim();
+const normalizeRecoveryAnswer = value => String(value || '').trim().toLowerCase();
 const parseNumber = value => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -46,15 +48,15 @@ const softDeleteBatchDescendants = (tx, batchId, deletedAt) => {
     { tableName: 'sales', idColumn: 'batch_id' },
   ];
 
-  childTables.forEach(({ tableName, idColumn }) => {
-    tx.executeSql(
-      `UPDATE ${tableName}
-       SET deleted_at = ?, synced = 0
-       WHERE ${idColumn} = ?
-         AND deleted_at IS NULL`,
-      [deletedAt, batchId],
-      () => console.log(`${tableName} children marked deleted for batch`, batchId),
-      (_, error) => {
+    childTables.forEach(({ tableName, idColumn }) => {
+      tx.executeSql(
+        `UPDATE ${tableName}
+        SET deleted_at = ?, synced = 0
+        WHERE ${idColumn} = ?
+          AND deleted_at IS NULL`,
+        [deletedAt, batchId],
+        () => console.log(`${tableName} children marked deleted for batch`, batchId),
+        (_, error) => {
         console.log(`Error cascading delete for ${tableName}`, error);
         return false;
       }
@@ -62,43 +64,43 @@ const softDeleteBatchDescendants = (tx, batchId, deletedAt) => {
   });
 };
 
-const softDeleteFarmDescendants = (tx, farmId, deletedAt) => {
-  tx.executeSql(
-    `UPDATE expenses
-     SET deleted_at = ?, synced = 0
-     WHERE farm_id = ?
-       AND deleted_at IS NULL`,
-    [deletedAt, farmId],
-    () => console.log("Farm expenses marked deleted", farmId),
-    (_, error) => {
-      console.log("Error cascading delete for farm expenses", error);
-      return false;
-    }
+  const softDeleteFarmDescendants = (tx, farmId, deletedAt) => {
+    tx.executeSql(
+      `UPDATE expenses
+      SET deleted_at = ?, synced = 0
+      WHERE farm_id = ?
+        AND deleted_at IS NULL`,
+      [deletedAt, farmId],
+      () => console.log("Farm expenses marked deleted", farmId),
+      (_, error) => {
+        console.log("Error cascading delete for farm expenses", error);
+        return false;
+      }
   );
 
-  tx.executeSql(
-    `SELECT batch_id
-     FROM batches
-     WHERE farm_id = ?
-       AND deleted_at IS NULL`,
-    [farmId],
-    (_, result) => {
-      const batches = rowsToArray(result.rows);
+    tx.executeSql(
+      `SELECT batch_id
+      FROM batches
+      WHERE farm_id = ?
+        AND deleted_at IS NULL`,
+      [farmId],
+      (_, result) => {
+        const batches = rowsToArray(result.rows);
 
       batches.forEach(batch => {
         softDeleteBatchDescendants(tx, batch.batch_id, deletedAt);
       });
 
-      tx.executeSql(
-        `UPDATE batches
-         SET deleted_at = ?, synced = 0
-         WHERE farm_id = ?
-           AND deleted_at IS NULL`,
-        [deletedAt, farmId],
-        () => console.log("Farm batches marked deleted", farmId),
-        (_, error) => {
-          console.log("Error cascading delete for batches", error);
-          return false;
+        tx.executeSql(
+          `UPDATE batches
+          SET deleted_at = ?, synced = 0
+          WHERE farm_id = ?
+            AND deleted_at IS NULL`,
+          [deletedAt, farmId],
+          () => console.log("Farm batches marked deleted", farmId),
+          (_, error) => {
+            console.log("Error cascading delete for batches", error);
+            return false;
         }
       );
     },
@@ -153,12 +155,16 @@ export const initDB = () => {
         password TEXT,
         role TEXT,
         owner_user_id INTEGER,
+        recovery_question TEXT,
+        recovery_answer TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         synced INTEGER DEFAULT 0
       );
     `, [], () => console.log("Users table created"), (_, err) => console.log("Users table error", err));
 
     ensureColumnExists(tx, 'users', 'owner_user_id', 'INTEGER');
+    ensureColumnExists(tx, 'users', 'recovery_question', 'TEXT');
+    ensureColumnExists(tx, 'users', 'recovery_answer', 'TEXT');
 
     // FARMS
     tx.executeSql(`
@@ -301,19 +307,54 @@ export const initDB = () => {
       );
     `, [], () => console.log("Notification delivery log table created"), (_, err) => console.log("Notification delivery log table error", err));
 
+    tx.executeSql(`
+      CREATE TABLE IF NOT EXISTS notification_inbox (
+        notification_id TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        title TEXT,
+        detail TEXT,
+        type TEXT,
+        severity TEXT,
+        farm_name TEXT,
+        farm_location TEXT,
+        batch_label TEXT,
+        batch_id INTEGER,
+        delivered_at TEXT NOT NULL
+      );
+    `, [], () => console.log("Notification inbox table created"), (_, err) => console.log("Notification inbox table error", err));
+
   });
 };
 
 // ================= USERS =================
 
 // CREATE USER
-export const createUser = (firstName, lastName, email, password, role, ownerUserId = null, callback) => {
+export const createUser = (
+  firstName,
+  lastName,
+  email,
+  password,
+  role,
+  ownerUserId = null,
+  recoveryQuestion = null,
+  recoveryAnswer = null,
+  callback
+) => {
   return new Promise((resolve, reject) => {
     db.transaction(tx => {
       tx.executeSql(
-        `INSERT INTO users (first_name, last_name, email, password, role, owner_user_id, synced)
-      VALUES (?, ?, ?, ?, ?, ?, 0)`,
-        [firstName, lastName, email, password, role, ownerUserId],
+        `INSERT INTO users (first_name, last_name, email, password, role, owner_user_id, recovery_question, recovery_answer, synced)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+        [
+          firstName,
+          lastName,
+          email,
+          password,
+          role,
+          ownerUserId,
+          normalizeRecoveryQuestion(recoveryQuestion) || null,
+          normalizeRecoveryAnswer(recoveryAnswer) || null,
+        ],
         (_, result) => {
           console.log("User created");
           callback && callback();
@@ -365,21 +406,42 @@ export const getUserById = (userId, callback) => {
   });
 };
 
-// Use rLogin
+// LOGIN USER
 export const loginUser = (email, password, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      `SELECT * FROM users WHERE email = ? AND password = ?`,
-      [email, password],
+      `SELECT * FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM(?)) LIMIT 1`,
+      [email],
       (_, result) => {
         if (result.rows.length > 0) {
-          callback(result.rows.item(0)); // user found
+          const user = result.rows.item(0);
+
+          if (user.password === password) {
+            callback({
+              status: 'success',
+              user,
+            });
+            return;
+          }
+
+          callback({
+            status: 'wrong_password',
+            user: null,
+          });
         } else {
-          callback(null); // no user
+          callback({
+            status: 'not_found',
+            user: null,
+          });
         }
       },
       (_, error) => {
         console.log("Login error", error);
+        callback({
+          status: 'error',
+          user: null,
+        });
+        return false;
       }
     );
   });
@@ -396,7 +458,7 @@ export const syncUsers = async () => {
 
         for (let user of users) {
           try {
-            await fetch('http://192.168.100.26:3000/users', {
+            await fetch('http://192.168.0.102:3000/users', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -406,6 +468,8 @@ export const syncUsers = async () => {
                 password: user.password,
                 role: user.role,
                 owner_user_id: user.owner_user_id,
+                recovery_question: user.recovery_question,
+                recovery_answer: user.recovery_answer,
               }),
             });
 
@@ -522,6 +586,50 @@ export const getUserByEmail = (email, callback) => {
       (_, error) => {
         console.log("Error fetching user by email", error);
         callback(null);
+        return false;
+      }
+    );
+  });
+};
+
+export const updateUserRecoveryQuestion = (userId, recoveryQuestion, recoveryAnswer, callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `UPDATE users
+       SET recovery_question = ?, recovery_answer = ?, synced = 0
+       WHERE user_id = ?`,
+      [
+        normalizeRecoveryQuestion(recoveryQuestion) || null,
+        normalizeRecoveryAnswer(recoveryAnswer) || null,
+        userId,
+      ],
+      () => {
+        console.log("Recovery question updated");
+        callback && callback(true);
+      },
+      (_, error) => {
+        console.log("Error updating recovery question", error);
+        callback && callback(false);
+        return false;
+      }
+    );
+  });
+};
+
+export const updateUserPassword = (userId, password, callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `UPDATE users
+       SET password = ?, synced = 0
+       WHERE user_id = ?`,
+      [password, userId],
+      () => {
+        console.log("User password updated");
+        callback && callback(true);
+      },
+      (_, error) => {
+        console.log("Error updating user password", error);
+        callback && callback(false);
         return false;
       }
     );
@@ -796,6 +904,94 @@ export const saveNotificationDeliveries = (notificationIds, callback) => {
       callback && callback();
     }
   );
+};
+
+export const saveNotificationInboxItems = (userId, items, callback) => {
+  if (!userId || !items?.length) {
+    callback && callback();
+    return;
+  }
+
+  const deliveredAt = new Date().toISOString();
+
+  db.transaction(
+    tx => {
+      items.forEach(item => {
+        tx.executeSql(
+          `INSERT OR REPLACE INTO notification_inbox
+           (notification_id, user_id, title, detail, type, severity, farm_name, farm_location, batch_label, batch_id, delivered_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            item.id,
+            userId,
+            item.title,
+            item.detail,
+            item.type,
+            item.severity,
+            item.farmName,
+            item.farmLocation,
+            item.batchLabel,
+            item.batchId ?? null,
+            deliveredAt,
+          ]
+        );
+      });
+    },
+    error => {
+      console.log("Error saving notification inbox items", error);
+      callback && callback();
+    },
+    () => {
+      callback && callback();
+    }
+  );
+};
+
+export const getNotificationInboxItems = (userId, callback) => {
+  if (!userId) {
+    callback([]);
+    return;
+  }
+
+  db.transaction(tx => {
+    tx.executeSql(
+      `SELECT notification_id,
+              title,
+              detail,
+              type,
+              severity,
+              farm_name,
+              farm_location,
+              batch_label,
+              batch_id,
+              delivered_at
+       FROM notification_inbox
+       WHERE user_id = ?
+       ORDER BY delivered_at DESC, notification_id DESC`,
+      [userId],
+      (_, result) => {
+        const items = rowsToArray(result.rows).map(row => ({
+          id: row.notification_id,
+          title: row.title,
+          detail: row.detail,
+          type: row.type,
+          severity: row.severity,
+          farmName: row.farm_name,
+          farmLocation: row.farm_location,
+          batchLabel: row.batch_label,
+          batchId: row.batch_id,
+          deliveredAt: row.delivered_at,
+        }));
+
+        callback(items);
+      },
+      (_, error) => {
+        console.log("Error fetching notification inbox items", error);
+        callback([]);
+        return false;
+      }
+    );
+  });
 };
 
 export const markUserAsSynced = (userId) => {
@@ -1455,6 +1651,8 @@ export const importBootstrapData = (authenticatedUser, bootstrapData) =>
       password: user.user_id === authenticatedUser.user_id ? authenticatedUser.password : '',
       role: user.role || '',
       owner_user_id: user.owner_user_id ?? null,
+      recovery_question: user.recovery_question ?? null,
+      recovery_answer: user.recovery_answer ?? null,
       created_at: user.created_at ?? null,
     }));
 
@@ -1462,8 +1660,8 @@ export const importBootstrapData = (authenticatedUser, bootstrapData) =>
       ...importedUsers.map(user => ({
         sql: `
           INSERT OR REPLACE INTO users
-          (user_id, first_name, last_name, email, password, role, owner_user_id, created_at, synced)
-          VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), 1)
+          (user_id, first_name, last_name, email, password, role, owner_user_id, recovery_question, recovery_answer, created_at, synced)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), 1)
         `,
         params: [
           user.user_id,
@@ -1473,6 +1671,8 @@ export const importBootstrapData = (authenticatedUser, bootstrapData) =>
           user.password,
           user.role,
           user.owner_user_id,
+          user.recovery_question,
+          user.recovery_answer,
           user.created_at,
         ],
       })),

@@ -3,6 +3,15 @@ import { Alert, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 
 import { useFocusEffect } from '@react-navigation/native';
 import ScreenBackground from '../components/ScreenBackground';
 import { loadNotificationsForUser } from '../notifications/notificationEngine';
+import { getNotificationInboxItems } from '../database/db';
+
+const toPromise = executor =>
+  new Promise(resolve => {
+    executor(resolve);
+  });
+
+const getNotificationInboxItemsAsync = userId =>
+  toPromise(resolve => getNotificationInboxItems(userId, resolve));
 
 const NotificationCard = ({ label, value }) => (
   <View style={styles.summaryCard}>
@@ -32,7 +41,7 @@ const NotificationListItem = ({ item, onPress }) => (
   </TouchableOpacity>
 );
 
-export default function NotificationsScreen({ route }) {
+export default function NotificationsScreen({ route, extraBottomPadding = 0 }) {
   const userId = route?.params?.userId;
   const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -41,9 +50,23 @@ export default function NotificationsScreen({ route }) {
 
   const loadNotifications = useCallback(async (done) => {
     try {
-      const { user, notifications: nextNotifications } = await loadNotificationsForUser(userId);
+      const [
+        { user, notifications: liveNotifications },
+        inboxNotifications,
+      ] = await Promise.all([
+        loadNotificationsForUser(userId),
+        getNotificationInboxItemsAsync(userId),
+      ]);
+
+      const mergedNotifications = [
+        ...(liveNotifications || []),
+        ...((inboxNotifications || []).filter(
+          inboxItem => !(liveNotifications || []).some(liveItem => liveItem.id === inboxItem.id)
+        )),
+      ];
+
       setCurrentUser(user);
-      setNotifications(nextNotifications);
+      setNotifications(mergedNotifications);
     } catch (error) {
       console.log('Error loading notifications', error);
       setCurrentUser(null);
@@ -82,7 +105,7 @@ export default function NotificationsScreen({ route }) {
   return (
     <ScreenBackground
       scroll
-      contentContainerStyle={styles.container}
+      contentContainerStyle={[styles.container, extraBottomPadding ? { paddingBottom: extraBottomPadding } : null]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ffffff" />}
     >
       <Text style={styles.title}>Notifications</Text>

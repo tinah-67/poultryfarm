@@ -1,16 +1,17 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, ImageBackground, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearRememberedSession, getUserById } from '../database/db';
 import { syncPendingBackup } from '../services/backupSync';
 import { syncDeviceNotificationsForUser } from '../services/localNotifications';
 
-export default function DashboardScreen({ navigation, route }) {
+export default function DashboardScreen({ navigation, route, showBottomTabs = false }) {
   const userId = route?.params?.userId;
   const [refreshing, setRefreshing] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [syncingBackup, setSyncingBackup] = useState(false);
   const syncingBackupRef = useRef(false);
+  const promptedRecoverySetupRef = useRef(false);
 
   console.log('DASHBOARD userId:', userId);
 
@@ -25,12 +26,12 @@ export default function DashboardScreen({ navigation, route }) {
     });
   }, [userId]);
 
-  const syncNotifications = useCallback(() => {
+  const syncNotifications = useCallback((options = {}) => {
     if (!userId) {
       return;
     }
 
-    syncDeviceNotificationsForUser(userId).catch(error => {
+    syncDeviceNotificationsForUser(userId, options).catch(error => {
       console.log('Error syncing device notifications', error);
     });
   }, [userId]);
@@ -73,6 +74,27 @@ export default function DashboardScreen({ navigation, route }) {
     }, [loadUser, syncNotifications, syncBackup])
   );
 
+  useEffect(() => {
+    const hasRecoveryQuestion = Boolean(String(currentUser?.recovery_question || '').trim());
+
+    if (!currentUser?.user_id || hasRecoveryQuestion || promptedRecoverySetupRef.current) {
+      return;
+    }
+
+    promptedRecoverySetupRef.current = true;
+    Alert.alert(
+      'Set Recovery Question',
+      'This account does not have a recovery question yet. Set one now so you can recover your password later.',
+      [
+        { text: 'Later', style: 'cancel' },
+        {
+          text: 'Set Now',
+          onPress: () => navigation.navigate('RecoveryQuestion', { userId }),
+        },
+      ]
+    );
+  }, [currentUser, navigation, userId]);
+
   const handleLogout = () => {
     clearRememberedSession(() => {
       navigation.replace('Login');
@@ -82,7 +104,7 @@ export default function DashboardScreen({ navigation, route }) {
   const handleRefresh = () => {
     setRefreshing(true);
     loadUser();
-    syncNotifications();
+    syncNotifications({ force: true });
     Promise.resolve(syncBackup()).finally(() => {
       setRefreshing(false);
     });
@@ -90,6 +112,7 @@ export default function DashboardScreen({ navigation, route }) {
 
   const roleLabel = currentUser?.role ? currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1) : null;
   const isOwner = currentUser?.role === 'owner';
+  const canAccessFarmManagement = ['owner', 'manager'].includes(currentUser?.role);
 
   return (
     <ImageBackground
@@ -108,12 +131,14 @@ export default function DashboardScreen({ navigation, route }) {
           {roleLabel ? <Text style={styles.subtitle}>Signed in as {roleLabel}</Text> : null}
           {syncingBackup ? <Text style={styles.syncStatus}>Syncing backup...</Text> : null}
 
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => navigation.navigate('FarmManagement', { userId })}
-          >
-            <Text style={styles.cardText}>Farm Management</Text>
-          </TouchableOpacity>
+          {canAccessFarmManagement ? (
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => navigation.navigate('FarmManagement', { userId })}
+            >
+              <Text style={styles.cardText}>Farm Management</Text>
+            </TouchableOpacity>
+          ) : null}
 
           {isOwner ? (
             <TouchableOpacity
@@ -138,12 +163,36 @@ export default function DashboardScreen({ navigation, route }) {
             <Text style={styles.cardText}>Reports</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => navigation.navigate('Notifications', { userId })}
-          >
-            <Text style={styles.cardText}>Notifications</Text>
-          </TouchableOpacity>
+          {!showBottomTabs ? (
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => navigation.navigate('Notifications', { userId })}
+            >
+              <Text style={styles.cardText}>Notifications</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {currentUser ? (
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => navigation.navigate('RecoveryQuestion', { userId })}
+            >
+              <Text style={styles.cardText}>
+                {String(currentUser.recovery_question || '').trim()
+                  ? 'Update Recovery Question'
+                  : 'Set Recovery Question'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {!showBottomTabs ? (
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => navigation.navigate('Help', { userId })}
+            >
+              <Text style={styles.cardText}>Help</Text>
+            </TouchableOpacity>
+          ) : null}
 
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutText}>Logout</Text>

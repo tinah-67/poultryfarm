@@ -22,6 +22,10 @@ export default function CreateBatchScreen({ navigation, route }) {
     const [costError, setCostError] = useState('');
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
+    const today = useMemo(() => {
+        const now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }, []);
 
     useEffect(() => {
         if (!userId) {
@@ -82,6 +86,17 @@ export default function CreateBatchScreen({ navigation, route }) {
         }
 
         if (selectedDate) {
+            const chosenDate = new Date(
+                selectedDate.getFullYear(),
+                selectedDate.getMonth(),
+                selectedDate.getDate()
+            );
+
+            if (chosenDate > today) {
+                Alert.alert('Invalid start date', 'The batch start date cannot be later than today.');
+                return;
+            }
+
             setStartDate(formatDate(selectedDate));
         }
     };
@@ -108,6 +123,11 @@ export default function CreateBatchScreen({ navigation, route }) {
 
         if (!isFormValid) {
             Alert.alert("Error", "Please fill all fields correctly, including chick purchase cost");
+            return;
+        }
+
+        if (parseLocalDate(startDate) > today) {
+            Alert.alert('Invalid start date', 'The batch start date cannot be later than today.');
             return;
         }
 
@@ -148,6 +168,7 @@ export default function CreateBatchScreen({ navigation, route }) {
                 value={startDate ? parseLocalDate(startDate) : new Date()}
                 mode="date"
                 display="default"
+                maximumDate={today}
                 onChange={handlePickerChange}
             />
         ) : null}

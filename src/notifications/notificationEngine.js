@@ -79,7 +79,6 @@ export const canRoleSeeNotification = (role, notificationType) => {
       'Vaccination',
       'Mortality',
       'Feed records',
-      'Age milestone',
     ].includes(notificationType);
   }
 

@@ -1,6 +1,6 @@
 import db from '../database/db';
 
-const BACKUP_BASE_URL = 'http://192.168.137.1:3000';
+const BACKUP_BASE_URL = 'http://192.168.0.102:3000';
 const BACKUP_REQUEST_TIMEOUT_MS = 15000; // 15 seconds
 
 const tableConfigs = [
@@ -10,7 +10,7 @@ const tableConfigs = [
     idColumn: 'user_id',
     endpoint: 'users',
     selectSql: `
-      SELECT user_id, first_name, last_name, email, password, role, owner_user_id, created_at
+      SELECT user_id, first_name, last_name, email, password, role, owner_user_id, recovery_question, recovery_answer, created_at
       FROM users
       WHERE synced = 0
       ORDER BY CASE WHEN owner_user_id IS NULL THEN 0 ELSE 1 END, user_id
