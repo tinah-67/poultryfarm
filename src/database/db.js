@@ -319,9 +319,12 @@ export const initDB = () => {
         farm_location TEXT,
         batch_label TEXT,
         batch_id INTEGER,
-        delivered_at TEXT NOT NULL
+        delivered_at TEXT NOT NULL,
+        read_at TEXT
       );
     `, [], () => console.log("Notification inbox table created"), (_, err) => console.log("Notification inbox table error", err));
+
+    ensureColumnExists(tx, 'notification_inbox', 'read_at', 'TEXT');
 
   });
 };
@@ -458,7 +461,7 @@ export const syncUsers = async () => {
 
         for (let user of users) {
           try {
-            await fetch('http://192.168.0.102:3000/users', {
+            await fetch('http://192.168.100.26:3000/users', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -917,22 +920,64 @@ export const saveNotificationInboxItems = (userId, items, callback) => {
   db.transaction(
     tx => {
       items.forEach(item => {
+        const notificationId = String(item.id || '').trim();
+
+        if (!notificationId) {
+          return;
+        }
+
+        const title = String(item.title || 'Farm reminder').trim();
+        const detail = String(item.detail || '').trim();
+        const type = String(item.type || 'Reminder').trim();
+        const severity = String(item.severity || 'info').trim();
+        const farmName = String(item.farmName || 'N/A').trim();
+        const farmLocation = String(item.farmLocation || 'N/A').trim();
+        const batchLabel = String(item.batchLabel || 'N/A').trim();
+        const batchId = item.batchId ?? null;
+        const values = [
+          notificationId,
+          userId,
+          title,
+          detail,
+          type,
+          severity,
+          farmName,
+          farmLocation,
+          batchLabel,
+          batchId,
+          deliveredAt,
+        ];
+
         tx.executeSql(
-          `INSERT OR REPLACE INTO notification_inbox
+          `INSERT OR IGNORE INTO notification_inbox
            (notification_id, user_id, title, detail, type, severity, farm_name, farm_location, batch_label, batch_id, delivered_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          values
+        );
+
+        tx.executeSql(
+          `UPDATE notification_inbox
+           SET user_id = ?,
+               title = ?,
+               detail = ?,
+               type = ?,
+               severity = ?,
+               farm_name = ?,
+               farm_location = ?,
+               batch_label = ?,
+               batch_id = ?
+           WHERE notification_id = ?`,
           [
-            item.id,
             userId,
-            item.title,
-            item.detail,
-            item.type,
-            item.severity,
-            item.farmName,
-            item.farmLocation,
-            item.batchLabel,
-            item.batchId ?? null,
-            deliveredAt,
+            title,
+            detail,
+            type,
+            severity,
+            farmName,
+            farmLocation,
+            batchLabel,
+            batchId,
+            notificationId,
           ]
         );
       });
@@ -948,14 +993,13 @@ export const saveNotificationInboxItems = (userId, items, callback) => {
 };
 
 export const getNotificationInboxItems = (userId, callback) => {
-  if (!userId) {
-    callback([]);
-    return;
-  }
+  const normalizedUserId = Number(userId);
+  const hasUserId = Number.isFinite(normalizedUserId) && normalizedUserId > 0;
 
   db.transaction(tx => {
     tx.executeSql(
       `SELECT notification_id,
+              user_id,
               title,
               detail,
               type,
@@ -964,14 +1008,16 @@ export const getNotificationInboxItems = (userId, callback) => {
               farm_location,
               batch_label,
               batch_id,
-              delivered_at
+              delivered_at,
+              read_at
        FROM notification_inbox
-       WHERE user_id = ?
+       ${hasUserId ? 'WHERE user_id = ?' : ''}
        ORDER BY delivered_at DESC, notification_id DESC`,
-      [userId],
+      hasUserId ? [normalizedUserId] : [],
       (_, result) => {
         const items = rowsToArray(result.rows).map(row => ({
           id: row.notification_id,
+          userId: row.user_id,
           title: row.title,
           detail: row.detail,
           type: row.type,
@@ -981,6 +1027,7 @@ export const getNotificationInboxItems = (userId, callback) => {
           batchLabel: row.batch_label,
           batchId: row.batch_id,
           deliveredAt: row.delivered_at,
+          readAt: row.read_at,
         }));
 
         callback(items);
@@ -988,6 +1035,34 @@ export const getNotificationInboxItems = (userId, callback) => {
       (_, error) => {
         console.log("Error fetching notification inbox items", error);
         callback([]);
+        return false;
+      }
+    );
+  });
+};
+
+export const markNotificationInboxItemRead = (notificationId, callback) => {
+  const normalizedNotificationId = String(notificationId || '').trim();
+
+  if (!normalizedNotificationId) {
+    callback && callback(null);
+    return;
+  }
+
+  const readAt = new Date().toISOString();
+
+  db.transaction(tx => {
+    tx.executeSql(
+      `UPDATE notification_inbox
+       SET read_at = COALESCE(read_at, ?)
+       WHERE notification_id = ?`,
+      [readAt, normalizedNotificationId],
+      () => {
+        callback && callback(readAt);
+      },
+      (_, error) => {
+        console.log("Error marking notification inbox item read", error);
+        callback && callback(null);
         return false;
       }
     );

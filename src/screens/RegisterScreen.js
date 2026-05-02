@@ -13,12 +13,22 @@ const getValidationMessage = ({
   confirmPassword,
   recoveryQuestion,
   recoveryAnswer,
-}, forSubmit = false) => {
+}, forSubmit = false, requireRecoverySetup = true) => {
   const nameRegex = /^[A-Za-z]+$/;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const normalizedEmail = email.trim().toLowerCase();
 
-  if (forSubmit && (!firstName || !lastName || !normalizedEmail || !password || !confirmPassword || !recoveryQuestion || !recoveryAnswer)) {
+  if (
+    forSubmit &&
+    (
+      !firstName ||
+      !lastName ||
+      !normalizedEmail ||
+      !password ||
+      !confirmPassword ||
+      (requireRecoverySetup && (!recoveryQuestion || !recoveryAnswer))
+    )
+  ) {
     return 'Please fill all required fields';
   }
 
@@ -50,11 +60,11 @@ const getValidationMessage = ({
     return 'Passwords do not match';
   }
 
-  if (recoveryQuestion && !RECOVERY_QUESTIONS.includes(recoveryQuestion.trim())) {
+  if (requireRecoverySetup && recoveryQuestion && !RECOVERY_QUESTIONS.includes(recoveryQuestion.trim())) {
     return 'Select one recovery question';
   }
 
-  if (recoveryAnswer && recoveryAnswer.trim().length < 2) {
+  if (requireRecoverySetup && recoveryAnswer && recoveryAnswer.trim().length < 2) {
     return 'Recovery answer is too short';
   }
 
@@ -64,6 +74,7 @@ const getValidationMessage = ({
 export default function RegisterScreen({ navigation, route }) {
   const ownerUserId = route?.params?.ownerUserId ?? null;
   const isOwnerCreatingStaff = ownerUserId != null;
+  const requiresRecoverySetup = !isOwnerCreatingStaff;
   const roleOptions = [
     { label: 'Manager', value: 'manager' },
     { label: 'Worker', value: 'worker' },
@@ -82,7 +93,14 @@ export default function RegisterScreen({ navigation, route }) {
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showRecoveryQuestionDropdown, setShowRecoveryQuestionDropdown] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const hasStartedTyping = Boolean(firstName || lastName || email || password || confirmPassword || recoveryQuestion || recoveryAnswer);
+  const hasStartedTyping = Boolean(
+    firstName ||
+    lastName ||
+    email ||
+    password ||
+    confirmPassword ||
+    (requiresRecoverySetup && (recoveryQuestion || recoveryAnswer))
+  );
 
   useEffect(() => {
     if (!hasStartedTyping) {
@@ -91,21 +109,33 @@ export default function RegisterScreen({ navigation, route }) {
     }
 
     setErrorMessage(
-      getValidationMessage({
-        firstName,
-        lastName,
-        email,
-        password,
-        confirmPassword,
-        recoveryQuestion,
-        recoveryAnswer,
-      })
+      getValidationMessage(
+        {
+          firstName,
+          lastName,
+          email,
+          password,
+          confirmPassword,
+          recoveryQuestion,
+          recoveryAnswer,
+        },
+        false,
+        requiresRecoverySetup
+      )
     );
-  }, [confirmPassword, email, firstName, hasStartedTyping, lastName, password, recoveryAnswer, recoveryQuestion]);
+  }, [
+    confirmPassword,
+    email,
+    firstName,
+    hasStartedTyping,
+    lastName,
+    password,
+    recoveryAnswer,
+    recoveryQuestion,
+    requiresRecoverySetup,
+  ]);
 
   const handleRegister = () => {
-    console.log('handleRegister pressed', { firstName, lastName, email, role, ownerUserId });
-
     const normalizedEmail = email.trim().toLowerCase();
     const targetRole = isOwnerCreatingStaff ? role : 'owner';
     const validationMessage = getValidationMessage(
@@ -118,7 +148,8 @@ export default function RegisterScreen({ navigation, route }) {
         recoveryQuestion,
         recoveryAnswer,
       },
-      true
+      true,
+      requiresRecoverySetup
     );
 
     if (validationMessage) {
@@ -128,9 +159,9 @@ export default function RegisterScreen({ navigation, route }) {
     }
 
     if (isOwnerCreatingStaff && !['manager', 'worker'].includes(targetRole)) {
-      const msg = 'Staff accounts can only be manager or worker';
-      setErrorMessage(msg);
-      Alert.alert('Error', msg);
+      const message = 'Staff accounts can only be manager or worker';
+      setErrorMessage(message);
+      Alert.alert('Error', message);
       return;
     }
 
@@ -138,9 +169,9 @@ export default function RegisterScreen({ navigation, route }) {
 
     getUserByEmail(normalizedEmail, async existingUser => {
       if (existingUser) {
-        const msg = 'An account with that email already exists';
-        setErrorMessage(msg);
-        Alert.alert('Error', msg);
+        const message = 'An account with that email already exists';
+        setErrorMessage(message);
+        Alert.alert('Error', message);
         return;
       }
 
@@ -152,8 +183,8 @@ export default function RegisterScreen({ navigation, route }) {
           password,
           targetRole,
           isOwnerCreatingStaff ? ownerUserId : null,
-          recoveryQuestion,
-          recoveryAnswer
+          requiresRecoverySetup ? recoveryQuestion : null,
+          requiresRecoverySetup ? recoveryAnswer : null
         );
 
         let backupSucceeded = false;
@@ -208,7 +239,7 @@ export default function RegisterScreen({ navigation, route }) {
             <Text style={styles.dropdownTriggerText}>
               {roleOptions.find(option => option.value === role)?.label ?? 'Select role'}
             </Text>
-            <Text style={styles.dropdownChevron}>{showRoleDropdown ? '▲' : '▼'}</Text>
+            <Text style={styles.dropdownChevron}>{showRoleDropdown ? '\u25B2' : '\u25BC'}</Text>
           </TouchableOpacity>
 
           {showRoleDropdown ? (
@@ -288,49 +319,53 @@ export default function RegisterScreen({ navigation, route }) {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.dropdownContainer}>
-        <TouchableOpacity
-          style={styles.dropdownTrigger}
-          activeOpacity={0.8}
-          onPress={() => setShowRecoveryQuestionDropdown(previous => !previous)}
-        >
-          <Text style={styles.dropdownTriggerText}>
-            {recoveryQuestion || 'Select recovery question'}
-          </Text>
-          <Text style={styles.dropdownChevron}>{showRecoveryQuestionDropdown ? 'â–²' : 'â–¼'}</Text>
-        </TouchableOpacity>
+      {requiresRecoverySetup ? (
+        <>
+          <View style={styles.dropdownContainer}>
+            <TouchableOpacity
+              style={styles.dropdownTrigger}
+              activeOpacity={0.8}
+              onPress={() => setShowRecoveryQuestionDropdown(previous => !previous)}
+            >
+              <Text style={styles.dropdownTriggerText}>
+                {recoveryQuestion || 'Select recovery question'}
+              </Text>
+              <Text style={styles.dropdownChevron}>{showRecoveryQuestionDropdown ? '\u25B2' : '\u25BC'}</Text>
+            </TouchableOpacity>
 
-        {showRecoveryQuestionDropdown ? (
-          <View style={styles.dropdownMenu}>
-            {RECOVERY_QUESTIONS.map(question => {
-              const isSelected = question === recoveryQuestion;
+            {showRecoveryQuestionDropdown ? (
+              <View style={styles.dropdownMenu}>
+                {RECOVERY_QUESTIONS.map(question => {
+                  const isSelected = question === recoveryQuestion;
 
-              return (
-                <TouchableOpacity
-                  key={question}
-                  style={[styles.dropdownOption, isSelected ? styles.dropdownOptionSelected : null]}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    setRecoveryQuestion(question);
-                    setShowRecoveryQuestionDropdown(false);
-                  }}
-                >
-                  <Text style={[styles.dropdownOptionText, isSelected ? styles.dropdownOptionTextSelected : null]}>
-                    {question}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+                  return (
+                    <TouchableOpacity
+                      key={question}
+                      style={[styles.dropdownOption, isSelected ? styles.dropdownOptionSelected : null]}
+                      activeOpacity={0.8}
+                      onPress={() => {
+                        setRecoveryQuestion(question);
+                        setShowRecoveryQuestionDropdown(false);
+                      }}
+                    >
+                      <Text style={[styles.dropdownOptionText, isSelected ? styles.dropdownOptionTextSelected : null]}>
+                        {question}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ) : null}
           </View>
-        ) : null}
-      </View>
-      <TextInput
-        placeholder="Recovery Answer"
-        placeholderTextColor="#999"
-        value={recoveryAnswer}
-        onChangeText={setRecoveryAnswer}
-        style={styles.input}
-      />
+          <TextInput
+            placeholder="Recovery Answer"
+            placeholderTextColor="#999"
+            value={recoveryAnswer}
+            onChangeText={setRecoveryAnswer}
+            style={styles.input}
+          />
+        </>
+      ) : null}
 
       <Button
         title={isOwnerCreatingStaff ? 'Create Staff Account' : 'Create Owner Account'}
@@ -386,6 +421,8 @@ const styles = StyleSheet.create({
   dropdownTriggerText: {
     color: '#0f172a',
     fontSize: 15,
+    flex: 1,
+    paddingRight: 12,
   },
   dropdownChevron: {
     color: '#475569',

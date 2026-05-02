@@ -18,6 +18,7 @@ import ViewFarmsScreen from './src/screens/ViewFarmsScreen';
 import FarmPerformanceSummaryScreen from './src/screens/FarmPerformanceSummaryScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
+import SearchScreen from './src/screens/SearchScreen';
 import HelpScreen from './src/screens/HelpScreen';
 import RecoveryQuestionScreen from './src/screens/RecoveryQuestionScreen';
 import CreateBatchScreen from './src/screens/CreateBatchScreen';
@@ -38,6 +39,9 @@ import ViewSalesScreen from './src/screens/ViewSalesScreen';
 // CREATE STACK
 const Stack = createNativeStackNavigator();
 const navigationRef = createNavigationContainerRef<any>();
+type RouteParamsWithUserId = {
+  userId?: number | string;
+};
 
 export default function App() {
   const [isReady, setIsReady] = useState(false);
@@ -54,22 +58,28 @@ export default function App() {
       return;
     }
 
-    const shouldOpenNotifications = await consumePendingNotificationOpen();
+    const notificationOpen = await consumePendingNotificationOpen();
 
-    if (!shouldOpenNotifications) {
+    if (!notificationOpen?.shouldOpenNotifications) {
       return;
     }
 
     const currentRoute = navigationRef.getCurrentRoute();
-    const routeUserId = Number(currentRoute?.params?.userId);
-    const targetUserId = Number.isFinite(routeUserId) && routeUserId > 0
-      ? routeUserId
-      : currentUserIdRef.current;
+    const currentRouteParams = currentRoute?.params as RouteParamsWithUserId | undefined;
+    const notificationUserId = Number(notificationOpen.userId);
+    const routeUserId = Number(currentRouteParams?.userId);
+    const targetUserId =
+      Number.isFinite(notificationUserId) && notificationUserId > 0
+        ? notificationUserId
+        : Number.isFinite(routeUserId) && routeUserId > 0
+          ? routeUserId
+          : currentUserIdRef.current;
 
     if (!targetUserId) {
       return;
     }
 
+    currentUserIdRef.current = targetUserId;
     navigationRef.navigate('Home', { userId: targetUserId, activeTab: 'notifications' });
   }, [isReady]);
 
@@ -128,7 +138,8 @@ export default function App() {
       onReady={openNotificationsFromIntent}
       onStateChange={() => {
         const route = navigationRef.getCurrentRoute();
-        const routeUserId = Number(route?.params?.userId);
+        const routeParams = route?.params as RouteParamsWithUserId | undefined;
+        const routeUserId = Number(routeParams?.userId);
 
         if (Number.isFinite(routeUserId) && routeUserId > 0) {
           currentUserIdRef.current = routeUserId;
@@ -187,12 +198,17 @@ export default function App() {
         <Stack.Screen
           name="Notifications"
           component={NotificationsScreen}
-          options={{ title: 'Notifications' }}
+          options={{ title: 'Reminders' }}
         />
         <Stack.Screen
           name="Reports"
           component={ReportsScreen}
           options={{ title: 'Reports' }}
+        />
+        <Stack.Screen
+          name="Search"
+          component={SearchScreen}
+          options={{ title: 'Search / Queries' }}
         />
         <Stack.Screen
           name="Help"

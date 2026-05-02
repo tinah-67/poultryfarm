@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   addSaleRecord,
@@ -26,19 +26,19 @@ export default function SalesScreen({ route, navigation }) {
       return;
     }
 
-    getBatchById(batchId, batch => {
-      if (!batch) {
+    getBatchById(batchId, batchRecord => {
+      if (!batchRecord) {
         setBatch(null);
         setAvailableBirds(0);
         done && done();
         return;
       }
 
-      setBatch(batch);
+      setBatch(batchRecord);
 
       getMortalityRecordsByBatchId(batchId, mortalityRecords => {
         getSalesByBatchId(batchId, salesRecords => {
-          const initialChicks = Number(batch.initial_chicks || 0);
+          const initialChicks = Number(batchRecord.initial_chicks || 0);
           const totalMortality = (mortalityRecords || []).reduce(
             (sum, item) => sum + Number(item.number_dead || 0),
             0
@@ -97,8 +97,10 @@ export default function SalesScreen({ route, navigation }) {
       return;
     }
 
-    if (Number(pricePerBird) <= 0) {
-      Alert.alert('Error', 'Price per bird must be greater than 0');
+    const priceValue = Number(pricePerBird);
+
+    if (!Number.isFinite(priceValue) || priceValue <= 0) {
+      Alert.alert('Error', 'Price per bird must be a valid number greater than 0');
       return;
     }
 
@@ -112,7 +114,7 @@ export default function SalesScreen({ route, navigation }) {
     addSaleRecord(
       batchId,
       birdsToSell,
-      Number(pricePerBird),
+      priceValue,
       new Date().toISOString(),
       () => {
         setBirdsSold('');

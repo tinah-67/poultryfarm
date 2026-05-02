@@ -9,7 +9,7 @@ const roleHelpContent = {
     items: [
       'Use Farm Management to add farms and review overall farm performance.',
       'Create staff accounts so workers and managers can record daily activities.',
-      'Check Reports and Notifications often to monitor feed, mortality, vaccination, sales, and expenses.',
+      'Check Reports and Reminders often to monitor feed, mortality, vaccination, sales, and expenses.',
     ],
   },
   manager: {
@@ -17,14 +17,14 @@ const roleHelpContent = {
     items: [
       'Use Farm Management to view farms, record farm expenses, and review farm performance.',
       'Use Batch Management to open a farm and manage its batches and daily records.',
-      'Use Reports and Notifications to follow up on operational issues quickly.',
+      'Use Reports and Reminders to follow up on operational issues quickly.',
     ],
   },
   worker: {
     title: 'Worker Help',
     items: [
       'Use Batch Management to open your farm and record feed, mortality, and vaccinations for the right batch.',
-      'Use Notifications to focus on feed, mortality, and vaccination alerts that need attention.',
+      'Use Reminders to focus on feed, mortality, and vaccination alerts that need attention.',
       'Use Reports to review your feed, mortality, and vaccination records when needed.',
     ],
   },
@@ -35,7 +35,7 @@ const defaultRoleHelp = {
   items: [
     'Use the dashboard to open the part of the system you need.',
     'Refresh the dashboard when you want the app to retry backup sync.',
-    'Record activities carefully so reports and notifications stay accurate.',
+    'Record activities carefully so reports and reminders stay accurate.',
   ],
 };
 

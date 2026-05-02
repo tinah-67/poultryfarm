@@ -1,6 +1,6 @@
 import db from '../database/db';
 
-const BACKUP_BASE_URL = 'http://192.168.0.102:3000';
+const BACKUP_BASE_URL = 'http://192.168.100.26:3000';
 const BACKUP_REQUEST_TIMEOUT_MS = 15000; // 15 seconds
 
 const tableConfigs = [
@@ -93,16 +93,16 @@ const tableConfigs = [
     endpoint: 'expenses',
     selectSql: `
       SELECT expenses.expense_id,
-             expenses.farm_id,
-             expenses.batch_id,
-             expenses.description,
-             expenses.amount,
-             expenses.expense_date,
-             COALESCE(expenses.expense_scope, 'batch') AS expense_scope,
-             expenses.feed_type,
-             expenses.vaccine_name,
-             expenses.quantity_bought,
-             expenses.deleted_at
+            expenses.farm_id,
+            expenses.batch_id,
+            expenses.description,
+            expenses.amount,
+            expenses.expense_date,
+            COALESCE(expenses.expense_scope, 'batch') AS expense_scope,
+            expenses.feed_type,
+            expenses.vaccine_name,
+            expenses.quantity_bought,
+            expenses.deleted_at
       FROM expenses
       WHERE expenses.synced = 0
         AND (

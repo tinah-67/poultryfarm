@@ -7,6 +7,7 @@ import { RECOVERY_QUESTIONS } from '../constants/recoveryQuestions';
 
 export default function RecoveryQuestionScreen({ navigation, route }) {
   const userId = route?.params?.userId;
+  const requiredOnLogin = route?.params?.requiredOnLogin === true;
   const [recoveryQuestion, setRecoveryQuestion] = useState('');
   const [recoveryAnswer, setRecoveryAnswer] = useState('');
   const [loading, setLoading] = useState(true);
@@ -56,7 +57,17 @@ export default function RecoveryQuestionScreen({ navigation, route }) {
         backupSucceeded
           ? 'Recovery question saved and backed up.'
           : 'Recovery question saved locally. Backup is still pending.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
+        [{
+          text: 'OK',
+          onPress: () => {
+            if (requiredOnLogin) {
+              navigation.replace('Home', { userId });
+              return;
+            }
+
+            navigation.goBack();
+          },
+        }]
       );
     });
   };
@@ -78,7 +89,7 @@ export default function RecoveryQuestionScreen({ navigation, route }) {
           <Text style={styles.dropdownTriggerText}>
             {recoveryQuestion || 'Select recovery question'}
           </Text>
-          <Text style={styles.dropdownChevron}>{showRecoveryQuestionDropdown ? 'â–²' : 'â–¼'}</Text>
+          <Text style={styles.dropdownChevron}>{showRecoveryQuestionDropdown ? '\u25B2' : '\u25BC'}</Text>
         </TouchableOpacity>
 
         {showRecoveryQuestionDropdown ? (

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Alert, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, ImageBackground, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearRememberedSession, getUserById } from '../database/db';
@@ -11,7 +11,6 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
   const [currentUser, setCurrentUser] = useState(null);
   const [syncingBackup, setSyncingBackup] = useState(false);
   const syncingBackupRef = useRef(false);
-  const promptedRecoverySetupRef = useRef(false);
 
   console.log('DASHBOARD userId:', userId);
 
@@ -73,27 +72,6 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
       syncBackup();
     }, [loadUser, syncNotifications, syncBackup])
   );
-
-  useEffect(() => {
-    const hasRecoveryQuestion = Boolean(String(currentUser?.recovery_question || '').trim());
-
-    if (!currentUser?.user_id || hasRecoveryQuestion || promptedRecoverySetupRef.current) {
-      return;
-    }
-
-    promptedRecoverySetupRef.current = true;
-    Alert.alert(
-      'Set Recovery Question',
-      'This account does not have a recovery question yet. Set one now so you can recover your password later.',
-      [
-        { text: 'Later', style: 'cancel' },
-        {
-          text: 'Set Now',
-          onPress: () => navigation.navigate('RecoveryQuestion', { userId }),
-        },
-      ]
-    );
-  }, [currentUser, navigation, userId]);
 
   const handleLogout = () => {
     clearRememberedSession(() => {
@@ -163,12 +141,19 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
             <Text style={styles.cardText}>Reports</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => navigation.navigate('Search', { userId })}
+          >
+            <Text style={styles.cardText}>Search / Queries</Text>
+          </TouchableOpacity>
+
           {!showBottomTabs ? (
             <TouchableOpacity
               style={styles.card}
               onPress={() => navigation.navigate('Notifications', { userId })}
             >
-              <Text style={styles.cardText}>Notifications</Text>
+              <Text style={styles.cardText}>Reminders</Text>
             </TouchableOpacity>
           ) : null}
 

@@ -6,7 +6,7 @@ import HelpScreen from './HelpScreen';
 
 const TAB_CONFIG = [
   { key: 'dashboard', label: 'Dashboard', icon: '\u2302' },
-  { key: 'notifications', label: 'Notifications', icon: '\u25A3' },
+  { key: 'notifications', label: 'Reminders', icon: '\u25A3' },
   { key: 'help', label: 'Help', icon: '?' },
 ];
 

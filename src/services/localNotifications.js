@@ -78,6 +78,8 @@ export const syncDeviceNotificationsForUser = async (userId, options = {}) => {
     return [];
   }
 
+  await saveNotificationInboxItemsAsync(userId, candidateNotifications);
+
   const deliveryLog = await getNotificationDeliveryLogAsync(candidateNotifications.map(item => item.id));
   const now = Date.now();
   const deliverableNotifications = force ? candidateNotifications : candidateNotifications.filter(item => {
@@ -104,7 +106,8 @@ export const syncDeviceNotificationsForUser = async (userId, options = {}) => {
     localNotificationModule.showNotification(
       item.id,
       item.title,
-      `${item.detail} ${item.farmName} - ${item.batchLabel}`.trim()
+      `${item.detail} ${item.farmName} - ${item.batchLabel}`.trim(),
+      Number(userId)
     );
   });
 
@@ -116,13 +119,33 @@ export const syncDeviceNotificationsForUser = async (userId, options = {}) => {
 
 export const consumePendingNotificationOpen = async () => {
   if (!canUseLocalNotificationModule() || typeof localNotificationModule.consumeNotificationOpen !== 'function') {
-    return false;
+    return {
+      shouldOpenNotifications: false,
+      userId: null,
+    };
   }
 
   try {
-    return await localNotificationModule.consumeNotificationOpen();
+    const result = await localNotificationModule.consumeNotificationOpen();
+
+    if (typeof result === 'boolean') {
+      return {
+        shouldOpenNotifications: result,
+        userId: null,
+      };
+    }
+
+    const userId = Number(result?.userId);
+
+    return {
+      shouldOpenNotifications: Boolean(result?.shouldOpenNotifications),
+      userId: Number.isFinite(userId) && userId > 0 ? userId : null,
+    };
   } catch (error) {
     console.log('Error consuming notification open intent', error);
-    return false;
+    return {
+      shouldOpenNotifications: false,
+      userId: null,
+    };
   }
 };

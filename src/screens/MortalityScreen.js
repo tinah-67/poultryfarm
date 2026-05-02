@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { addMortalityRecord, getBatchById, getUserById } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
@@ -52,6 +52,11 @@ export default function MortalityScreen({ route, navigation }) {
 
     if (!numberDead || !cause.trim()) {
       Alert.alert('Error', 'Enter number dead and cause');
+      return;
+    }
+
+    if (!/^\d+$/.test(numberDead.trim()) || Number(numberDead) <= 0) {
+      Alert.alert('Error', 'Number dead must be a positive whole number');
       return;
     }
 

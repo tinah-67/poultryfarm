@@ -25,6 +25,18 @@ export default function LoginScreen({ navigation }) {
         return;
       }
 
+      const hasRecoveryQuestion = Boolean(String(user.recovery_question || '').trim());
+
+      if (!hasRecoveryQuestion) {
+        clearRememberedSession(() => {
+          navigation.replace('RecoveryQuestion', {
+            userId: user.user_id,
+            requiredOnLogin: true,
+          });
+        });
+        return;
+      }
+
       const complete = () => {
         Alert.alert('Success', 'Login successful');
         navigation.replace('Home', { userId: user.user_id });
