@@ -18,6 +18,14 @@ Open the BroilerHub app on your Android device. If you already have an account, 
 
 If you are the farm owner and do not have an account yet, tap **Register** from the login screen and create the owner account first. Staff accounts should be created by the owner from inside the app.
 
+![Login screen](user-manual-assets/login-screen.png)
+
+*Login screen*
+
+![Registration screen](user-manual-assets/registration-screen.png)
+
+*Registration screen*
+
 ## Login Help
 
 Use the same email address and password that were used when the account was created. Email matching is not case-sensitive, but the password must be entered correctly.
@@ -29,6 +37,10 @@ If login fails, check the email and password, then try again. If the account was
 The dashboard is the main screen after login. From the dashboard, users can open farm management, batch management, reports, search, reminders, recovery question setup, and help.
 
 The options shown may differ depending on whether the user is an owner, manager, or worker.
+
+![Dashboard screen](user-manual-assets/dashboard-screen.png)
+
+*Dashboard screen*
 
 ## Farm Management
 
@@ -42,6 +54,10 @@ To add a farm:
 4. Save the farm.
 
 Use the farm list to view farms, open farm performance, or choose a farm before managing batches.
+
+![Add farm screen](user-manual-assets/add-farm-screen.png)
+
+*Add farm screen*
 
 ## Batch Management
 
@@ -57,6 +73,10 @@ To create a batch:
 
 Always select the correct farm and batch before recording feed, mortality, vaccination, expense, or sales data.
 
+![Create batch screen](user-manual-assets/create-batch-screen.png)
+
+*Create batch screen*
+
 ## Feed Recording
 
 Use feed records to track feed usage for a batch.
@@ -71,6 +91,10 @@ To record feed:
 
 The app may warn you if the selected feed type does not match the recommended feed stage for the batch age.
 
+![Feed recording screen](user-manual-assets/feed-recording-screen.png)
+
+*Feed recording screen*
+
 ## Mortality Recording
 
 Use mortality records to track bird deaths and causes.
@@ -84,6 +108,10 @@ To record mortality:
 5. Save the mortality record.
 
 Mortality data helps reports calculate total deaths and mortality rate.
+
+![Mortality recording screen](user-manual-assets/mortality-recording-screen.png)
+
+*Mortality recording screen*
 
 ## Vaccination Management
 
@@ -101,6 +129,10 @@ To record vaccination:
 
 Upcoming vaccination dates can appear in reminders.
 
+![Vaccination screen](user-manual-assets/vaccination-screen.png)
+
+*Vaccination screen*
+
 ## Expenses
 
 Expenses can be recorded for a whole farm or for a specific batch, depending on the screen and selected target.
@@ -114,6 +146,10 @@ To record an expense:
 5. Save the expense.
 
 For farm feed or vaccine purchases, select the correct purchase type and quantity so the app can calculate remaining stock correctly.
+
+![Expense entry screen](user-manual-assets/expense-entry-screen.png)
+
+*Expense entry screen*
 
 ## Sales
 
@@ -129,6 +165,10 @@ To record a sale:
 
 The app blocks sales that exceed the available birds in the batch.
 
+![Sales recording screen](user-manual-assets/sales-recording-screen.png)
+
+*Sales recording screen*
+
 ## Reports
 
 Reports help users review farm and batch activity. Available reports include batch, sales, expense, feed, mortality, and vaccination reports.
@@ -138,6 +178,10 @@ Use the filters to narrow reports by date, farm, batch, or report type. Reports 
 ## Reminders
 
 The reminders screen shows important alerts such as vaccination follow-ups and operational notices. Open reminders regularly to check unread messages and mark items as read when handled.
+
+![Reminder screen](user-manual-assets/notification-screen.png)
+
+*Reminder screen*
 
 ## Offline Use
 
@@ -149,9 +193,21 @@ When internet access becomes available, the app can sync pending backup data. If
 
 Owner users can manage farms, create staff accounts, manage records, view reports, and review farm performance.
 
+![Owner dashboard](user-manual-assets/dashboard-screen.png)
+
+*Owner dashboard*
+
 Manager users can manage batches, record expenses and sales, view reports, and monitor farm activity.
 
+![Manager interface](user-manual-assets/manager-interface.png)
+
+*Manager interface*
+
 Worker users can record operational data such as feed, mortality, and vaccination records.
+
+![Worker interface](user-manual-assets/worker-interface.png)
+
+*Worker interface*
 
 Some actions may be hidden or blocked if your role does not have permission.
 
@@ -166,6 +222,10 @@ If reports look incomplete, confirm that records were saved under the correct fa
 If the app is not responding, close and reopen it, then try the action again.
 
 If a completed batch blocks new entries, this is expected. Completed batches keep past records available but prevent new feed, mortality, vaccination, expense, and sales entries.
+
+![Error message example](user-manual-assets/error-message-example.png)
+
+*Error message example*
 
 ## Support
 
