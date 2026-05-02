@@ -17,7 +17,7 @@ BroilerHub is a React Native poultry farm management application. It records far
 - Reports: generate filtered reports for batches, sales, expenses, feed, mortality, and vaccinations.
 - Reminders: store farm alerts in an inbox-style message screen with read and unread state.
 - Backup Sync: send unsynced records to the backup server.
-- Help: role-based help and login help.
+- Help: role-based help, login help, and an online user manual link that is enabled only when the manual URL is reachable.
 
 ## Database Tables
 

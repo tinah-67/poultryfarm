@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { getUserById } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
+import { checkOnlineHelpAvailable, openOnlineHelp } from '../services/onlineHelp';
 
 const roleHelpContent = {
   owner: {
@@ -50,10 +51,90 @@ const SectionCard = ({ title, items }) => (
   </View>
 );
 
+const onlineHelpMessages = {
+  checking: 'Checking online user manual availability...',
+  available: 'The online user manual is available. It will open in your browser.',
+  unavailable: 'The online user manual is unavailable right now. Offline help below is still available.',
+};
+
+const OnlineHelpCard = ({ status, onCheck, onOpen }) => {
+  const isChecking = status === 'checking';
+  const isAvailable = status === 'available';
+
+  return (
+    <View style={styles.sectionCard}>
+      <Text style={styles.sectionTitle}>Online User Manual</Text>
+      <Text style={styles.sectionDescription}>
+        {onlineHelpMessages[status] || onlineHelpMessages.unavailable}
+      </Text>
+
+      <View style={styles.onlineHelpActions}>
+        <TouchableOpacity
+          style={[styles.primaryAction, !isAvailable ? styles.disabledAction : null]}
+          activeOpacity={0.85}
+          disabled={!isAvailable}
+          onPress={onOpen}
+        >
+          <Text style={[styles.primaryActionText, !isAvailable ? styles.disabledActionText : null]}>
+            Open User Manual
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.secondaryAction, isChecking ? styles.disabledAction : null]}
+          activeOpacity={0.85}
+          disabled={isChecking}
+          onPress={onCheck}
+        >
+          <Text style={[styles.secondaryActionText, isChecking ? styles.disabledActionText : null]}>
+            {isChecking ? 'Checking...' : 'Check Again'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
 export default function HelpScreen({ route, extraBottomPadding = 0 }) {
   const userId = route?.params?.userId;
   const helpMode = route?.params?.mode || 'general';
   const [currentUser, setCurrentUser] = useState(null);
+  const [onlineHelpStatus, setOnlineHelpStatus] = useState('checking');
+
+  const refreshOnlineHelpStatus = useCallback(async () => {
+    setOnlineHelpStatus('checking');
+
+    try {
+      const isAvailable = await checkOnlineHelpAvailable();
+      setOnlineHelpStatus(isAvailable ? 'available' : 'unavailable');
+    } catch (error) {
+      console.log('Online help unavailable:', error);
+      setOnlineHelpStatus('unavailable');
+    }
+  }, []);
+
+  const handleOpenOnlineHelp = useCallback(async () => {
+    try {
+      setOnlineHelpStatus('checking');
+      const isAvailable = await checkOnlineHelpAvailable();
+
+      if (!isAvailable) {
+        setOnlineHelpStatus('unavailable');
+        Alert.alert('Online user manual unavailable', 'Connect to the internet and check again before opening the user manual.');
+        return;
+      }
+
+      setOnlineHelpStatus('available');
+      await openOnlineHelp();
+    } catch (error) {
+      setOnlineHelpStatus('unavailable');
+      Alert.alert('Could not open user manual', error?.message || 'Try again when internet is available.');
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshOnlineHelpStatus();
+  }, [refreshOnlineHelpStatus]);
 
   useEffect(() => {
     if (helpMode === 'login') {
@@ -85,6 +166,12 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
       <ScreenBackground scroll contentContainerStyle={[styles.container, extraBottomPadding ? { paddingBottom: extraBottomPadding } : null]}>
         <Text style={styles.title}>Login Help</Text>
         <Text style={styles.subtitle}>Quick guidance for signing in</Text>
+
+        <OnlineHelpCard
+          status={onlineHelpStatus}
+          onCheck={refreshOnlineHelpStatus}
+          onOpen={handleOpenOnlineHelp}
+        />
 
         <SectionCard
           title="Before You Login"
@@ -132,6 +219,12 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
           ? `Guidance for ${roleLabel} users`
           : 'Quick guidance for using the app'}
       </Text>
+
+      <OnlineHelpCard
+        status={onlineHelpStatus}
+        onCheck={refreshOnlineHelpStatus}
+        onOpen={handleOpenOnlineHelp}
+      />
 
       <SectionCard
         title="Getting Started"
@@ -197,5 +290,44 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     marginBottom: 8,
+  },
+  sectionDescription: {
+    color: '#334155',
+    fontSize: 14,
+    lineHeight: 21,
+    marginBottom: 12,
+  },
+  onlineHelpActions: {
+    flexDirection: 'row',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  primaryAction: {
+    backgroundColor: '#16a34a',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  primaryActionText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  secondaryAction: {
+    borderWidth: 1,
+    borderColor: '#16a34a',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  secondaryActionText: {
+    color: '#166534',
+    fontWeight: '700',
+  },
+  disabledAction: {
+    backgroundColor: '#e2e8f0',
+    borderColor: '#cbd5e1',
+  },
+  disabledActionText: {
+    color: '#64748b',
   },
 });
