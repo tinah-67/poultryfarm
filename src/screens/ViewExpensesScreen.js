@@ -5,7 +5,9 @@ import { deleteExpenseRecord, getExpensesByBatchId, getExpensesByFarmId, getUser
 import DataTable from '../components/DataTable';
 import ScreenBackground from '../components/ScreenBackground';
 
+// Shows farm-level or batch-level expense records.
 export default function ViewExpensesScreen({ route, navigation }) {
+  // Stores route target, loaded expense rows, current user role, and view mode.
   const batchId = route?.params?.batchId;
   const farmId = route?.params?.farmId;
   const farmName = route?.params?.farmName;
@@ -14,6 +16,7 @@ export default function ViewExpensesScreen({ route, navigation }) {
   const [currentUser, setCurrentUser] = useState(null);
   const isFarmExpenseView = farmId != null && !batchId;
 
+  // Loads the correct expense list depending on whether the target is a farm or batch.
   const loadRecords = useCallback(() => {
     if (isFarmExpenseView && farmId) {
       getExpensesByFarmId(farmId, setRecords);
@@ -28,6 +31,7 @@ export default function ViewExpensesScreen({ route, navigation }) {
     getExpensesByBatchId(batchId, setRecords);
   }, [batchId, farmId, isFarmExpenseView]);
 
+  // Reloads the current role and expense records whenever the screen receives focus.
   useFocusEffect(
     useCallback(() => {
       if (userId) {
@@ -40,6 +44,7 @@ export default function ViewExpensesScreen({ route, navigation }) {
     }, [loadRecords, userId])
   );
 
+  // Computes summary values and table columns for the expense list.
   const canDeleteExpense = ['owner', 'manager'].includes(currentUser?.role);
   const totalExpenses = records.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const title = isFarmExpenseView ? 'Farm Expense Records' : 'Batch Expense Records';
@@ -50,6 +55,7 @@ export default function ViewExpensesScreen({ route, navigation }) {
     { key: 'actions', title: 'Actions', width: 120 },
   ];
 
+  // Confirms and soft-deletes an expense record when the role allows it.
   const handleDelete = expenseId => {
     if (!canDeleteExpense) {
       Alert.alert('Access denied', 'Only owner and manager users can delete expense records.');
@@ -74,12 +80,14 @@ export default function ViewExpensesScreen({ route, navigation }) {
       <Text style={styles.summary}>
         {isFarmExpenseView ? `Total Farm Expenses: ${totalExpenses}` : `Total Batch Expenses: ${totalExpenses}`}
       </Text>
+      {/* Opens the matching farm or batch expense entry screen. */}
       <View style={styles.actions}>
         <ButtonLink
           title={isFarmExpenseView ? 'Record Farm Expense' : 'Record Batch Expense'}
           onPress={() => navigation.navigate('Expense', { batchId, farmId, farmName, userId })}
         />
       </View>
+      {/* Displays expense records in a reusable table. */}
       <View style={styles.tableWrapper}>
         <DataTable
           columns={columns}
@@ -105,6 +113,7 @@ export default function ViewExpensesScreen({ route, navigation }) {
   );
 }
 
+// Renders a compact primary action button above the table.
 const ButtonLink = ({ title, onPress }) => (
   <TouchableOpacity style={styles.primaryAction} onPress={onPress}>
     <Text style={styles.primaryActionText}>{title}</Text>
@@ -112,6 +121,7 @@ const ButtonLink = ({ title, onPress }) => (
 );
 
 const styles = StyleSheet.create({
+  // Expense records table, action, and cell styles.
   container: { flex: 1, padding: 20 },
   title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
   contextText: { color: '#e2e8f0', marginBottom: 6 },

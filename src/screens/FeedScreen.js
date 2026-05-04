@@ -3,7 +3,9 @@ import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity } fr
 import { addFeedRecord, getBatchById, getFeedAvailability, getUserById } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 
+// Lets owner and worker users record feed usage for an active batch.
 export default function FeedScreen({ route, navigation }) {
+    // Stores route ids, feed form fields, stock information, and role/batch data.
     const batchId = route?.params?.batchId;
     const userId = route?.params?.userId;
     const feedTypeOptions = ['starter', 'grower', 'finisher'];
@@ -18,6 +20,7 @@ export default function FeedScreen({ route, navigation }) {
     const [batch, setBatch] = useState(null);
     const formatCurrency = value => `KES ${Number(value || 0).toFixed(2)}`;
 
+    // Loads the current user so feed-entry permissions can be enforced.
     useEffect(() => {
         if (userId) {
         getUserById(userId, user => {
@@ -28,6 +31,7 @@ export default function FeedScreen({ route, navigation }) {
         }
     }, [userId]);
 
+    // Loads the batch so completed batches can be locked.
     useEffect(() => {
         if (!batchId) {
         setBatch(null);
@@ -39,6 +43,7 @@ export default function FeedScreen({ route, navigation }) {
         });
     }, [batchId]);
 
+    // Recalculates remaining feed whenever the batch or feed type changes.
     useEffect(() => {
         if (!batchId || !feedType) {
         setRemainingFeed(null);
@@ -66,8 +71,10 @@ export default function FeedScreen({ route, navigation }) {
         );
     }, [batchId, feedType]);
 
+    // Computes role access and batch age details used for validation.
     const canRecordFeed = ['owner', 'worker'].includes(currentUser?.role);
     const isBatchCompleted = String(batch?.status || 'active').toLowerCase() === 'completed';
+    // Parses stored batch dates without timezone shifts.
     const parseLocalDate = dateString => {
         const [year, month, day] = (dateString || '').split('-').map(Number);
 
@@ -78,6 +85,7 @@ export default function FeedScreen({ route, navigation }) {
         return new Date(year, month - 1, day);
     };
 
+    // Calculates batch age in days from the start date.
     const getAgeInDays = startDate => {
         const batchStartDate = parseLocalDate(startDate);
 
@@ -96,6 +104,7 @@ export default function FeedScreen({ route, navigation }) {
         return Math.max(Math.floor(diffMs / (1000 * 60 * 60 * 24)), 0);
     };
 
+    // Chooses the expected feed stage based on batch age.
     const getRecommendedFeedType = ageInDays => {
         if (ageInDays == null) {
         return null;
@@ -116,6 +125,7 @@ export default function FeedScreen({ route, navigation }) {
     const ageInWeeks = ageInDays == null ? null : (ageInDays / 7).toFixed(1);
     const recommendedFeedType = getRecommendedFeedType(ageInDays);
 
+    // Restricts feed quantity input to a short whole number.
     const handleQuantityChange = text => {
         if (/^\d{0,2}$/.test(text)) {
         setQuantity(text);
@@ -125,6 +135,7 @@ export default function FeedScreen({ route, navigation }) {
         }
     };
 
+    // Validates permission, batch status, feed stage, quantity, and stock before saving.
     const handleAdd = () => {
         if (!canRecordFeed) {
         Alert.alert('Access denied', 'Only owner and worker users can record feed.');
@@ -205,6 +216,7 @@ export default function FeedScreen({ route, navigation }) {
         Feed cost is calculated automatically from farm feed purchases recorded under farm expenses.
         </Text>
 
+        {/* Shows feed type and quantity controls only when entry is allowed. */}
         {canRecordFeed && !isBatchCompleted ? (
             <>
             <View style={styles.dropdownContainer}>
@@ -268,6 +280,7 @@ export default function FeedScreen({ route, navigation }) {
             <Text style={styles.noteText}>You can review feed records, but only owners and workers can add feed entries.</Text>
         )}
 
+        {/* Opens the historical feed records for this batch. */}
         <View style={styles.actions}>
             <Button title="View Feed Records" onPress={() => navigation.navigate('ViewFeeds', { batchId, userId })} />
         </View>
@@ -276,6 +289,7 @@ export default function FeedScreen({ route, navigation }) {
     }
 
     const styles = StyleSheet.create({
+    // Feed form, stock warning, dropdown, and action styles.
     container: {
         flex: 1,
         padding: 20,

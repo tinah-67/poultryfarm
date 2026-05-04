@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { addVaccinationRecord, getBatchById, getUserById, markVaccinationDueCompleted } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 
+// Loads the optional native date picker when the dependency is available.
 let DateTimePicker = null;
 try {
   DateTimePicker = require('@react-native-community/datetimepicker').default;
@@ -11,6 +12,7 @@ try {
   DateTimePicker = null;
 }
 
+// Lists common broiler vaccines and suggested follow-up timing.
 const VACCINE_OPTIONS = [
   {
     name: 'Newcastle disease',
@@ -39,6 +41,7 @@ const VACCINE_OPTIONS = [
   },
 ];
 
+// Calculates the batch age in whole days for vaccination suggestions.
 const getAgeInDays = startDate => {
   const parsedStartDate = new Date(String(startDate || '').trim());
 
@@ -57,6 +60,7 @@ const getAgeInDays = startDate => {
   return Math.floor((normalizedToday.getTime() - normalizedStartDate.getTime()) / (24 * 60 * 60 * 1000));
 };
 
+// Suggests vaccines based on the batch's current age.
 const getSuggestedVaccinesForAge = ageInDays => {
   if (ageInDays == null || ageInDays < 0) {
     return [];
@@ -81,7 +85,9 @@ const getSuggestedVaccinesForAge = ageInDays => {
   return [];
 };
 
+// Lets owner and worker users record vaccinations and complete follow-up reminders.
 export default function VaccinationScreen({ route, navigation }) {
+  // Stores route context, vaccination fields, picker state, and role/batch data.
   const batchId = route?.params?.batchId;
   const userId = route?.params?.userId;
   const prefilledVaccineName = route?.params?.prefilledVaccineName;
@@ -95,6 +101,7 @@ export default function VaccinationScreen({ route, navigation }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [batch, setBatch] = useState(null);
 
+  // Reloads role, batch status, and any prefilled follow-up details on focus.
   useFocusEffect(
     useCallback(() => {
       if (userId) {
@@ -120,10 +127,14 @@ export default function VaccinationScreen({ route, navigation }) {
 
   const canRecordVaccination = ['owner', 'worker'].includes(currentUser?.role);
   const isBatchCompleted = String(batch?.status || 'active').toLowerCase() === 'completed';
+
+  // Returns today's local date at midnight.
   const getTodayDate = () => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), today.getDate());
   };
+
+  // Parses a date string into a comparable local date.
   const parseComparableDate = value => {
     const rawValue = String(value || '').trim();
 
@@ -139,12 +150,17 @@ export default function VaccinationScreen({ route, navigation }) {
 
     return new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate());
   };
+
   const todayDate = getTodayDate();
+
+  // Adds days to a local date for suggested follow-up dates.
   const addDays = (date, days) => {
     const nextDate = new Date(date);
     nextDate.setDate(nextDate.getDate() + days);
     return nextDate;
   };
+
+  // Formats today's date for the vaccination date field.
   const formatToday = () => {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -153,6 +169,8 @@ export default function VaccinationScreen({ route, navigation }) {
   const selectedVaccineOption = VACCINE_OPTIONS.find(option => option.name === vaccineName) || null;
   const batchAgeInDays = getAgeInDays(batch?.start_date);
   const suggestedVaccines = getSuggestedVaccinesForAge(batchAgeInDays);
+
+  // Suggests the next due date based on the vaccine schedule and batch start date.
   const getSuggestedNextDueDate = selectedVaccine => {
     const matchingVaccine = VACCINE_OPTIONS.find(option => option.name === selectedVaccine);
     const batchStartDate = parseComparableDate(batch?.start_date);
@@ -167,6 +185,7 @@ export default function VaccinationScreen({ route, navigation }) {
     return formatTodayFromDate(normalizedDueDate);
   };
 
+  // Updates the selected date picker field and prevents past follow-up dates.
   const handlePickerChange = (_, selectedDate) => {
     if (Platform.OS !== 'ios') {
       setPickerField(null);
@@ -189,10 +208,12 @@ export default function VaccinationScreen({ route, navigation }) {
     }
   };
 
+  // Formats a date as YYYY-MM-DD for storage and display.
   const formatTodayFromDate = (date) => {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
+  // Opens the native date picker for the requested field.
   const openPicker = (field) => {
     if (!DateTimePicker) {
       Alert.alert('Date Picker Not Ready', 'Rebuild the app to use the calendar picker. You can still use the Today button for now.');
@@ -202,6 +223,7 @@ export default function VaccinationScreen({ route, navigation }) {
     setPickerField(field);
   };
 
+  // Applies a vaccine selection and fills a suggested next due date when possible.
   const handleSelectVaccine = selectedVaccine => {
     setVaccineName(selectedVaccine);
     setShowVaccineDropdown(false);
@@ -214,12 +236,14 @@ export default function VaccinationScreen({ route, navigation }) {
     setNextDueDate(suggestedDueDate);
   };
 
+  // Sets a date field to today's date.
   const setToday = (field) => {
     if (field === 'nextDueDate') {
       setNextDueDate(todayText);
     }
   };
 
+  // Validates permission, batch status, dates, and vaccine fields before saving.
   const handleAdd = () => {
     if (!canRecordVaccination) {
       Alert.alert('Access denied', 'Only owner and worker users can record vaccinations.');
@@ -317,6 +341,7 @@ export default function VaccinationScreen({ route, navigation }) {
           This batch is completed. New vaccination entries are disabled, but you can still view the existing records.
         </Text>
       ) : null}
+      {/* Shows vaccination entry controls only when recording is allowed. */}
       {canRecordVaccination && !isBatchCompleted ? (
         <>
           <TextInput
@@ -404,6 +429,7 @@ export default function VaccinationScreen({ route, navigation }) {
         <Text style={styles.noteText}>You can review vaccination records, but only owners and workers can add vaccination entries.</Text>
       )}
 
+      {/* Opens existing vaccination records for this batch. */}
       <View style={styles.actions}>
         <Button title="View Vaccination Records" onPress={() => navigation.navigate('ViewVaccinations', { batchId, userId })} />
       </View>
@@ -412,6 +438,7 @@ export default function VaccinationScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+  // Vaccination form, dropdown, date picker, and action styles.
   container: { flex: 1, padding: 20 },
   title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
   lockedNote: { color: '#fecaca', marginBottom: 12 },

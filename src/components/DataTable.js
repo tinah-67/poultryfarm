@@ -1,6 +1,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+// Renders a reusable horizontal table for report and record screens.
 export default function DataTable({
   columns,
   data,
@@ -11,6 +12,7 @@ export default function DataTable({
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
       <View style={styles.table}>
+        {/* Builds the header row from the supplied column definitions. */}
         <View style={[styles.row, styles.headerRow]}>
           {columns.map((column) => (
             <View key={column.key} style={[styles.cell, styles.headerCell, { width: column.width || 140 }]}>
@@ -19,6 +21,7 @@ export default function DataTable({
           ))}
         </View>
 
+        {/* Renders data rows when records exist, otherwise shows an empty state. */}
         {data.length ? (
           data.map((item, index) => (
             <View
@@ -43,6 +46,7 @@ export default function DataTable({
 }
 
 const styles = StyleSheet.create({
+  // Keeps the table scrollable while filling narrow screens.
   scrollContent: {
     flexGrow: 1,
     minWidth: '100%',
@@ -55,6 +59,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#fff',
   },
+  // Shared row and cell styling for the table grid.
   row: {
     flexDirection: 'row',
   },
@@ -75,6 +80,7 @@ const styles = StyleSheet.create({
     borderColor: '#d5dce5',
     justifyContent: 'center',
   },
+  // Header and empty-state styles.
   headerCell: {
     borderBottomColor: '#0f172a',
   },

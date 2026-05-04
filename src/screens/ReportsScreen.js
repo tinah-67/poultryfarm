@@ -16,6 +16,7 @@ import {
   getVaccinationRecordsByBatchId,
 } from '../database/db';
 
+// Loads the optional native date picker when the dependency is available.
 let DateTimePicker = null;
 try {
   DateTimePicker = require('@react-native-community/datetimepicker').default;
@@ -23,10 +24,12 @@ try {
   DateTimePicker = null;
 }
 
+// Defines report types and the limited set available to worker users.
 const REPORT_TYPES = ['batches', 'sales', 'expenses', 'feed', 'mortality', 'vaccinations'];
 const WORKER_REPORT_TYPES = ['feed', 'mortality', 'vaccinations'];
 const ZERO_DEFAULT_KEYS = ['birds_alive', 'birds_sold', 'total_mortality', 'number_dead'];
 
+// Formats report numeric values with a fixed number of decimals.
 const formatNumber = (value, digits = 2) => {
   const numericValue = Number(value || 0);
 
@@ -37,6 +40,7 @@ const formatNumber = (value, digits = 2) => {
   return numericValue.toFixed(digits);
 };
 
+// Formats currency values for summaries, tables, and exports.
 const formatCurrency = value => {
   const numericValue = Number(value || 0);
 
@@ -47,8 +51,10 @@ const formatCurrency = value => {
   return numericValue.toFixed(2);
 };
 
+// Normalizes feed types so purchases and usage can be matched.
 const normalizeFeedType = value => String(value || '').trim().toLowerCase();
 
+// Adds remaining-feed values to feed usage records from farm purchase totals.
 const buildFeedRecordsWithRemaining = (feedRecords, expenseRecords) => {
   const purchaseTotals = new Map();
 
@@ -97,6 +103,7 @@ const buildFeedRecordsWithRemaining = (feedRecords, expenseRecords) => {
   }));
 };
 
+// Builds the latest remaining-feed totals per feed type for summary cards.
 const getFeedSummaryRemainingByType = feedRecords => {
   const latestByFarmAndType = new Map();
 
@@ -128,6 +135,7 @@ const getFeedSummaryRemainingByType = feedRecords => {
   }, {});
 };
 
+// Provides the empty report data shape used before records are loaded.
 const createEmptyData = () => ({
   farms: [],
   batches: [],
@@ -138,15 +146,18 @@ const createEmptyData = () => ({
   vaccinations: [],
 });
 
+// Formats a local date as YYYY-MM-DD.
 const formatDateValue = date => (
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 );
 
+// Returns today's local date at midnight for date-range validation.
 const getTodayDate = () => {
   const today = new Date();
   return new Date(today.getFullYear(), today.getMonth(), today.getDate());
 };
 
+// Parses report date values into comparable local dates.
 const parseComparableDate = value => {
   const rawValue = String(value || '').trim();
 
@@ -167,6 +178,7 @@ const parseComparableDate = value => {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 };
 
+// Checks whether a row date falls inside the selected period filter.
 const isWithinDateRange = (value, startDate, endDate) => {
   if (!startDate && !endDate) {
     return true;
@@ -189,6 +201,7 @@ const isWithinDateRange = (value, startDate, endDate) => {
   return true;
 };
 
+// Counts distinct farms in a filtered report result.
 const getUniqueFarmCount = items =>
   new Set(
     items
@@ -196,6 +209,7 @@ const getUniqueFarmCount = items =>
       .filter(Boolean)
   ).size;
 
+// Renders one summary metric card for the active report.
 const SummaryCard = ({ label, value }) => (
   <View style={styles.summaryCard}>
     <Text style={styles.summaryLabel}>{label}</Text>
@@ -203,7 +217,9 @@ const SummaryCard = ({ label, value }) => (
   </View>
 );
 
+// Builds filtered operational reports across farms, batches, and record types.
 export default function ReportsScreen({ route }) {
+  // Stores report data, filters, active report, export state, and dropdown state.
   const userId = route?.params?.userId;
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -218,6 +234,7 @@ export default function ReportsScreen({ route }) {
   const [showFarmDropdown, setShowFarmDropdown] = useState(false);
   const [showBatchDropdown, setShowBatchDropdown] = useState(false);
 
+  // Loads the current user so reports can be restricted by role.
   useFocusEffect(
     useCallback(() => {
       if (!userId) {
@@ -233,6 +250,7 @@ export default function ReportsScreen({ route }) {
     }, [userId])
   );
 
+  // Loads farms, batches, and all child records into one report data object.
   const loadReports = useCallback((done) => {
     if (!userId) {
       setReportData(createEmptyData());
@@ -261,6 +279,7 @@ export default function ReportsScreen({ route }) {
       const totalFarmOperations = safeFarms.length * 2;
       let completedFarmOperations = 0;
 
+      // Finalizes report data once each farm-level and batch-level load completes.
       const finalizeReportsLoad = () => {
         completedFarmOperations += 1;
 
@@ -438,16 +457,19 @@ export default function ReportsScreen({ route }) {
     });
   }, [userId]);
 
+  // Refreshes report data whenever the Reports screen receives focus.
   useFocusEffect(
     useCallback(() => {
       loadReports();
     }, [loadReports])
   );
 
+  // Limits worker users to operational reports they are allowed to see.
   const availableReportTypes = useMemo(() => (
     currentUser?.role === 'worker' ? WORKER_REPORT_TYPES : REPORT_TYPES
   ), [currentUser?.role]);
 
+  // Switches away from a report type if the current role cannot view it.
   useEffect(() => {
     if (availableReportTypes.includes(activeReport)) {
       return;
@@ -456,15 +478,18 @@ export default function ReportsScreen({ route }) {
     setActiveReport(availableReportTypes[0] || 'feed');
   }, [activeReport, availableReportTypes]);
 
+  // Handles pull-to-refresh for report data.
   const handleRefresh = () => {
     setRefreshing(true);
     loadReports(() => setRefreshing(false));
   };
 
+  // Prepares date filter values for validation and row filtering.
   const parsedFromDate = useMemo(() => parseComparableDate(fromDate), [fromDate]);
   const parsedToDate = useMemo(() => parseComparableDate(toDate), [toDate]);
   const todayDate = useMemo(() => getTodayDate(), []);
 
+  // Applies date picker changes while keeping the range valid.
   const handlePickerChange = (_, selectedDate) => {
     if (Platform.OS !== 'ios') {
       setPickerField(null);
@@ -520,6 +545,7 @@ export default function ReportsScreen({ route }) {
     }
   };
 
+  // Opens the native date picker for the requested date field.
   const openPicker = field => {
     if (!DateTimePicker) {
       Alert.alert('Date Picker Not Ready', 'Rebuild the app to use the calendar picker.');
@@ -529,12 +555,14 @@ export default function ReportsScreen({ route }) {
     setPickerField(field);
   };
 
+  // Clears both date filters and closes the picker.
   const clearDateRange = () => {
     setFromDate('');
     setToDate('');
     setPickerField(null);
   };
 
+  // Builds farm dropdown options from accessible farms.
   const farmOptions = useMemo(() => (
     reportData.farms.map(farm => ({
       value: String(farm.farm_id),
@@ -542,6 +570,7 @@ export default function ReportsScreen({ route }) {
     }))
   ), [reportData.farms]);
 
+  // Builds batch dropdown options filtered by the selected farm.
   const batchOptions = useMemo(() => (
     reportData.batches
       .filter(batch => selectedFarmId === 'all' || String(batch.farm_id) === selectedFarmId)
@@ -551,6 +580,7 @@ export default function ReportsScreen({ route }) {
       }))
   ), [reportData.batches, selectedFarmId]);
 
+  // Resolves selected dropdown labels for display.
   const selectedFarmLabel = useMemo(() => {
     const selectedFarm = farmOptions.find(option => option.value === selectedFarmId);
     return selectedFarm?.label || 'All Farms';
@@ -561,6 +591,7 @@ export default function ReportsScreen({ route }) {
     return selectedBatch?.label || 'All Batches';
   }, [batchOptions, selectedBatchId]);
 
+  // Checks farm and batch filters for one report row.
   const matchesFarmAndBatchFilters = useCallback(item => {
     if (selectedFarmId !== 'all' && String(item.farm_id) !== selectedFarmId) {
       return false;
@@ -573,6 +604,7 @@ export default function ReportsScreen({ route }) {
     return true;
   }, [selectedBatchId, selectedFarmId]);
 
+  // Applies date, farm, and batch filters to every report dataset.
   const filteredReportData = useMemo(() => ({
     ...reportData,
     batches: reportData.batches.filter(item => (
@@ -601,6 +633,7 @@ export default function ReportsScreen({ route }) {
     )),
   }), [matchesFarmAndBatchFilters, parsedFromDate, parsedToDate, reportData]);
 
+  // Builds the active report definitions, including summary cards, columns, and rows.
   const reportConfig = useMemo(() => {
     const batchData = filteredReportData.batches;
     const salesData = filteredReportData.sales;
@@ -762,6 +795,7 @@ export default function ReportsScreen({ route }) {
 
   const currentReport = reportConfig[activeReport] || reportConfig[availableReportTypes[0]];
 
+  // Exports the currently visible report to an Excel workbook.
   const handleExport = useCallback(async () => {
     if (exporting) {
       return;
@@ -793,6 +827,7 @@ export default function ReportsScreen({ route }) {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ffffff" />}
     >
       <Text style={styles.title}>Reports</Text>
+      {/* Exports the active report with the current filters applied. */}
       <TouchableOpacity
         style={[styles.exportButton, exporting ? styles.exportButtonDisabled : null]}
         activeOpacity={0.85}
@@ -803,6 +838,7 @@ export default function ReportsScreen({ route }) {
           {exporting ? 'Exporting Excel...' : 'Download Excel Report'}
         </Text>
       </TouchableOpacity>
+      {/* Filters reports by period. */}
       <View style={styles.filterCard}>
         <Text style={styles.filterTitle}>Period</Text>
         <View style={styles.dateRangeRow}>
@@ -850,6 +886,7 @@ export default function ReportsScreen({ route }) {
           />
         ) : null}
       </View>
+      {/* Filters reports by farm and batch. */}
       <View style={styles.filterCard}>
         <Text style={styles.filterTitle}>Farm And Batch</Text>
         <View style={styles.dropdownContainer}>
@@ -955,6 +992,7 @@ export default function ReportsScreen({ route }) {
           <Text style={styles.clearFilterText}>Clear farm and batch filter</Text>
         </TouchableOpacity>
       </View>
+      {/* Selects which report type is currently displayed. */}
       <View style={styles.reportPicker}>
         {availableReportTypes.map(reportType => {
           const isSelected = activeReport === reportType;
@@ -975,6 +1013,7 @@ export default function ReportsScreen({ route }) {
         })}
       </View>
 
+      {/* Shows summary metrics and table rows for the active report. */}
       <View style={styles.reportCard}>
         <Text style={styles.sectionTitle}>{currentReport.title}</Text>
         <Text style={styles.periodText}>
@@ -1042,6 +1081,7 @@ export default function ReportsScreen({ route }) {
 }
 
 const styles = StyleSheet.create({
+  // Reports screen layout and export button styles.
   container: {
     flexGrow: 1,
     padding: 20,
@@ -1067,6 +1107,7 @@ const styles = StyleSheet.create({
     color: '#166534',
     fontWeight: '700',
   },
+  // Filter card, date chip, and dropdown styles.
   filterCard: {
     backgroundColor: 'rgba(15, 23, 42, 0.58)',
     borderRadius: 16,
@@ -1169,6 +1210,7 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 18,
   },
+  // Report type chip styles.
   reportChip: {
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -1185,6 +1227,7 @@ const styles = StyleSheet.create({
   reportChipTextSelected: {
     color: '#166534',
   },
+  // Report summary, table, and cell styles.
   reportCard: {
     backgroundColor: 'rgba(15, 23, 42, 0.72)',
     borderRadius: 16,

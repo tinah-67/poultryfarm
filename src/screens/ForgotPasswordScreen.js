@@ -4,8 +4,10 @@ import { getUserByEmail, updateUserPassword } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 import { syncPendingBackup } from '../services/backupSync';
 
+// Normalizes answers so recovery checks ignore case and extra spaces.
 const normalizeRecoveryAnswer = value => String(value || '').trim().toLowerCase();
 
+// Returns the first password validation message, or an empty string when valid.
 const getPasswordValidationMessage = (password, confirmPassword) => {
   if (!password || !confirmPassword) {
     return 'Enter and confirm the new password.';
@@ -30,18 +32,22 @@ const getPasswordValidationMessage = (password, confirmPassword) => {
   return '';
 };
 
+// Lets users reset a local account password using their saved recovery question.
 export default function ForgotPasswordScreen({ navigation }) {
+  // Stores account lookup and password reset form state.
   const [email, setEmail] = useState('');
   const [matchedUser, setMatchedUser] = useState(null);
   const [answer, setAnswer] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Recomputes password validation as the user types.
   const passwordMessage = useMemo(
     () => getPasswordValidationMessage(newPassword, confirmPassword),
     [confirmPassword, newPassword]
   );
 
+  // Finds the account and reveals the saved recovery question.
   const handleFindAccount = () => {
     const normalizedEmail = email.trim().toLowerCase();
 
@@ -71,6 +77,7 @@ export default function ForgotPasswordScreen({ navigation }) {
     });
   };
 
+  // Validates the recovery answer, updates the password, and tries to back it up.
   const handleResetPassword = () => {
     if (!matchedUser) {
       Alert.alert('Error', 'Find the account first.');
@@ -119,6 +126,7 @@ export default function ForgotPasswordScreen({ navigation }) {
         Reset your password using the recovery question saved for this account on this device.
       </Text>
 
+      {/* Collects the email before showing the recovery-question panel. */}
       <TextInput
         placeholder="Account Email"
         placeholderTextColor="#999"
@@ -130,6 +138,7 @@ export default function ForgotPasswordScreen({ navigation }) {
 
       <Button title="Find Account" onPress={handleFindAccount} />
 
+      {/* Shows password reset fields only after a matching account is found. */}
       {matchedUser ? (
         <View style={styles.panel}>
           <Text style={styles.questionLabel}>Recovery Question</Text>
@@ -169,6 +178,7 @@ export default function ForgotPasswordScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  // Form layout, input, and recovery panel styles.
   container: {
     flexGrow: 1,
     padding: 20,

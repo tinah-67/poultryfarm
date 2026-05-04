@@ -10,7 +10,9 @@ import {
 } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 
+// Shows batch-level actions and controls when a selected batch is opened.
 export default function BatchDetailsScreen({ route, navigation }) {
+  // Stores route ids, current user role, and the latest batch record.
   const batchId = route?.params?.batchId;
   const farmId = route?.params?.farmId;
   const farmName = route?.params?.farmName;
@@ -18,6 +20,7 @@ export default function BatchDetailsScreen({ route, navigation }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [batch, setBatch] = useState(null);
 
+  // Reloads role and batch status whenever the details screen receives focus.
   useFocusEffect(
     useCallback(() => {
       if (!userId) {
@@ -44,6 +47,7 @@ export default function BatchDetailsScreen({ route, navigation }) {
   const batchStatus = batch?.status || 'active';
   const isCompleted = batchStatus === 'completed';
 
+  // Checks whether all birds are sold or accounted for before completing a batch.
   const canCompleteBatch = useCallback((callback) => {
     if (!batchId) {
       callback(false);
@@ -75,6 +79,7 @@ export default function BatchDetailsScreen({ route, navigation }) {
     });
   }, [batchId]);
 
+  // Confirms and applies batch completion when role and bird counts allow it.
   const handleToggleBatchStatus = () => {
     if (!canManageBatchStatus) {
       Alert.alert('Access denied', 'Only owner and manager users can change batch status.');
@@ -132,6 +137,7 @@ export default function BatchDetailsScreen({ route, navigation }) {
           : 'Loading role permissions...'}
       </Text>
 
+      {/* Opens batch record screens according to the user's role. */}
       <Button title="Feeds" onPress={() => navigation.navigate('Feed', { batchId, userId })} />
       <Button title="Mortality" onPress={() => navigation.navigate('Mortality', { batchId, userId })} />
       <Button title="Vaccination" onPress={() => navigation.navigate('Vaccination', { batchId, userId })} />
@@ -150,6 +156,7 @@ export default function BatchDetailsScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+  // Batch detail layout and status text styles.
   container: {
     flex: 1,
     padding: 20,

@@ -1,8 +1,10 @@
 import db from '../database/db';
 
+// Defines the backup API host and timeout used for offline-first sync.
 const BACKUP_BASE_URL = 'http://192.168.100.26:3000';
 const BACKUP_REQUEST_TIMEOUT_MS = 15000; // 15 seconds
 
+// Maps each local table to the server endpoint and query used for pending records.
 const tableConfigs = [
   {
     key: 'users',
@@ -142,6 +144,7 @@ const tableConfigs = [
   },
 ];
 
+// Converts SQLite result rows into a normal JavaScript array.
 const rowsToArray = rows => {
   if (!rows) {
     return [];
@@ -159,6 +162,7 @@ const rowsToArray = rows => {
   return items;
 };
 
+// Runs one SQL statement inside a database transaction.
 const executeSql = (sql, params = []) =>
   new Promise((resolve, reject) => {
     db.transaction(tx => {
@@ -174,11 +178,13 @@ const executeSql = (sql, params = []) =>
     });
   });
 
+// Reads unsynced rows for a configured table.
 const getUnsyncedRecords = async config => {
   const result = await executeSql(config.selectSql);
   return rowsToArray(result.rows);
 };
 
+// Marks records as synced after the backup server accepts them.
 const markRecordsAsSynced = async (tableName, idColumn, ids) => {
   if (!ids.length) {
     return;
@@ -192,6 +198,7 @@ const markRecordsAsSynced = async (tableName, idColumn, ids) => {
   );
 };
 
+// Uploads one table's pending records and records the successful sync locally.
 const syncTable = async config => {
   const records = await getUnsyncedRecords(config);
 
@@ -227,6 +234,7 @@ const syncTable = async config => {
   return { key: config.key, syncedCount: syncedIds.length };
 };
 
+// Syncs every configured table in dependency order.
 export const syncPendingBackup = async () => {
   const results = [];
 

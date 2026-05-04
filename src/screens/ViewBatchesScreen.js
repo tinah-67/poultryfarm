@@ -9,7 +9,9 @@ import {
 } from '../database/db';
 import DataTable from '../components/DataTable';
 
+// Lists batches for one farm and supports search, filtering, editing, and deletion.
 export default function ViewBatchesScreen({ navigation, route }) {
+    // Stores route context, batch data, current user, edit fields, filters, and refresh state.
     const farmId = route?.params?.farmId;
     const farmName = route?.params?.farmName;
     const userId = route?.params?.userId;
@@ -25,6 +27,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
     const [statusFilter, setStatusFilter] = useState('all');
     const [refreshing, setRefreshing] = useState(false);
 
+    // Loads active batches for the selected farm.
     const loadBatches = useCallback((done) => {
         if (!farmId) {
             done && done();
@@ -37,6 +40,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
         });
     }, [farmId]);
 
+    // Loads the current user so batch management actions can be restricted.
     const loadUser = useCallback(() => {
         if (!userId) {
             setCurrentUser(null);
@@ -48,6 +52,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
         });
     }, [userId]);
 
+    // Refreshes user and batch data whenever the screen receives focus.
     useFocusEffect(
         useCallback(() => {
             loadUser();
@@ -55,6 +60,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
         }, [loadBatches, loadUser])
     );
 
+    // Computes management permission and the table columns for this role.
     const canManageBatches = ['owner', 'manager'].includes(currentUser?.role);
 
     const columns = useMemo(() => [
@@ -66,6 +72,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
         { key: 'actions', title: 'Actions', width: canManageBatches ? 310 : 140 },
     ], [canManageBatches]);
 
+    // Applies text search and status filtering to the batch list.
     const filteredBatches = useMemo(() => {
         const normalizedQuery = searchQuery.trim().toLowerCase();
         return batches.filter(batch => {
@@ -93,6 +100,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
         });
     }, [batches, searchQuery, statusFilter]);
 
+    // Starts inline editing for one batch row.
     const startEdit = (batch) => {
         if (!canManageBatches) {
             Alert.alert('Access denied', 'Only owner and manager users can edit batches.');
@@ -106,6 +114,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
         setEditedPurchaseCost(String(batch.purchase_cost ?? '0'));
     };
 
+    // Clears the inline batch edit form.
     const cancelEdit = () => {
         setEditingBatch(null);
         setEditedStartDate('');
@@ -114,6 +123,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
         setEditedPurchaseCost('');
     };
 
+    // Validates and saves inline batch edits.
     const saveEdit = () => {
         if (!canManageBatches) {
             Alert.alert('Access denied', 'Only owner and manager users can edit batches.');
@@ -152,6 +162,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
         );
     };
 
+    // Confirms and soft-deletes a batch when the role allows it.
     const handleDelete = (batchId) => {
         if (!canManageBatches) {
             Alert.alert('Access denied', 'Only owner and manager users can delete batches.');
@@ -175,6 +186,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
         );
     };
 
+    // Handles pull-to-refresh for the batch list.
     const handleRefresh = () => {
         setRefreshing(true);
         loadBatches(() => setRefreshing(false));
@@ -194,6 +206,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
                 : 'You can view batch details here.'}
         </Text>
 
+        {/* Lets the user search across batch fields. */}
         <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -202,6 +215,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
             placeholderTextColor="#64748b"
         />
 
+        {/* Filters batches by status. */}
         <View style={styles.filterRow}>
             {['all', 'active', 'completed'].map(filter => (
                 <TouchableOpacity
@@ -224,6 +238,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
             ))}
         </View>
 
+        {/* Owners and managers can create new batches for this farm. */}
         {canManageBatches ? (
             <Button
                 title="Add Batch"
@@ -231,6 +246,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
             />
         ) : null}
 
+        {/* Displays batch records and row actions in a reusable table. */}
         <View style={styles.tableWrapper}>
         <DataTable
             columns={columns}
@@ -377,6 +393,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
+    // Batch list layout, filters, table cells, edit fields, and action styles.
     container: { flex: 1, backgroundColor: '#f1f5f9' },
     contentContainer: { padding: 20 },
     title: { fontSize: 20, marginBottom: 10, color: '#0f172a', fontWeight: '700' },

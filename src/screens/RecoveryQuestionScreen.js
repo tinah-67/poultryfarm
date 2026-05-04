@@ -5,7 +5,9 @@ import ScreenBackground from '../components/ScreenBackground';
 import { syncPendingBackup } from '../services/backupSync';
 import { RECOVERY_QUESTIONS } from '../constants/recoveryQuestions';
 
+// Lets users set or update the recovery question used for password reset.
 export default function RecoveryQuestionScreen({ navigation, route }) {
+  // Stores the selected question, answer, and dropdown/loading state.
   const userId = route?.params?.userId;
   const requiredOnLogin = route?.params?.requiredOnLogin === true;
   const [recoveryQuestion, setRecoveryQuestion] = useState('');
@@ -13,6 +15,7 @@ export default function RecoveryQuestionScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [showRecoveryQuestionDropdown, setShowRecoveryQuestionDropdown] = useState(false);
 
+  // Loads any existing recovery question for the signed-in user.
   useEffect(() => {
     if (!userId) {
       setLoading(false);
@@ -26,6 +29,7 @@ export default function RecoveryQuestionScreen({ navigation, route }) {
     });
   }, [userId]);
 
+  // Validates and saves the selected recovery question, then attempts backup sync.
   const handleSave = () => {
     if (!recoveryQuestion.trim() || !recoveryAnswer.trim()) {
       Alert.alert('Error', 'Enter both recovery question and recovery answer.');
@@ -79,6 +83,7 @@ export default function RecoveryQuestionScreen({ navigation, route }) {
         Set a recovery question so you can reset your password later if you forget it.
       </Text>
 
+      {/* Selects one of the preset recovery questions. */}
       <View style={styles.dropdownContainer}>
         <TouchableOpacity
           style={styles.dropdownTrigger}
@@ -116,6 +121,7 @@ export default function RecoveryQuestionScreen({ navigation, route }) {
           </View>
         ) : null}
       </View>
+      {/* Stores the private answer for future password recovery checks. */}
       <TextInput
         placeholder="Recovery Answer"
         placeholderTextColor="#999"
@@ -131,6 +137,7 @@ export default function RecoveryQuestionScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
+  // Layout, input, and dropdown styles.
   container: {
     flexGrow: 1,
     padding: 20,

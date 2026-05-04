@@ -4,7 +4,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { addExpenseRecord, getBatchById, getUserById } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 
+// Lets owner and manager users record farm-level or batch-level expenses.
 export default function ExpenseScreen({ route, navigation }) {
+  // Defines dropdown options for expense categories and inventory purchase types.
   const feedTypeOptions = ['starter', 'grower', 'finisher'];
   const vaccineOptions = [
     'Newcastle disease',
@@ -22,6 +24,8 @@ export default function ExpenseScreen({ route, navigation }) {
     'Labor',
     'Transport',
   ];
+
+  // Stores route target, expense fields, dropdown state, current user, and batch status.
   const batchId = route?.params?.batchId;
   const farmId = route?.params?.farmId;
   const farmName = route?.params?.farmName;
@@ -39,6 +43,7 @@ export default function ExpenseScreen({ route, navigation }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [batch, setBatch] = useState(null);
 
+  // Reloads role and batch status whenever the expense screen receives focus.
   useFocusEffect(
     useCallback(() => {
       if (userId) {
@@ -71,6 +76,8 @@ export default function ExpenseScreen({ route, navigation }) {
   const amountValue = Number(amount);
   const quantityBoughtValue = Number(quantityBought);
   const vaccineQuantityValue = Number(vaccineQuantity);
+
+  // Builds a useful default description for structured farm expenses.
   const buildFarmExpenseDescription = () => {
     if (description.trim()) {
       return description.trim();
@@ -89,6 +96,7 @@ export default function ExpenseScreen({ route, navigation }) {
     return expenseType;
   };
 
+  // Validates permissions, target, amount, and purchase details before saving.
   const handleAdd = () => {
     if (!canRecordExpense) {
       Alert.alert('Access denied', 'Only owner and manager users can record expenses.');
@@ -177,6 +185,7 @@ export default function ExpenseScreen({ route, navigation }) {
     <ScreenBackground contentContainerStyle={styles.container}>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.noteText}>{helperText}</Text>
+      {/* Farm expenses choose a category before showing category-specific fields. */}
       {isFarmExpense ? (
         <View style={styles.dropdownContainer}>
           <TouchableOpacity
@@ -232,6 +241,7 @@ export default function ExpenseScreen({ route, navigation }) {
           This batch is completed. New expense entries are disabled, but you can still view the existing records.
         </Text>
       ) : null}
+      {/* Shows expense entry controls only when recording is allowed. */}
       {canRecordExpense && !isBatchCompleted ? (
         <>
           {isFarmExpense && isFeedPurchase ? (
@@ -366,6 +376,7 @@ export default function ExpenseScreen({ route, navigation }) {
         <Text style={styles.noteText}>You can review expense records, but only owners and managers can add expense entries.</Text>
       )}
 
+      {/* Opens existing expense records for the selected farm or batch. */}
       <View style={styles.actions}>
         <Button title="View Expense Records" onPress={() => navigation.navigate('ViewExpenses', { batchId, farmId, farmName, userId })} />
       </View>
@@ -374,6 +385,7 @@ export default function ExpenseScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+  // Expense form, dropdown, locked-state, and action styles.
   container: { flex: 1, padding: 20 },
   title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
   lockedNote: { color: '#fecaca', marginBottom: 12 },

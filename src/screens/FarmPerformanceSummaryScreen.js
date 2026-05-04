@@ -15,6 +15,7 @@ import {
   getUserById,
 } from '../database/db';
 
+// Formats numeric summary values with a fixed number of decimals.
 const formatNumber = (value, digits = 2) => {
   const numericValue = Number(value || 0);
 
@@ -25,6 +26,7 @@ const formatNumber = (value, digits = 2) => {
   return numericValue.toFixed(digits);
 };
 
+// Formats currency values for summary tables and exports.
 const formatCurrency = value => {
   const numericValue = Number(value || 0);
 
@@ -35,6 +37,7 @@ const formatCurrency = value => {
   return numericValue.toFixed(2);
 };
 
+// Provides a blank metric shape for farm and overall totals.
 const createEmptyMetrics = () => ({
   initialChicks: 0,
   birdsAlive: 0,
@@ -50,6 +53,7 @@ const createEmptyMetrics = () => ({
   batchCount: 0,
 });
 
+// Calculates derived farm metrics from accumulated totals.
 const calculateMetricsFromTotals = totals => {
   const mortalityRate = totals.initialChicks > 0 ? (totals.totalMortality / totals.initialChicks) * 100 : 0;
   const totalExpenses = totals.totalFeedCost + totals.otherExpenses;
@@ -64,7 +68,9 @@ const calculateMetricsFromTotals = totals => {
   };
 };
 
+// Shows farm-level performance summaries across accessible farms.
 export default function FarmPerformanceSummaryScreen({ navigation, route }) {
+  // Stores route filters, current user, summaries, dropdown state, refresh state, and export state.
   const userId = route?.params?.userId;
   const initialFarmId = route?.params?.initialFarmId;
   const targetFarmId = initialFarmId != null ? String(initialFarmId) : 'all';
@@ -77,6 +83,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
   const [showFarmDropdown, setShowFarmDropdown] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  // Loads accessible farms and rolls up batch, feed, mortality, expense, and sales metrics.
   const loadSummary = useCallback((done) => {
     if (!userId) {
       setCurrentUser(null);
@@ -120,6 +127,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
         const totalFarmOperations = scopedFarms.length;
         let completedFarmOperations = 0;
 
+        // Finalizes the overall summary once every scoped farm has been processed.
         const finalizeFarmSummaryLoad = () => {
           completedFarmOperations += 1;
 
@@ -164,6 +172,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
             let farmExpensesLoaded = false;
             let batchMetricsLoaded = false;
 
+            // Adds one farm summary after farm expenses and batch metrics have both loaded.
             const maybeFinalizeFarm = () => {
               if (!farmExpensesLoaded || !batchMetricsLoaded) {
                 return;
@@ -242,18 +251,21 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
     });
   }, [navigation, targetFarmId, userId]);
 
+  // Refreshes farm summary data whenever the screen receives focus.
   useFocusEffect(
     useCallback(() => {
       loadSummary();
     }, [loadSummary])
   );
 
+  // Handles pull-to-refresh for summary data.
   const handleRefresh = () => {
     setRefreshing(true);
     setShowFarmDropdown(false);
     loadSummary(() => setRefreshing(false));
   };
 
+  // Builds the active summary view from either one farm or the overall totals.
   const roleLabel = currentUser?.role ? currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1) : 'User';
   const selectedFarmSummary = useMemo(
     () => farmSummaries.find(farm => String(farm.farm_id) === String(selectedFarmId)) ?? null,
@@ -325,6 +337,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
     { key: 'profit', title: 'Profit', width: 120 },
   ], []);
 
+  // Exports either the selected farm summary or all farm summaries to Excel.
   const handleExport = useCallback(async () => {
     if (exporting) {
       return;
@@ -396,6 +409,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
       <Text style={styles.subtitle}>
         {selectedFarmSummary ? `${roleLabel} view for ${selectedFarmSummary.farm_name}` : `${roleLabel} view across accessible farms`}
       </Text>
+      {/* Exports the current farm performance view. */}
       <TouchableOpacity
         style={[styles.exportButton, exporting ? styles.exportButtonDisabled : null]}
         activeOpacity={0.85}
@@ -407,6 +421,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
         </Text>
       </TouchableOpacity>
 
+      {/* Lets the user switch between all farms and one farm. */}
       <View style={styles.filterCard}>
         <Text style={styles.filterLabel}>Choose farm</Text>
         <TouchableOpacity
@@ -458,6 +473,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
         ) : null}
       </View>
 
+      {/* Shows the selected summary in metric-table form. */}
       <View style={styles.overallCard}>
         <Text style={styles.sectionTitle}>{summaryTitle}</Text>
         <Text style={styles.overallMeta}>{summaryMeta}</Text>
@@ -472,6 +488,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
         />
       </View>
 
+      {/* Shows a farm-by-farm table when the overall view is selected. */}
       {!selectedFarmSummary && targetFarmId === 'all' ? <Text style={styles.sectionTitle}>By Farm</Text> : null}
       {!selectedFarmSummary && targetFarmId === 'all' && farmSummaries.length > 0 ? (
         <View style={styles.farmTableCard}>
@@ -507,6 +524,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
         ) : null
       )}
 
+      {/* Explains the data included in the farm performance rollup. */}
       <View style={styles.noteCard}>
         <Text style={styles.noteTitle}>Report Note</Text>
         <Text style={styles.noteText}>
@@ -519,6 +537,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
+  // Farm performance layout, export, filters, summary table, and note styles.
   container: {
     flexGrow: 1,
     padding: 20,

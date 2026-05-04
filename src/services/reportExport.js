@@ -10,6 +10,7 @@ const DECIMAL_KEYS = ['feed_quantity', 'feed_used'];
 const STATUS_KEYS = ['batch_status', 'status'];
 const ZERO_DEFAULT_KEYS = ['birds_alive', 'birds_sold', 'total_mortality', 'number_dead'];
 
+// Formats numeric values for spreadsheet cells.
 const formatNumber = (value, digits = 2) => {
   const numericValue = Number(value || 0);
 
@@ -20,6 +21,7 @@ const formatNumber = (value, digits = 2) => {
   return numericValue.toFixed(digits);
 };
 
+// Formats currency-like report values with two decimal places.
 const formatCurrency = value => {
   const numericValue = Number(value || 0);
 
@@ -30,6 +32,7 @@ const formatCurrency = value => {
   return numericValue.toFixed(2);
 };
 
+// Applies report-column-specific formatting before Excel export.
 const formatCellValue = (columnKey, value) => {
   if (ZERO_DEFAULT_KEYS.includes(columnKey)) {
     const numericValue = Number(value || 0);
@@ -51,6 +54,7 @@ const formatCellValue = (columnKey, value) => {
   return String(value ?? 'N/A');
 };
 
+// Produces a filesystem-safe report name.
 const sanitizeName = value =>
   String(value || 'report')
     .replace(/[\\/:*?"<>|]+/g, '-')
@@ -58,8 +62,10 @@ const sanitizeName = value =>
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
 
+// Pads date and time file-name parts to two digits.
 const padFilePart = value => String(value).padStart(2, '0');
 
+// Builds a timestamp that is safe to use in exported file names.
 const formatFileDateTime = date => {
   const year = date.getFullYear();
   const month = padFilePart(date.getMonth() + 1);
@@ -71,6 +77,7 @@ const formatFileDateTime = date => {
   return `${year}-${month}-${day}-${hours}-${minutes}-${seconds}`;
 };
 
+// Asks Android's media scanner to make the exported report visible to other apps.
 const scanAndroidFile = async path => {
   if (Platform.OS !== 'android' || !path) {
     return;
@@ -83,6 +90,7 @@ const scanAndroidFile = async path => {
   }
 };
 
+// Shares the exported Excel file using the native Android bridge or iOS share sheet.
 const shareReportFile = async ({ path, title }) => {
   if (!path) {
     return;
@@ -104,6 +112,7 @@ const shareReportFile = async ({ path, title }) => {
   });
 };
 
+// Requests legacy Android storage permission only on versions that require it.
 const ensureAndroidWritePermission = async () => {
   if (Platform.OS !== 'android' || Platform.Version >= 29) {
     return true;
@@ -116,12 +125,14 @@ const ensureAndroidWritePermission = async () => {
   return granted === PermissionsAndroid.RESULTS.GRANTED;
 };
 
+// Converts summary card values into rows for the first workbook sheet.
 const buildSummarySheetRows = summary =>
   summary.map(item => ({
     Metric: item.label,
     Value: item.value,
   }));
 
+// Converts visible report columns and data into rows for the data workbook sheet.
 const buildDataSheetRows = (columns, data) =>
   data.map(item => {
     const nextRow = {};
@@ -133,6 +144,7 @@ const buildDataSheetRows = (columns, data) =>
     return nextRow;
   });
 
+// Creates an Excel workbook, saves it to device storage, and attempts to share it.
 export const exportReportToExcel = async ({ reportType, report }) => {
   const workbook = XLSX.utils.book_new();
   const summarySheet = XLSX.utils.json_to_sheet(buildSummarySheetRows(report.summary));

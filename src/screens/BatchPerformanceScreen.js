@@ -11,6 +11,7 @@ import {
   getSalesByBatchId,
 } from '../database/db';
 
+// Formats numeric metric values with a fixed number of decimals.
 const formatNumber = (value, digits = 2) => {
   const numericValue = Number(value || 0);
 
@@ -21,6 +22,7 @@ const formatNumber = (value, digits = 2) => {
   return numericValue.toFixed(digits);
 };
 
+// Formats currency values for metric cards and exports.
 const formatCurrency = value => {
   const numericValue = Number(value || 0);
 
@@ -31,6 +33,7 @@ const formatCurrency = value => {
   return numericValue.toFixed(2);
 };
 
+// Renders one performance metric card.
 const MetricCard = ({ label, value, helper }) => (
   <View style={styles.metricCard}>
     <Text style={styles.metricLabel}>{label}</Text>
@@ -39,7 +42,9 @@ const MetricCard = ({ label, value, helper }) => (
   </View>
 );
 
+// Calculates and displays performance metrics for one batch.
 export default function BatchPerformanceScreen({ route }) {
+  // Stores route context, loaded batch data, calculated metrics, and export state.
   const batchId = route?.params?.batchId;
   const farmName = route?.params?.farmName;
 
@@ -48,6 +53,7 @@ export default function BatchPerformanceScreen({ route }) {
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  // Loads batch records and calculates mortality, feed, expense, revenue, and profit metrics.
   const loadPerformance = useCallback((done) => {
     if (!batchId) {
       setBatch(null);
@@ -149,17 +155,20 @@ export default function BatchPerformanceScreen({ route }) {
     });
   }, [batchId]);
 
+  // Refreshes metrics whenever the screen receives focus.
   useFocusEffect(
     useCallback(() => {
       loadPerformance();
     }, [loadPerformance])
   );
 
+  // Handles pull-to-refresh for batch performance data.
   const handleRefresh = () => {
     setRefreshing(true);
     loadPerformance(() => setRefreshing(false));
   };
 
+  // Builds and exports the batch performance report as Excel.
   const handleExport = useCallback(async () => {
     if (!batch || !metrics || exporting) {
       return;
@@ -227,6 +236,7 @@ export default function BatchPerformanceScreen({ route }) {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ffffff" />}
     >
       <Text style={styles.title}>Batch Performance</Text>
+      {/* Exports the current batch performance view. */}
       <TouchableOpacity
         style={[styles.exportButton, exporting ? styles.exportButtonDisabled : null]}
         activeOpacity={0.85}
@@ -249,6 +259,7 @@ export default function BatchPerformanceScreen({ route }) {
 
       {metrics ? (
         <>
+          {/* Shows the calculated performance metrics. */}
           <View style={styles.metricsGrid}>
             <MetricCard label="Total Birds Alive" value={String(metrics.totalBirdsAlive)} helper={`Initial chicks: ${batch?.initial_chicks ?? 0}`} />
             <MetricCard label="Total Dead" value={String(metrics.totalMortality)} helper={`Mortality rate: ${formatNumber(metrics.mortalityRate)}%`} />
@@ -275,6 +286,7 @@ export default function BatchPerformanceScreen({ route }) {
             <MetricCard label="Profit" value={formatCurrency(metrics.profit)} helper={metrics.profit >= 0 ? 'Revenue minus expenses' : 'This batch is currently at a loss'} />
           </View>
 
+          {/* Explains how the performance values are calculated. */}
           <View style={styles.noteCard}>
             <Text style={styles.noteTitle}>Report Note</Text>
             <Text style={styles.noteText}>
@@ -288,6 +300,7 @@ export default function BatchPerformanceScreen({ route }) {
 }
 
 const styles = StyleSheet.create({
+  // Batch performance layout, export, metric, and note styles.
   container: {
     flexGrow: 1,
     padding: 20,

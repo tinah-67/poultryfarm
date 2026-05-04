@@ -1,7 +1,9 @@
 import { importBootstrapData } from '../database/db';
 
+// Uses the backup server as the source for restoring account data onto a fresh device.
 const BACKUP_BASE_URL = 'http://192.168.100.26:3000';
 
+// Authenticates against the backup server and imports the returned local database records.
 export const bootstrapDeviceLogin = async (email, password) => {
   const response = await fetch(`${BACKUP_BASE_URL}/bootstrap/login`, {
     method: 'POST',

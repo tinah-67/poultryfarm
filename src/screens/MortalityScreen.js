@@ -4,7 +4,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { addMortalityRecord, getBatchById, getUserById } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 
+// Lets owner and worker users record mortality for an active batch.
 export default function MortalityScreen({ route, navigation }) {
+  // Stores route ids, mortality form fields, current user, and batch status.
   const batchId = route?.params?.batchId;
   const userId = route?.params?.userId;
   const [numberDead, setNumberDead] = useState('');
@@ -12,6 +14,7 @@ export default function MortalityScreen({ route, navigation }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [batch, setBatch] = useState(null);
 
+  // Reloads role and batch status whenever the screen receives focus.
   useFocusEffect(
     useCallback(() => {
       if (userId) {
@@ -34,6 +37,8 @@ export default function MortalityScreen({ route, navigation }) {
 
   const canRecordMortality = ['owner', 'worker'].includes(currentUser?.role);
   const isBatchCompleted = String(batch?.status || 'active').toLowerCase() === 'completed';
+
+  // Validates permission, batch status, and mortality fields before saving.
   const handleAdd = () => {
     if (!canRecordMortality) {
       Alert.alert('Access denied', 'Only owner and worker users can record mortality.');
@@ -81,6 +86,7 @@ export default function MortalityScreen({ route, navigation }) {
           This batch is completed. New mortality entries are disabled, but you can still view the existing records.
         </Text>
       ) : null}
+      {/* Shows entry fields only when mortality recording is allowed. */}
       {canRecordMortality && !isBatchCompleted ? (
         <>
           <TextInput
@@ -104,6 +110,7 @@ export default function MortalityScreen({ route, navigation }) {
         <Text style={styles.noteText}>You can review mortality records, but only owners and workers can add mortality entries.</Text>
       )}
 
+      {/* Opens existing mortality records for the batch. */}
       <View style={styles.actions}>
         <Button title="View Mortality Records" onPress={() => navigation.navigate('ViewMortality', { batchId, userId })} />
       </View>
@@ -112,6 +119,7 @@ export default function MortalityScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+  // Mortality form, locked-state, and action styles.
   container: { flex: 1, padding: 20 },
   title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
   lockedNote: { color: '#fecaca', marginBottom: 12 },

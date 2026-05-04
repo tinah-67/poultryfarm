@@ -8,14 +8,17 @@ import {
   getVaccinationRecordsByBatchId,
 } from '../database/db';
 
+// Orders reminder priorities so critical items appear before warnings and info.
 export const SEVERITY_ORDER = {
   critical: 0,
   warning: 1,
   info: 2,
 };
 
+// Defines age checkpoints where active batches should produce milestone reminders.
 const MILESTONE_DAYS = [7, 14, 21, 28, 35, 42];
 
+// Parses stored date strings as local dates to avoid timezone shifts in reminder math.
 const parseLocalDate = value => {
   if (!value) {
     return null;
@@ -36,13 +39,16 @@ const parseLocalDate = value => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+// Normalizes a date to midnight for day-level comparisons.
 const startOfDay = date => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
+// Calculates the whole-day difference between two dates.
 const getDaysBetween = (firstDate, secondDate) => {
   const millisecondsPerDay = 24 * 60 * 60 * 1000;
   return Math.floor((startOfDay(firstDate).getTime() - startOfDay(secondDate).getTime()) / millisecondsPerDay);
 };
 
+// Builds a readable label for batch-related reminders.
 const getBatchLabel = batch => {
   const breed = String(batch?.breed || '').trim();
   const startDate = String(batch?.start_date || '').trim();
@@ -58,6 +64,7 @@ const getBatchLabel = batch => {
   return `Batch #${batch?.batch_id ?? 'N/A'}`;
 };
 
+// Determines which reminder categories each role is allowed to see.
 export const canRoleSeeNotification = (role, notificationType) => {
   if (role === 'owner') {
     return true;
@@ -85,11 +92,13 @@ export const canRoleSeeNotification = (role, notificationType) => {
   return false;
 };
 
+// Converts callback-style database helpers into promises for reminder generation.
 const toPromise = executor =>
   new Promise(resolve => {
     executor(resolve);
   });
 
+// Promise wrappers for the database reads needed by the reminder engine.
 const getUserByIdAsync = userId => toPromise(resolve => getUserById(userId, resolve));
 const getAccessibleFarmsAsync = userId => toPromise(resolve => getAccessibleFarms(userId, resolve));
 const getBatchesByFarmIdAsync = farmId => toPromise(resolve => getBatchesByFarmId(farmId, resolve));
@@ -98,6 +107,7 @@ const getMortalityRecordsByBatchIdAsync = batchId => toPromise(resolve => getMor
 const getSalesByBatchIdAsync = batchId => toPromise(resolve => getSalesByBatchId(batchId, resolve));
 const getVaccinationRecordsByBatchIdAsync = batchId => toPromise(resolve => getVaccinationRecordsByBatchId(batchId, resolve));
 
+// Sorts reminder items by severity and title for stable display.
 export const sortNotifications = items =>
   items.slice().sort((left, right) => {
     const severityDifference = SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity];
@@ -109,9 +119,11 @@ export const sortNotifications = items =>
     return left.title.localeCompare(right.title);
   });
 
+// Filters reminders by role and then sorts them for display.
 export const filterNotificationsForRole = (items, role) =>
   sortNotifications(items.filter(item => canRoleSeeNotification(role, item.type)));
 
+// Loads farm and batch data, generates reminders, and returns only items visible to the user.
 export const loadNotificationsForUser = async userId => {
   if (!userId) {
     return {
@@ -188,6 +200,7 @@ export const loadNotificationsForUser = async userId => {
           const lowBirdThreshold = Math.max(10, Math.ceil(initialChicks * 0.1));
           const items = [];
 
+          // Creates milestone reminders when a batch reaches key growth days.
           if (isActive && ageInDays != null && MILESTONE_DAYS.includes(ageInDays)) {
             items.push({
               id: `milestone-${batch.batch_id}-${ageInDays}`,
@@ -202,6 +215,7 @@ export const loadNotificationsForUser = async userId => {
             });
           }
 
+          // Warns when mortality rises above the normal operating threshold.
           if (isActive && mortalityRate >= 5) {
             items.push({
               id: `mortality-${batch.batch_id}`,
@@ -216,6 +230,7 @@ export const loadNotificationsForUser = async userId => {
             });
           }
 
+          // Flags active batches that are close to market age with birds available.
           if (isActive && ageInDays != null && ageInDays >= 49 && birdsAlive > 0) {
             items.push({
               id: `sale-ready-${batch.batch_id}`,
@@ -230,6 +245,7 @@ export const loadNotificationsForUser = async userId => {
             });
           }
 
+          // Notes batches where only a small number of birds remain unsold.
           if (isActive && birdsAlive > 0 && birdsAlive <= lowBirdThreshold && totalSold > 0) {
             items.push({
               id: `low-stock-${batch.batch_id}`,
@@ -244,6 +260,7 @@ export const loadNotificationsForUser = async userId => {
             });
           }
 
+          // Reminds users to record feed if records are missing or stale.
           if (isActive && safeFeedRecords.length === 0) {
             items.push({
               id: `feed-missing-${batch.batch_id}`,
@@ -270,6 +287,7 @@ export const loadNotificationsForUser = async userId => {
             });
           }
 
+          // Creates overdue and upcoming vaccination reminders from next due dates.
           safeVaccinationRecords.forEach(record => {
             const nextDueDate = parseLocalDate(record.next_due_date);
             const dueCompletedAt = parseLocalDate(record.due_completed_at);
@@ -312,6 +330,7 @@ export const loadNotificationsForUser = async userId => {
             }
           });
 
+          // Warns when a completed batch still shows birds alive.
           if (!isActive && birdsAlive > 0) {
             items.push({
               id: `completed-with-birds-${batch.batch_id}`,

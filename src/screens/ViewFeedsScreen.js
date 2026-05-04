@@ -5,13 +5,16 @@ import { deleteFeedRecord, getFeedRecordsByBatch, getUserById } from '../databas
 import DataTable from '../components/DataTable';
 import ScreenBackground from '../components/ScreenBackground';
 
+// Shows feed records for one batch and allows permitted users to delete them.
 export default function ViewFeedsScreen({ route, navigation }) {
+    // Stores route ids, loaded feed rows, and current user role.
     const batchId = route?.params?.batchId;
     const userId = route?.params?.userId;
 
     const [records, setRecords] = useState([]);
     const [currentUser, setCurrentUser] = useState(null);
 
+    // Loads active feed records for the selected batch.
     const loadFeed = useCallback(() => {
         if (!batchId) {
         setRecords([]);
@@ -23,6 +26,7 @@ export default function ViewFeedsScreen({ route, navigation }) {
         });
     }, [batchId]);
 
+    // Reloads the current role and feed records whenever the screen receives focus.
     useFocusEffect(
         useCallback(() => {
         if (userId) {
@@ -37,6 +41,7 @@ export default function ViewFeedsScreen({ route, navigation }) {
         }, [loadFeed, userId])
     );
 
+    // Computes summary values and table columns for the feed list.
     const canDeleteFeed = ['owner', 'worker'].includes(currentUser?.role);
     const totalQuantity = records.reduce((sum, item) => sum + Number(item.feed_quantity || item.quantity || 0), 0);
     const columns = [
@@ -46,6 +51,7 @@ export default function ViewFeedsScreen({ route, navigation }) {
         { key: 'actions', title: 'Actions', width: 120 },
     ];
 
+    // Confirms and soft-deletes a feed record when the role allows it.
     const handleDelete = id => {
         if (!canDeleteFeed) {
         Alert.alert('Access denied', 'Only owner and worker users can delete feed records.');
@@ -74,10 +80,12 @@ export default function ViewFeedsScreen({ route, navigation }) {
         <Text style={styles.title}>Feed Records</Text>
         <Text style={styles.total}>Total Feed Consumed: {totalQuantity} kg</Text>
 
+        {/* Opens the feed entry screen for this batch. */}
         <View style={styles.actions}>
             <ButtonLink title="Record Feed" onPress={() => navigation.navigate('Feed', { batchId, userId })} />
         </View>
 
+        {/* Displays the feed records in a reusable table. */}
         <View style={styles.tableWrapper}>
             <DataTable
             columns={columns}
@@ -118,6 +126,7 @@ export default function ViewFeedsScreen({ route, navigation }) {
     );
     }
 
+    // Renders a compact primary action button above the table.
     const ButtonLink = ({ title, onPress }) => (
     <TouchableOpacity style={styles.primaryAction} onPress={onPress}>
         <Text style={styles.primaryActionText}>{title}</Text>
@@ -125,6 +134,7 @@ export default function ViewFeedsScreen({ route, navigation }) {
     );
 
     const styles = StyleSheet.create({
+    // Feed records table, action, and cell styles.
     container: {
         flex: 1,
         padding: 20,

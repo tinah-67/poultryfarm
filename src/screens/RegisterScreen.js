@@ -5,6 +5,7 @@ import ScreenBackground from '../components/ScreenBackground';
 import { syncPendingBackup } from '../services/backupSync';
 import { RECOVERY_QUESTIONS } from '../constants/recoveryQuestions';
 
+// Validates owner and staff account fields before allowing registration.
 const getValidationMessage = ({
   firstName,
   lastName,
@@ -71,7 +72,9 @@ const getValidationMessage = ({
   return '';
 };
 
+// Creates owner accounts from public sign-up and staff accounts from the owner dashboard.
 export default function RegisterScreen({ navigation, route }) {
+  // Determines whether this screen is creating an owner account or an owner-linked staff account.
   const ownerUserId = route?.params?.ownerUserId ?? null;
   const isOwnerCreatingStaff = ownerUserId != null;
   const requiresRecoverySetup = !isOwnerCreatingStaff;
@@ -80,6 +83,7 @@ export default function RegisterScreen({ navigation, route }) {
     { label: 'Worker', value: 'worker' },
   ];
 
+  // Stores account form fields and dropdown visibility state.
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -102,6 +106,7 @@ export default function RegisterScreen({ navigation, route }) {
     (requiresRecoverySetup && (recoveryQuestion || recoveryAnswer))
   );
 
+  // Shows validation feedback after the user begins entering account details.
   useEffect(() => {
     if (!hasStartedTyping) {
       setErrorMessage('');
@@ -135,6 +140,7 @@ export default function RegisterScreen({ navigation, route }) {
     requiresRecoverySetup,
   ]);
 
+  // Validates the form, prevents duplicate emails, creates the user, and attempts backup sync.
   const handleRegister = () => {
     const normalizedEmail = email.trim().toLowerCase();
     const targetRole = isOwnerCreatingStaff ? role : 'owner';
@@ -229,6 +235,7 @@ export default function RegisterScreen({ navigation, route }) {
         {isOwnerCreatingStaff ? `Staff Role: ${role}` : 'Public sign-up creates owner accounts only'}
       </Text>
 
+      {/* Lets owners select whether the staff account is a manager or worker. */}
       {isOwnerCreatingStaff ? (
         <View style={styles.dropdownContainer}>
           <TouchableOpacity
@@ -268,6 +275,7 @@ export default function RegisterScreen({ navigation, route }) {
         </View>
       ) : null}
 
+      {/* Collects the user's name and email identity. */}
       <TextInput
         placeholder="First Name"
         placeholderTextColor="#999"
@@ -291,6 +299,7 @@ export default function RegisterScreen({ navigation, route }) {
         style={styles.input}
       />
 
+      {/* Collects and confirms the password with visibility toggles. */}
       <View style={styles.passwordField}>
         <TextInput
           placeholder="Password"
@@ -319,6 +328,7 @@ export default function RegisterScreen({ navigation, route }) {
         </TouchableOpacity>
       </View>
 
+      {/* Owner self-registration requires recovery setup immediately. */}
       {requiresRecoverySetup ? (
         <>
           <View style={styles.dropdownContainer}>
@@ -372,6 +382,7 @@ export default function RegisterScreen({ navigation, route }) {
         onPress={handleRegister}
       />
 
+      {/* Public owner registration can return to login after account creation. */}
       {!isOwnerCreatingStaff ? (
         <TouchableOpacity onPress={() => navigation.navigate('Login')}>
           <Text style={styles.loginLink}>Already have an account? Login</Text>
@@ -382,6 +393,7 @@ export default function RegisterScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
+  // Form layout, validation, dropdown, and password field styles.
   container: {
     flexGrow: 1,
     padding: 20,

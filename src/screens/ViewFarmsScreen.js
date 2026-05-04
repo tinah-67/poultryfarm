@@ -4,7 +4,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { getAccessibleFarms, deleteFarm, updateFarm, getUserById } from '../database/db';
 import DataTable from '../components/DataTable';
 
+// Lists farms visible to the user and supports farm selection, editing, and deletion.
 export default function ViewFarmsScreen({ navigation, route }) {
+  // Stores route mode, farm data, search text, editing state, and refresh state.
   const userId = route?.params?.userId ?? route?.params?.user_Id;
   const selectionMode = route?.params?.selectionMode;
   const [farms, setFarms] = useState([]);
@@ -15,6 +17,7 @@ export default function ViewFarmsScreen({ navigation, route }) {
   const [newLocation, setNewLocation] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
+  // Loads the current user and their accessible farms.
   const loadContext = useCallback((done) => {
     if (!userId) {
       setCurrentUser(null);
@@ -33,17 +36,20 @@ export default function ViewFarmsScreen({ navigation, route }) {
     });
   }, [userId]);
 
+  // Refreshes farms each time the screen is focused.
   useFocusEffect(
     useCallback(() => {
       loadContext();
     }, [loadContext])
   );
 
+  // Computes permissions and selection mode flags for this list.
   const isOwner = currentUser?.role === 'owner';
   const canViewFarmPerformance = currentUser?.role !== 'worker';
   const isExpenseSelectionMode = selectionMode === 'expense';
   const isBatchSelectionMode = selectionMode === 'batch';
 
+  // Confirms and soft-deletes a farm when the owner allows it.
   const handleDelete = (id) => {
     if (!isOwner) {
       Alert.alert('Access denied', 'Only owner users can delete farms.');
@@ -67,6 +73,7 @@ export default function ViewFarmsScreen({ navigation, route }) {
     );
   };
 
+  // Starts inline editing for one farm row.
   const startEdit = (farm) => {
     if (!isOwner) {
       Alert.alert('Access denied', 'Only owner users can edit farms.');
@@ -78,6 +85,7 @@ export default function ViewFarmsScreen({ navigation, route }) {
     setNewLocation(farm.location);
   };
 
+  // Saves inline farm edits and reloads the list.
   const saveEdit = () => {
     if (!isOwner) {
       Alert.alert('Access denied', 'Only owner users can edit farms.');
@@ -89,11 +97,13 @@ export default function ViewFarmsScreen({ navigation, route }) {
     loadContext();
   };
 
+  // Handles pull-to-refresh for the farm list.
   const handleRefresh = () => {
     setRefreshing(true);
     loadContext(() => setRefreshing(false));
   };
 
+  // Builds table columns according to role and selection workflow.
   const columns = useMemo(() => {
     const baseColumns = [
       { key: 'farm_name', title: 'Farm Name', width: 160 },
@@ -116,6 +126,7 @@ export default function ViewFarmsScreen({ navigation, route }) {
     return [...baseColumns, { key: 'actions', title: 'Actions', width: canViewFarmPerformance ? 360 : 260 }];
   }, [canViewFarmPerformance, isBatchSelectionMode, isExpenseSelectionMode, isOwner]);
 
+  // Filters farms by name or location search text.
   const filteredFarms = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
@@ -136,6 +147,7 @@ export default function ViewFarmsScreen({ navigation, route }) {
       contentContainerStyle={styles.contentContainer}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
     >
+      {/* Shows top-level farm actions when this is the normal management view. */}
       {isOwner && !isExpenseSelectionMode && !isBatchSelectionMode ? (
         <Button
           title="Add New Farm"
@@ -162,6 +174,7 @@ export default function ViewFarmsScreen({ navigation, route }) {
           : 'These farms are linked to the owner account that created your login.'}
       </Text>
 
+      {/* Lets the user search farms before choosing a row action. */}
       <TextInput
         value={searchQuery}
         onChangeText={setSearchQuery}
@@ -170,6 +183,7 @@ export default function ViewFarmsScreen({ navigation, route }) {
         placeholderTextColor="#64748b"
       />
 
+      {/* Displays farms and row actions in a reusable table. */}
       <DataTable
         columns={columns}
         data={filteredFarms}
@@ -337,6 +351,7 @@ export default function ViewFarmsScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
+  // Farm list layout, table cell, search, edit, and action styles.
   container: { flex: 1, backgroundColor: '#f1f5f9' },
   contentContainer: { padding: 20 },
   topAction: { marginTop: 10, marginBottom: 6 },

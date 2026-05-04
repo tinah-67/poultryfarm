@@ -4,23 +4,28 @@ import DashboardScreen from './DashboardScreen';
 import NotificationsScreen from './NotificationsScreen';
 import HelpScreen from './HelpScreen';
 
+// Defines the bottom tabs available after login.
 const TAB_CONFIG = [
   { key: 'dashboard', label: 'Dashboard', icon: '\u2302' },
   { key: 'notifications', label: 'Reminders', icon: '\u25A3' },
   { key: 'help', label: 'Help', icon: '?' },
 ];
 
+// Hosts the dashboard, reminders, and help screens behind a persistent bottom tab bar.
 export default function HomeShellScreen({ navigation, route }) {
+  // Tracks the active tab and the signed-in user id shared by each child screen.
   const userId = route?.params?.userId;
   const requestedTab = route?.params?.activeTab;
   const [activeTab, setActiveTab] = useState(requestedTab || 'dashboard');
 
+  // Responds to navigation requests that ask the shell to open a specific tab.
   useEffect(() => {
     if (requestedTab && requestedTab !== activeTab) {
       setActiveTab(requestedTab);
     }
   }, [activeTab, requestedTab]);
 
+  // Passes the current user id through to whichever tab screen is active.
   const sharedRoute = useMemo(
     () => ({
       ...route,
@@ -32,6 +37,7 @@ export default function HomeShellScreen({ navigation, route }) {
     [route, userId]
   );
 
+  // Keeps child screen props consistent across the tab switcher.
   const screenProps = {
     navigation,
     route: sharedRoute,
@@ -40,6 +46,7 @@ export default function HomeShellScreen({ navigation, route }) {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
+        {/* Renders only the currently selected tab content. */}
         {activeTab === 'dashboard' ? (
           <DashboardScreen {...screenProps} showBottomTabs />
         ) : null}
@@ -51,6 +58,7 @@ export default function HomeShellScreen({ navigation, route }) {
         ) : null}
       </View>
 
+      {/* Renders the bottom tab bar. */}
       <View style={styles.tabBar}>
         {TAB_CONFIG.map(tab => {
           const isActive = activeTab === tab.key;
@@ -73,6 +81,7 @@ export default function HomeShellScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
+  // Shell layout and tab bar styles.
   container: {
     flex: 1,
     backgroundColor: '#0f172a',

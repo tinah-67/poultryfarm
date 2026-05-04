@@ -3,10 +3,13 @@ import { StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { getUserById } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 
+// Shows farm-level actions based on the signed-in user's role.
 export default function FarmManagementScreen({ navigation, route }) {
+  // Loads the current user so owner-only actions can be hidden from staff.
   const userId = route?.params?.userId ?? route?.params?.user_Id;
   const [currentUser, setCurrentUser] = useState(null);
 
+  // Fetches the user whenever the route user id changes.
   useEffect(() => {
     if (!userId) {
       setCurrentUser(null);
@@ -27,6 +30,7 @@ export default function FarmManagementScreen({ navigation, route }) {
         Choose what you want to manage at farm level.
       </Text>
 
+      {/* Owners can create farms; managers can only manage existing accessible farms. */}
       {canAddFarm ? (
         <TouchableOpacity
           style={styles.card}
@@ -37,6 +41,7 @@ export default function FarmManagementScreen({ navigation, route }) {
         </TouchableOpacity>
       ) : null}
 
+      {/* Opens farm lists for viewing, expenses, or performance workflows. */}
       <TouchableOpacity
         style={styles.card}
         activeOpacity={0.85}
@@ -65,6 +70,7 @@ export default function FarmManagementScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
+  // Layout, heading, and farm action button styles.
   container: {
     flex: 1,
     padding: 20,

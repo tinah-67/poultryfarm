@@ -5,12 +5,15 @@ import { deleteMortalityRecord, getMortalityRecordsByBatchId, getUserById } from
 import DataTable from '../components/DataTable';
 import ScreenBackground from '../components/ScreenBackground';
 
+// Shows mortality records for one batch and allows permitted users to delete them.
 export default function ViewMortalityScreen({ route, navigation }) {
+  // Stores route ids, loaded mortality rows, and current user role.
   const batchId = route?.params?.batchId;
   const userId = route?.params?.userId;
   const [records, setRecords] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
 
+  // Loads active mortality records for the selected batch.
   const loadRecords = useCallback(() => {
     if (!batchId) {
       setRecords([]);
@@ -20,6 +23,7 @@ export default function ViewMortalityScreen({ route, navigation }) {
     getMortalityRecordsByBatchId(batchId, setRecords);
   }, [batchId]);
 
+  // Reloads the current role and mortality records whenever the screen receives focus.
   useFocusEffect(
     useCallback(() => {
       if (userId) {
@@ -32,6 +36,7 @@ export default function ViewMortalityScreen({ route, navigation }) {
     }, [loadRecords, userId])
   );
 
+  // Computes summary values and table columns for the mortality list.
   const canDeleteMortality = ['owner', 'worker'].includes(currentUser?.role);
   const totalDead = records.reduce((sum, item) => sum + Number(item.number_dead || 0), 0);
   const columns = [
@@ -41,6 +46,7 @@ export default function ViewMortalityScreen({ route, navigation }) {
     { key: 'actions', title: 'Actions', width: 120 },
   ];
 
+  // Confirms and soft-deletes a mortality record when the role allows it.
   const handleDelete = mortalityId => {
     if (!canDeleteMortality) {
       Alert.alert('Access denied', 'Only owner and worker users can delete mortality records.');
@@ -61,9 +67,11 @@ export default function ViewMortalityScreen({ route, navigation }) {
     <ScreenBackground contentContainerStyle={styles.container}>
       <Text style={styles.title}>Mortality Records</Text>
       <Text style={styles.summary}>Total Dead: {totalDead}</Text>
+      {/* Opens the mortality entry screen for this batch. */}
       <View style={styles.actions}>
         <ButtonLink title="Record Mortality" onPress={() => navigation.navigate('Mortality', { batchId, userId })} />
       </View>
+      {/* Displays mortality records in a reusable table. */}
       <View style={styles.tableWrapper}>
         <DataTable
           columns={columns}
@@ -89,6 +97,7 @@ export default function ViewMortalityScreen({ route, navigation }) {
   );
 }
 
+// Renders a compact primary action button above the table.
 const ButtonLink = ({ title, onPress }) => (
   <TouchableOpacity style={styles.primaryAction} onPress={onPress}>
     <Text style={styles.primaryActionText}>{title}</Text>
@@ -96,6 +105,7 @@ const ButtonLink = ({ title, onPress }) => (
 );
 
 const styles = StyleSheet.create({
+  // Mortality records table, action, and cell styles.
   container: { flex: 1, padding: 20 },
   title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
   summary: { marginBottom: 12, fontWeight: '700', color: '#fff' },

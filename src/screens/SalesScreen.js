@@ -10,7 +10,9 @@ import {
 } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 
+// Lets owner and manager users record bird sales for an active batch.
 export default function SalesScreen({ route, navigation }) {
+  // Stores route ids, sale fields, role data, available birds, and batch status.
   const batchId = route?.params?.batchId;
   const userId = route?.params?.userId;
   const [birdsSold, setBirdsSold] = useState('');
@@ -19,6 +21,7 @@ export default function SalesScreen({ route, navigation }) {
   const [availableBirds, setAvailableBirds] = useState(0);
   const [batch, setBatch] = useState(null);
 
+  // Calculates birds still available after mortality and previous sales.
   const loadAvailableBirds = useCallback((done) => {
     if (!batchId) {
       setAvailableBirds(0);
@@ -55,6 +58,7 @@ export default function SalesScreen({ route, navigation }) {
     });
   }, [batchId]);
 
+  // Reloads role and available bird count whenever the screen receives focus.
   useFocusEffect(
     useCallback(() => {
       if (userId) {
@@ -71,6 +75,8 @@ export default function SalesScreen({ route, navigation }) {
 
   const canRecordSales = ['owner', 'manager'].includes(currentUser?.role);
   const isBatchCompleted = String(batch?.status || 'active').toLowerCase() === 'completed';
+
+  // Validates permission, batch status, quantity, price, and available birds before saving.
   const handleAdd = () => {
     if (!canRecordSales) {
       Alert.alert('Access denied', 'Only owner and manager users can record sales.');
@@ -134,6 +140,7 @@ export default function SalesScreen({ route, navigation }) {
         </Text>
       ) : null}
       <Text style={styles.summary}>Birds Available for Sale: {availableBirds}</Text>
+      {/* Shows sale entry fields only when recording is allowed. */}
       {canRecordSales && !isBatchCompleted ? (
         <>
           <TextInput
@@ -158,6 +165,7 @@ export default function SalesScreen({ route, navigation }) {
         <Text style={styles.noteText}>You can review sales records, but only owners and managers can add sales entries.</Text>
       )}
 
+      {/* Opens existing sales records for this batch. */}
       <View style={styles.actions}>
         <Button title="View Sales Records" onPress={() => navigation.navigate('ViewSales', { batchId, userId })} />
       </View>
@@ -166,6 +174,7 @@ export default function SalesScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+  // Sales form, available-birds summary, locked-state, and action styles.
   container: { flex: 1, padding: 20 },
   title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
   lockedNote: { color: '#fecaca', marginBottom: 12 },

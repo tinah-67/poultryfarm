@@ -5,12 +5,15 @@ import { deleteVaccinationRecord, getUserById, getVaccinationRecordsByBatchId } 
 import DataTable from '../components/DataTable';
 import ScreenBackground from '../components/ScreenBackground';
 
+// Shows vaccination records and follow-up actions for one batch.
 export default function ViewVaccinationsScreen({ route, navigation }) {
+  // Stores route ids, loaded vaccination rows, and current user role.
   const batchId = route?.params?.batchId;
   const userId = route?.params?.userId;
   const [records, setRecords] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
 
+  // Loads active vaccination records for the selected batch.
   const loadRecords = useCallback(() => {
     if (!batchId) {
       setRecords([]);
@@ -20,6 +23,7 @@ export default function ViewVaccinationsScreen({ route, navigation }) {
     getVaccinationRecordsByBatchId(batchId, setRecords);
   }, [batchId]);
 
+  // Reloads the current role and vaccination records whenever the screen receives focus.
   useFocusEffect(
     useCallback(() => {
       if (userId) {
@@ -32,6 +36,7 @@ export default function ViewVaccinationsScreen({ route, navigation }) {
     }, [loadRecords, userId])
   );
 
+  // Computes permissions, follow-up helpers, and table columns.
   const canDeleteVaccination = ['owner', 'worker'].includes(currentUser?.role);
   const canRecordVaccination = ['owner', 'worker'].includes(currentUser?.role);
   const hasNextDueDate = value => String(value || '').trim().length > 0;
@@ -45,6 +50,7 @@ export default function ViewVaccinationsScreen({ route, navigation }) {
     { key: 'actions', title: 'Actions', width: 170 },
   ];
 
+  // Confirms and soft-deletes a vaccination record when the role allows it.
   const handleDelete = vaccinationId => {
     if (!canDeleteVaccination) {
       Alert.alert('Access denied', 'Only owner and worker users can delete vaccination records.');
@@ -61,6 +67,7 @@ export default function ViewVaccinationsScreen({ route, navigation }) {
     );
   };
 
+  // Opens the vaccination form prefilled for a pending follow-up dose.
   const handleRecordFollowUp = record => {
     if (!canRecordVaccination) {
       Alert.alert('Access denied', 'Only owner and worker users can record vaccinations.');
@@ -79,9 +86,11 @@ export default function ViewVaccinationsScreen({ route, navigation }) {
   return (
     <ScreenBackground contentContainerStyle={styles.container}>
       <Text style={styles.title}>Vaccination Records</Text>
+      {/* Opens the vaccination entry screen for this batch. */}
       <View style={styles.actions}>
         <ButtonLink title="Record Vaccination" onPress={() => navigation.navigate('Vaccination', { batchId, userId })} />
       </View>
+      {/* Displays vaccination records and row-level actions in a reusable table. */}
       <View style={styles.tableWrapper}>
         <DataTable
           columns={columns}
@@ -130,6 +139,7 @@ export default function ViewVaccinationsScreen({ route, navigation }) {
   );
 }
 
+// Renders a compact primary action button above the table.
 const ButtonLink = ({ title, onPress }) => (
   <TouchableOpacity style={styles.primaryAction} onPress={onPress}>
     <Text style={styles.primaryActionText}>{title}</Text>
@@ -137,6 +147,7 @@ const ButtonLink = ({ title, onPress }) => (
 );
 
 const styles = StyleSheet.create({
+  // Vaccination records table, action, status, and cell styles.
   container: { flex: 1, padding: 20 },
   title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
   actions: { marginBottom: 14 },

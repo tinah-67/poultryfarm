@@ -1,6 +1,7 @@
 import React from 'react';
 import { ImageBackground, ScrollView, StyleSheet, View } from 'react-native';
 
+// Provides the shared chicken image background and dark overlay used by app screens.
 export default function ScreenBackground({
   children,
   scroll = false,
@@ -8,6 +9,7 @@ export default function ScreenBackground({
   keyboardShouldPersistTaps,
   refreshControl,
 }) {
+  // Uses a scroll view when the screen content may be taller than the viewport.
   if (scroll) {
     return (
       <ImageBackground
@@ -29,6 +31,7 @@ export default function ScreenBackground({
     );
   }
 
+  // Uses a fixed content container for simple non-scrolling screens.
   return (
     <ImageBackground
       source={require('../Broilers-Chickens.webp')}
@@ -43,6 +46,7 @@ export default function ScreenBackground({
 }
 
 const styles = StyleSheet.create({
+  // Covers the screen with the shared image and readable overlay.
   background: {
     flex: 1,
   },

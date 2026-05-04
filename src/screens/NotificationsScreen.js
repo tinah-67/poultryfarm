@@ -9,20 +9,25 @@ import {
   saveNotificationInboxItems,
 } from '../database/db';
 
+// Converts callback-style database helpers into promises so async/await can be used.
 const toPromise = executor =>
   new Promise(resolve => {
     executor(resolve);
   });
 
+// Loads saved reminder messages from the local notification inbox.
 const getNotificationInboxItemsAsync = userId =>
   toPromise(resolve => getNotificationInboxItems(userId, resolve));
 
+// Marks one reminder as read in the local notification inbox.
 const markNotificationInboxItemReadAsync = notificationId =>
   toPromise(resolve => markNotificationInboxItemRead(notificationId, resolve));
 
+// Persists newly generated reminders so they remain available offline.
 const saveNotificationInboxItemsAsync = (userId, items) =>
   toPromise(resolve => saveNotificationInboxItems(userId, items, resolve));
 
+// Defines the allowed reminder priorities and the visible inbox filters.
 const VALID_SEVERITIES = ['critical', 'warning', 'info'];
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -32,6 +37,7 @@ const FILTERS = [
   { key: 'info', label: 'Info' },
 ];
 
+// Ensures each reminder has the fields needed by the inbox UI.
 const normalizeMessageItem = item => {
   const severity = VALID_SEVERITIES.includes(item?.severity) ? item.severity : 'info';
   const title = String(item?.title || 'Farm reminder').trim();
@@ -52,6 +58,7 @@ const normalizeMessageItem = item => {
   };
 };
 
+// Orders reminder messages with the newest items first.
 const sortMessages = items =>
   items.slice().sort((left, right) => {
     const rightTime = Date.parse(right.deliveredAt) || 0;
@@ -59,6 +66,7 @@ const sortMessages = items =>
     return rightTime - leftTime;
   });
 
+// Combines saved inbox messages with newly generated messages and removes duplicates.
 const mergeMessages = (inboxMessages = [], liveMessages = []) => {
   const seenIds = new Set();
 
@@ -74,6 +82,7 @@ const mergeMessages = (inboxMessages = [], liveMessages = []) => {
     });
 };
 
+// Formats reminder delivery time for compact inbox display.
 const formatMessageTime = value => {
   const date = new Date(value);
 
@@ -91,9 +100,11 @@ const formatMessageTime = value => {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 };
 
+// Builds the small metadata line shown under each reminder preview.
 const buildMessageMeta = item =>
   [item.type, item.batchLabel, item.farmName].filter(Boolean).join(' - ');
 
+// Renders one count card in the reminder summary area.
 const MessageSummary = ({ label, value }) => (
   <View style={styles.summaryCard}>
     <Text style={styles.summaryLabel}>{label}</Text>
@@ -101,6 +112,7 @@ const MessageSummary = ({ label, value }) => (
   </View>
 );
 
+// Renders one reminder row with read/unread state and severity styling.
 const MessageListItem = ({ item, onPress }) => {
   const isUnread = !item.readAt;
 
@@ -136,13 +148,16 @@ const MessageListItem = ({ item, onPress }) => {
   );
 };
 
+// Shows the user's reminder inbox, including local offline messages and fresh generated alerts.
 export default function NotificationsScreen({ route, extraBottomPadding = 0 }) {
+  // Keeps route data and screen state together for loading, filtering, and refresh UI.
   const userId = route?.params?.userId;
   const [refreshing, setRefreshing] = useState(false);
   const [messages, setMessages] = useState([]);
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [currentUser, setCurrentUser] = useState(null);
 
+  // Loads fresh reminders, saves them locally, then merges them with the saved inbox.
   const loadMessages = useCallback(async (done) => {
     let liveUser = null;
     let liveMessages = [];
@@ -173,17 +188,20 @@ export default function NotificationsScreen({ route, extraBottomPadding = 0 }) {
     }
   }, [userId]);
 
+  // Refreshes reminders each time the user opens or returns to this screen.
   useFocusEffect(
     useCallback(() => {
       loadMessages();
     }, [loadMessages])
   );
 
+  // Handles pull-to-refresh and stops the spinner after loading finishes.
   const handleRefresh = () => {
     setRefreshing(true);
     loadMessages(() => setRefreshing(false));
   };
 
+  // Opens the reminder details and marks unread reminders as read.
   const handleOpenMessage = useCallback(item => {
     if (!item.readAt) {
       markNotificationInboxItemReadAsync(item.id).then(readAt => {
@@ -205,6 +223,7 @@ export default function NotificationsScreen({ route, extraBottomPadding = 0 }) {
     );
   }, []);
 
+  // Applies the selected inbox filter before rendering the message list.
   const filteredMessages = useMemo(() => {
     if (selectedFilter === 'all') {
       return messages;
@@ -217,6 +236,7 @@ export default function NotificationsScreen({ route, extraBottomPadding = 0 }) {
     return messages.filter(item => item.severity === selectedFilter);
   }, [messages, selectedFilter]);
 
+  // Calculates the summary counts shown at the top of the inbox.
   const summary = useMemo(() => ({
     total: messages.length,
     unread: messages.filter(item => !item.readAt).length,
@@ -238,12 +258,14 @@ export default function NotificationsScreen({ route, extraBottomPadding = 0 }) {
         <Text style={styles.subtitle}>Message inbox for farm alerts</Text>
       )}
 
+      {/* Shows the overall inbox totals. */}
       <View style={styles.summaryGrid}>
         <MessageSummary label="Messages" value={String(summary.total)} />
         <MessageSummary label="Unread" value={String(summary.unread)} />
         <MessageSummary label="Critical" value={String(summary.critical)} />
       </View>
 
+      {/* Lets the user narrow the inbox by read state or severity. */}
       <View style={styles.filterRow}>
         {FILTERS.map(filter => {
           const isSelected = selectedFilter === filter.key;
@@ -263,6 +285,7 @@ export default function NotificationsScreen({ route, extraBottomPadding = 0 }) {
         })}
       </View>
 
+      {/* Renders matching reminders or a simple empty state. */}
       <View style={styles.listPanel}>
         {filteredMessages.length ? filteredMessages.map(item => (
           <MessageListItem
@@ -279,6 +302,7 @@ export default function NotificationsScreen({ route, extraBottomPadding = 0 }) {
 }
 
 const styles = StyleSheet.create({
+  // Screen layout and heading styles.
   container: {
     flexGrow: 1,
     padding: 20,
@@ -293,6 +317,7 @@ const styles = StyleSheet.create({
     color: '#e2e8f0',
     marginBottom: 16,
   },
+  // Summary count card styles.
   summaryGrid: {
     gap: 10,
     marginBottom: 18,
@@ -312,6 +337,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
   },
+  // Filter chip styles.
   filterRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -334,6 +360,7 @@ const styles = StyleSheet.create({
   filterChipTextSelected: {
     color: '#166534',
   },
+  // Message list container and row styles.
   listPanel: {
     backgroundColor: 'rgba(248, 250, 252, 0.96)',
     borderRadius: 8,
@@ -351,6 +378,7 @@ const styles = StyleSheet.create({
   messageRowUnread: {
     backgroundColor: '#ffffff',
   },
+  // Severity avatar styles.
   avatar: {
     width: 42,
     height: 42,
@@ -373,6 +401,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  // Message body text and metadata styles.
   messageBody: {
     flex: 1,
   },
@@ -438,6 +467,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
   },
+  // Severity badge color styles.
   criticalBadge: {
     backgroundColor: '#fecaca',
     color: '#991b1b',
@@ -450,6 +480,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#bfdbfe',
     color: '#1d4ed8',
   },
+  // Empty inbox message style.
   emptyText: {
     color: '#475569',
     textAlign: 'center',

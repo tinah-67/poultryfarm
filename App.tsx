@@ -7,7 +7,7 @@ import { clearRememberedSession, getRememberedSession, initDB } from './src/data
 import { syncPendingBackup } from './src/services/backupSync';
 import { consumePendingNotificationOpen } from './src/services/localNotifications';
 
-// IMPORT SCREENS
+// Imports every screen registered in the navigation stack.
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
@@ -36,23 +36,29 @@ import ViewExpensesScreen from './src/screens/ViewExpensesScreen';
 import SalesScreen from './src/screens/SalesScreen';
 import ViewSalesScreen from './src/screens/ViewSalesScreen';
 
-// CREATE STACK
+// Creates the root stack navigator and a navigation ref for notification opens.
 const Stack = createNativeStackNavigator();
 const navigationRef = createNavigationContainerRef<any>();
+
+// Describes route params that may carry the signed-in user id.
 type RouteParamsWithUserId = {
   userId?: number | string;
 };
 
+// Initializes the app database, session restore, sync, notifications, and navigation.
 export default function App() {
+  // Tracks initial app readiness and the current user for notification routing.
   const [isReady, setIsReady] = useState(false);
   const [initialUserId, setInitialUserId] = useState<number | null>(null);
   const appStateRef = useRef(AppState.currentState);
   const currentUserIdRef = useRef<number | null>(null);
 
+  // Keeps the notification routing ref aligned with the restored session.
   useEffect(() => {
     currentUserIdRef.current = initialUserId;
   }, [initialUserId]);
 
+  // Opens the reminders tab when the app was launched from a notification.
   const openNotificationsFromIntent = useCallback(async () => {
     if (!isReady || !navigationRef.isReady()) {
       return;
@@ -83,6 +89,7 @@ export default function App() {
     navigationRef.navigate('Home', { userId: targetUserId, activeTab: 'notifications' });
   }, [isReady]);
 
+  // Boots the local database, attempts backup sync, and restores the remembered session.
   useEffect(() => {
     initDB();
     syncPendingBackup().catch(error => {
@@ -95,6 +102,7 @@ export default function App() {
     });
   }, []);
 
+  // Handles any pending notification intent after navigation becomes ready.
   useEffect(() => {
     if (!isReady) {
       return;
@@ -103,6 +111,7 @@ export default function App() {
     openNotificationsFromIntent();
   }, [isReady, openNotificationsFromIntent]);
 
+  // Watches app foreground/background changes for notification opens and session clearing.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
       const previousAppState = appStateRef.current;
@@ -124,6 +133,7 @@ export default function App() {
     };
   }, [openNotificationsFromIntent]);
 
+  // Shows a simple loading state while the database and session restore finish.
   if (!isReady) {
     return (
       <View style={styles.loadingContainer}>
@@ -132,6 +142,7 @@ export default function App() {
     );
   }
 
+  // Registers every app screen and preserves the current user id as navigation changes.
   return (
     <NavigationContainer
       ref={navigationRef}
@@ -148,14 +159,13 @@ export default function App() {
     >
       <Stack.Navigator initialRouteName={initialUserId ? 'Home' : 'Login'}>
 
-        {/* LOGIN */}
+        {/* Authentication screens. */}
         <Stack.Screen
           name="Login"
           component={LoginScreen}
           options={{ title: 'Login' }}
         />
 
-        {/* REGISTER */}
         <Stack.Screen
           name="Register"
           component={RegisterScreen}
@@ -167,7 +177,7 @@ export default function App() {
           options={{ title: 'Forgot Password' }}
         />
 
-        {/* DASHBOARD */}
+        {/* Main dashboard and shared app sections. */}
         <Stack.Screen
           name="Home"
           component={HomeShellScreen}
@@ -221,6 +231,7 @@ export default function App() {
           options={{ title: 'Recovery Question' }}
         />
 
+        {/* Batch operations and batch-level records. */}
         <Stack.Screen name="CreateBatch"
           component={CreateBatchScreen}
           options={{ title: 'Record Batch' }}
@@ -295,6 +306,7 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  // Centers the startup spinner while initialization is running.
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',

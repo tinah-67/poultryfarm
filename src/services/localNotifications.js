@@ -6,32 +6,40 @@ import {
 } from '../database/db';
 import { loadNotificationsForUser } from '../notifications/notificationEngine';
 
+// Limits repeated local notification delivery so users are not spammed.
 const DELIVERY_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 const MAX_NOTIFICATIONS_PER_SYNC = 5;
 
+// References the custom Android module that creates and shows notifications.
 const localNotificationModule = NativeModules.LocalNotificationModule;
 
+// Converts callback-style database helpers into promises.
 const toPromise = executor =>
   new Promise(resolve => {
     executor(resolve);
   });
 
+// Loads the local delivery log for notification cooldown checks.
 const getNotificationDeliveryLogAsync = notificationIds =>
   toPromise(resolve => getNotificationDeliveryLog(notificationIds, resolve));
 
+// Saves delivered notification ids so future syncs can throttle repeats.
 const saveNotificationDeliveriesAsync = notificationIds =>
   new Promise(resolve => {
     saveNotificationDeliveries(notificationIds, resolve);
   });
 
+// Stores notification inbox items so they remain visible offline.
 const saveNotificationInboxItemsAsync = (userId, items) =>
   new Promise(resolve => {
     saveNotificationInboxItems(userId, items, resolve);
   });
 
+// Checks whether the native Android notification bridge is available.
 const canUseLocalNotificationModule = () =>
   Platform.OS === 'android' && localNotificationModule;
 
+// Creates the Android notification channel and requests permission when required.
 export const initializeLocalNotifications = async () => {
   if (!canUseLocalNotificationModule()) {
     return false;
@@ -58,6 +66,7 @@ export const initializeLocalNotifications = async () => {
   return result === PermissionsAndroid.RESULTS.GRANTED;
 };
 
+// Generates reminders, saves them to the inbox, and shows eligible local notifications.
 export const syncDeviceNotificationsForUser = async (userId, options = {}) => {
   const { force = false } = options;
 
@@ -82,6 +91,8 @@ export const syncDeviceNotificationsForUser = async (userId, options = {}) => {
 
   const deliveryLog = await getNotificationDeliveryLogAsync(candidateNotifications.map(item => item.id));
   const now = Date.now();
+
+  // Filters out notifications recently shown unless a manual refresh forces delivery.
   const deliverableNotifications = force ? candidateNotifications : candidateNotifications.filter(item => {
     const deliveredAt = deliveryLog[item.id];
 
@@ -117,6 +128,7 @@ export const syncDeviceNotificationsForUser = async (userId, options = {}) => {
   return deliverableNotifications;
 };
 
+// Consumes a native notification-tap intent so the app can open the reminders tab once.
 export const consumePendingNotificationOpen = async () => {
   if (!canUseLocalNotificationModule() || typeof localNotificationModule.consumeNotificationOpen !== 'function') {
     return {

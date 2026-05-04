@@ -5,7 +5,9 @@ import { clearRememberedSession, getUserById } from '../database/db';
 import { syncPendingBackup } from '../services/backupSync';
 import { syncDeviceNotificationsForUser } from '../services/localNotifications';
 
+// Shows the main menu after login and starts background sync work.
 export default function DashboardScreen({ navigation, route, showBottomTabs = false }) {
+  // Tracks the signed-in user, refresh state, and backup-sync guard.
   const userId = route?.params?.userId;
   const [refreshing, setRefreshing] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -14,6 +16,7 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
 
   console.log('DASHBOARD userId:', userId);
 
+  // Loads the current user so role-specific dashboard options can be shown.
   const loadUser = useCallback(() => {
     if (!userId) {
       setCurrentUser(null);
@@ -25,6 +28,7 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
     });
   }, [userId]);
 
+  // Generates and stores reminder notifications for the signed-in user.
   const syncNotifications = useCallback((options = {}) => {
     if (!userId) {
       return;
@@ -35,6 +39,7 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
     });
   }, [userId]);
 
+  // Uploads pending local records while preventing overlapping sync runs.
   const syncBackup = useCallback(async ({ showFeedback = false } = {}) => {
     if (syncingBackupRef.current) {
       return [];
@@ -65,6 +70,7 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
     }
   }, []);
 
+  // Refreshes user, reminders, and backup sync whenever the dashboard receives focus.
   useFocusEffect(
     useCallback(() => {
       loadUser();
@@ -73,12 +79,14 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
     }, [loadUser, syncNotifications, syncBackup])
   );
 
+  // Logs out by clearing the remembered session and returning to login.
   const handleLogout = () => {
     clearRememberedSession(() => {
       navigation.replace('Login');
     });
   };
 
+  // Pull-to-refresh reloads user data, forces reminders, and retries backup sync.
   const handleRefresh = () => {
     setRefreshing(true);
     loadUser();
@@ -92,6 +100,7 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
   const isOwner = currentUser?.role === 'owner';
   const canAccessFarmManagement = ['owner', 'manager'].includes(currentUser?.role);
 
+  // Renders role-aware navigation cards for the main app workflows.
   return (
     <ImageBackground
       source={require('../Broilers-Chickens.webp')}
@@ -109,6 +118,7 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
           {roleLabel ? <Text style={styles.subtitle}>Signed in as {roleLabel}</Text> : null}
           {syncingBackup ? <Text style={styles.syncStatus}>Syncing backup...</Text> : null}
 
+          {/* Owner and manager users can access farm-level workflows. */}
           {canAccessFarmManagement ? (
             <TouchableOpacity
               style={styles.card}
@@ -118,6 +128,7 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
             </TouchableOpacity>
           ) : null}
 
+          {/* Only owners can create staff accounts. */}
           {isOwner ? (
             <TouchableOpacity
               style={styles.card}
@@ -127,6 +138,7 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
             </TouchableOpacity>
           ) : null}
 
+          {/* Core app workflows available from the dashboard. */}
           <TouchableOpacity
             style={styles.card}
             onPress={() => navigation.navigate('ViewFarms', { userId, selectionMode: 'batch' })}
@@ -157,6 +169,7 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
             </TouchableOpacity>
           ) : null}
 
+          {/* Recovery question setup is available once the user record has loaded. */}
           {currentUser ? (
             <TouchableOpacity
               style={styles.card}
@@ -170,6 +183,7 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
             </TouchableOpacity>
           ) : null}
 
+          {/* Standalone dashboard mode shows Help; tabbed mode uses the bottom Help tab. */}
           {!showBottomTabs ? (
             <TouchableOpacity
               style={styles.card}
@@ -189,6 +203,7 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
 }
 
 const styles = StyleSheet.create({
+  // Background, overlay, and dashboard layout styles.
   background: {
     flex: 1,
   },
@@ -225,6 +240,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '600',
   },
+  // Main dashboard action card styles.
   card: {
     width: '100%',
     padding: 20,
@@ -237,6 +253,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
   },
+  // Logout button styles.
   logoutButton: {
     marginTop: 24,
     paddingVertical: 12,

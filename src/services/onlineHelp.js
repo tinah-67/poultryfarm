@@ -1,6 +1,7 @@
 import { Linking } from 'react-native';
 import { ONLINE_HELP_REQUEST_TIMEOUT_MS, ONLINE_HELP_URL } from '../constants/onlineHelp';
 
+// Adds a timeout around network checks so the Help screen does not wait forever.
 const withTimeout = (promise, timeoutMs) =>
   Promise.race([
     promise,
@@ -11,6 +12,7 @@ const withTimeout = (promise, timeoutMs) =>
     }),
   ]);
 
+// Checks whether the online user manual can be reached before enabling the button.
 export const checkOnlineHelpAvailable = async () => {
   const response = await withTimeout(
     fetch(ONLINE_HELP_URL, {
@@ -23,6 +25,7 @@ export const checkOnlineHelpAvailable = async () => {
   return response.ok;
 };
 
+// Opens the online user manual in the device browser.
 export const openOnlineHelp = async () => {
   await Linking.openURL(ONLINE_HELP_URL);
 };

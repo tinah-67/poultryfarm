@@ -3,7 +3,9 @@ import { Text, TextInput, Button, StyleSheet, Alert, RefreshControl } from 'reac
 import { createFarm, farmExistsForUser, getUserById } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 
+// Lets owner users create a new farm record.
 export default function FarmScreen({ navigation, route }) {
+  // Tracks the farm form and save/refresh state.
   const userId = route?.params?.userId ?? route?.params?.user_Id;
 
   console.log('FarmScreen userId:', userId);
@@ -13,6 +15,7 @@ export default function FarmScreen({ navigation, route }) {
   const [isSaving, setIsSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Prepares trimmed values and checks whether the form can be submitted.
   const trimmedFarmName = farmName.trim();
   const trimmedLocation = location.trim();
   const isFormValid = useMemo(
@@ -20,6 +23,7 @@ export default function FarmScreen({ navigation, route }) {
     [trimmedFarmName, trimmedLocation]
   );
 
+  // Validates owner permission, prevents duplicates, and saves the farm.
   const handleAddFarm = () => {
     if (isSaving) {
       return;
@@ -67,6 +71,7 @@ export default function FarmScreen({ navigation, route }) {
     });
   };
 
+  // Clears the form during pull-to-refresh.
   const handleRefresh = () => {
     setRefreshing(true);
     setFarmName('');
@@ -85,6 +90,7 @@ export default function FarmScreen({ navigation, route }) {
     >
       <Text style={styles.title}>Add Farm</Text>
 
+      {/* Collects the farm name and physical location. */}
       <TextInput
         placeholder="Farm Name"
         placeholderTextColor="#666"
@@ -116,6 +122,7 @@ export default function FarmScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
+  // Farm form layout and input styles.
   container: { flexGrow: 1, padding: 20 },
   title: { fontSize: 20, fontWeight: 'bold', marginBottom: 10, color: '#fff' },
   input: {

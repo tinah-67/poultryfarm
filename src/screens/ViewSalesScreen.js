@@ -5,13 +5,16 @@ import { deleteSaleRecord, getBatchById, getMortalityRecordsByBatchId, getSalesB
 import DataTable from '../components/DataTable';
 import ScreenBackground from '../components/ScreenBackground';
 
+// Shows sales records, revenue totals, and remaining birds for one batch.
 export default function ViewSalesScreen({ route, navigation }) {
+  // Stores route ids, loaded sales rows, current user role, and available bird count.
   const batchId = route?.params?.batchId;
   const userId = route?.params?.userId;
   const [records, setRecords] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [availableBirds, setAvailableBirds] = useState(0);
 
+  // Loads sales plus mortality and batch data so remaining birds can be calculated.
   const loadSalesState = useCallback(() => {
     if (!batchId) {
       setRecords([]);
@@ -39,6 +42,7 @@ export default function ViewSalesScreen({ route, navigation }) {
     });
   }, [batchId]);
 
+  // Reloads the current role and sales state whenever the screen receives focus.
   useFocusEffect(
     useCallback(() => {
       if (userId) {
@@ -51,6 +55,7 @@ export default function ViewSalesScreen({ route, navigation }) {
     }, [loadSalesState, userId])
   );
 
+  // Computes summary values and table columns for the sales list.
   const canDeleteSales = ['owner', 'manager'].includes(currentUser?.role);
   const totalRevenue = records.reduce((sum, item) => sum + Number(item.total_revenue || 0), 0);
   const columns = [
@@ -61,6 +66,7 @@ export default function ViewSalesScreen({ route, navigation }) {
     { key: 'actions', title: 'Actions', width: 120 },
   ];
 
+  // Confirms and soft-deletes a sale record when the role allows it.
   const handleDelete = saleId => {
     if (!canDeleteSales) {
       Alert.alert('Access denied', 'Only owner and manager users can delete sales records.');
@@ -82,9 +88,11 @@ export default function ViewSalesScreen({ route, navigation }) {
       <Text style={styles.title}>Sales Records</Text>
       <Text style={styles.summary}>Birds Available for Sale: {availableBirds}</Text>
       <Text style={styles.summary}>Total Revenue: {totalRevenue}</Text>
+      {/* Opens the sales entry screen for this batch. */}
       <View style={styles.actions}>
         <ButtonLink title="Record Sales" onPress={() => navigation.navigate('Sales', { batchId, userId })} />
       </View>
+      {/* Displays sales records in a reusable table. */}
       <View style={styles.tableWrapper}>
         <DataTable
           columns={columns}
@@ -111,6 +119,7 @@ export default function ViewSalesScreen({ route, navigation }) {
   );
 }
 
+// Renders a compact primary action button above the table.
 const ButtonLink = ({ title, onPress }) => (
   <TouchableOpacity style={styles.primaryAction} onPress={onPress}>
     <Text style={styles.primaryActionText}>{title}</Text>
@@ -118,6 +127,7 @@ const ButtonLink = ({ title, onPress }) => (
 );
 
 const styles = StyleSheet.create({
+  // Sales records table, action, and cell styles.
   container: { flex: 1, padding: 20 },
   title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
   summary: { marginBottom: 12, fontWeight: '700', color: '#fff' },

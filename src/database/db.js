@@ -1,6 +1,7 @@
 import { Alert } from 'react-native';
 import SQLite from 'react-native-sqlite-2';
 
+// Opens the local SQLite database used by the offline-first app.
 const db = SQLite.openDatabase(
   'poultry.db',
   '1.0',
@@ -8,10 +9,12 @@ const db = SQLite.openDatabase(
   200000
 );
 
+// Controls how long a remembered login session remains valid.
 const REMEMBERED_SESSION_TTL_MS = 30 * 60 * 1000;
 
 console.log("DB initialized");
 
+// Converts SQLite result rows into a regular JavaScript array.
 const rowsToArray = (rows) => {
   if (!rows) {
     return [];
@@ -29,6 +32,7 @@ const rowsToArray = (rows) => {
   return items;
 };
 
+// Shared formatting and normalization helpers used before saving records.
 const getCurrentTimestamp = () => new Date().toISOString();
 const roundCurrency = value => Number(Number(value || 0).toFixed(2));
 const normalizeFeedType = value => String(value || '').trim().toLowerCase();
@@ -39,6 +43,7 @@ const parseNumber = value => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+// Marks all records belonging to a deleted batch as deleted without removing history.
 const softDeleteBatchDescendants = (tx, batchId, deletedAt) => {
   const childTables = [
     { tableName: 'feed_records', idColumn: 'batch_id' },
@@ -64,6 +69,7 @@ const softDeleteBatchDescendants = (tx, batchId, deletedAt) => {
   });
 };
 
+  // Marks all records belonging to a deleted farm as deleted without removing history.
   const softDeleteFarmDescendants = (tx, farmId, deletedAt) => {
     tx.executeSql(
       `UPDATE expenses
@@ -111,6 +117,7 @@ const softDeleteBatchDescendants = (tx, batchId, deletedAt) => {
   );
 };
 
+// Adds missing columns when older local databases are upgraded.
 const ensureColumnExists = (tx, tableName, columnName, definition) => {
   tx.executeSql(
     `PRAGMA table_info(${tableName})`,
@@ -141,6 +148,7 @@ const ensureColumnExists = (tx, tableName, columnName, definition) => {
 };
 
 // ================= INIT DATABASE =================
+// Creates or upgrades all local tables required by the app.
 export const initDB = () => {
   console.log("initDB called");
   db.transaction(tx => {
@@ -331,7 +339,7 @@ export const initDB = () => {
 
 // ================= USERS =================
 
-// CREATE USER
+// Creates a user or staff account and marks it pending backup sync.
 export const createUser = (
   firstName,
   lastName,
@@ -373,7 +381,7 @@ export const createUser = (
   });
 };
 
-// GET USERS
+// Loads all users from the local database.
 export const getUsers = (callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -389,7 +397,7 @@ export const getUsers = (callback) => {
   });
 };
 
-// GET USER BY ID
+// Loads one user by id for role checks and screen context.
 export const getUserById = (userId, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -409,7 +417,7 @@ export const getUserById = (userId, callback) => {
   });
 };
 
-// LOGIN USER
+// Checks local login credentials and returns a detailed login status.
 export const loginUser = (email, password, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -450,7 +458,7 @@ export const loginUser = (email, password, callback) => {
   });
 };
 
-//synusc users to server
+// Uploads unsynced users to the backup server.
 export const syncUsers = async () => {
   db.transaction(tx => {
     tx.executeSql(
@@ -494,7 +502,7 @@ export const syncUsers = async () => {
 
 // ================= FARMS =================
 
-// CREATE FARM
+// Creates a farm for an owner and marks it pending backup sync.
 export const createFarm = (user_id, farm_name, location, callback) => {
   console.log("createFarm called with:", { user_id, farm_name, location });
   let insertId = null;
@@ -526,6 +534,7 @@ export const createFarm = (user_id, farm_name, location, callback) => {
   );
 };
 
+// Checks whether an owner already has a farm with the same name and location.
 export const farmExistsForUser = (userId, farmName, location, callback) => {
   const normalizedFarmName = farmName.trim().toLowerCase();
   const normalizedLocation = location.trim().toLowerCase();
@@ -550,6 +559,7 @@ export const farmExistsForUser = (userId, farmName, location, callback) => {
   });
 };
 
+// Resolves the owner id that a user should use for farm-level access.
 export const getAccessibleOwnerId = (userId, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -574,6 +584,7 @@ export const getAccessibleOwnerId = (userId, callback) => {
   });
 };
 
+// Finds a user by email for login recovery and duplicate account checks.
 export const getUserByEmail = (email, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -595,6 +606,7 @@ export const getUserByEmail = (email, callback) => {
   });
 };
 
+// Saves or updates the recovery question used during password reset.
 export const updateUserRecoveryQuestion = (userId, recoveryQuestion, recoveryAnswer, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -619,6 +631,7 @@ export const updateUserRecoveryQuestion = (userId, recoveryQuestion, recoveryAns
   });
 };
 
+// Updates a user's password and marks the account pending backup sync.
 export const updateUserPassword = (userId, password, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -639,7 +652,7 @@ export const updateUserPassword = (userId, password, callback) => {
   });
 };
 
-// GET FARMS
+// Loads active farms, optionally restricted to one owner.
 export const getFarms = (userId, callback) => {
   const normalizedUserId = userId != null ? Number(userId) : null;
 
@@ -671,7 +684,7 @@ export const getFarms = (userId, callback) => {
   });
 };
 
-// UPDATE FARM
+// Updates farm details and marks the farm pending backup sync.
 export const updateFarm = (farm_id, farm_name, location) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -683,7 +696,7 @@ export const updateFarm = (farm_id, farm_name, location) => {
   });
 };
 
-// DELETE FARM
+// Soft-deletes a farm and cascades the soft delete to related records.
 export const deleteFarm = (farm_id) => {
   db.transaction(tx => {
     const deletedAt = getCurrentTimestamp();
@@ -699,7 +712,7 @@ export const deleteFarm = (farm_id) => {
   });
 };
 
-// CREATE BATCH
+// Creates an active batch for a farm and marks it pending backup sync.
 export const createBatch = (farm_id, start_date, breed, initial_chicks, purchase_cost, callback) => {
   console.log("createBatch called:", { farm_id, start_date, breed, initial_chicks, purchase_cost });
 
@@ -720,7 +733,7 @@ export const createBatch = (farm_id, start_date, breed, initial_chicks, purchase
   });
 };
 
-//GET BATCHES BY FARM ID
+// Loads active batches for one farm.
 export const getBatchesByFarmId = (farm_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -738,6 +751,7 @@ export const getBatchesByFarmId = (farm_id, callback) => {
   });
 };
 
+// Stores a short-lived remembered session for convenience login.
 export const saveRememberedSession = (userId, callback) => {
   const rememberedAt = new Date().toISOString();
 
@@ -757,6 +771,7 @@ export const saveRememberedSession = (userId, callback) => {
   });
 };
 
+// Loads farms visible to a user based on owner/staff relationship.
 export const getAccessibleFarms = (userId, callback) => {
   const normalizedUserId = userId != null ? Number(userId) : null;
 
@@ -789,6 +804,7 @@ export const getAccessibleFarms = (userId, callback) => {
   });
 };
 
+// Clears the remembered session on logout or app backgrounding.
 export const clearRememberedSession = (callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -806,6 +822,7 @@ export const clearRememberedSession = (callback) => {
   });
 };
 
+// Loads the remembered session and expires it when the TTL has passed.
 export const getRememberedSession = (callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -850,6 +867,7 @@ export const getRememberedSession = (callback) => {
   });
 };
 
+// Loads notification delivery timestamps used to throttle repeated local alerts.
 export const getNotificationDeliveryLog = (notificationIds, callback) => {
   if (!notificationIds?.length) {
     callback({});
@@ -881,6 +899,7 @@ export const getNotificationDeliveryLog = (notificationIds, callback) => {
   });
 };
 
+// Saves the ids of notifications that were shown to the device.
 export const saveNotificationDeliveries = (notificationIds, callback) => {
   if (!notificationIds?.length) {
     callback && callback();
@@ -909,6 +928,7 @@ export const saveNotificationDeliveries = (notificationIds, callback) => {
   );
 };
 
+// Stores generated notifications in the local inbox for offline viewing.
 export const saveNotificationInboxItems = (userId, items, callback) => {
   if (!userId || !items?.length) {
     callback && callback();
@@ -992,6 +1012,7 @@ export const saveNotificationInboxItems = (userId, items, callback) => {
   );
 };
 
+// Loads inbox reminders for a user, newest first.
 export const getNotificationInboxItems = (userId, callback) => {
   const normalizedUserId = Number(userId);
   const hasUserId = Number.isFinite(normalizedUserId) && normalizedUserId > 0;
@@ -1041,6 +1062,7 @@ export const getNotificationInboxItems = (userId, callback) => {
   });
 };
 
+// Marks one inbox reminder as read while preserving its first read timestamp.
 export const markNotificationInboxItemRead = (notificationId, callback) => {
   const normalizedNotificationId = String(notificationId || '').trim();
 
@@ -1069,6 +1091,7 @@ export const markNotificationInboxItemRead = (notificationId, callback) => {
   });
 };
 
+// Marks a user as synced after the backup server accepts it.
 export const markUserAsSynced = (userId) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1080,8 +1103,10 @@ export const markUserAsSynced = (userId) => {
   });
 };
 
+// Keeps the older getBatches name available for screens that still import it.
 export const getBatches = getBatchesByFarmId;
 
+// Loads one active batch by id for detail and entry screens.
 export const getBatchById = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1103,6 +1128,7 @@ export const getBatchById = (batch_id, callback) => {
   });
 };
 
+// Updates batch details and marks the batch pending backup sync.
 export const updateBatchDetails = (batch_id, start_date, breed, initial_chicks, purchase_cost, status, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1122,7 +1148,7 @@ export const updateBatchDetails = (batch_id, start_date, breed, initial_chicks, 
   });
 };
 
-//UPDATE BATCH STATUS
+// Updates a batch status without changing other batch details.
 export const updateBatchStatus = (batch_id, status) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1134,7 +1160,7 @@ export const updateBatchStatus = (batch_id, status) => {
   });
 };
 
-//DELETE BATCH
+// Soft-deletes a batch and its related records.
 export const deleteBatch = (batch_id) => {
   db.transaction(tx => {
     const deletedAt = getCurrentTimestamp();
@@ -1150,6 +1176,7 @@ export const deleteBatch = (batch_id) => {
   });
 };
 
+// Calculates purchased, used, and remaining feed for a batch's farm.
 const loadFeedAvailabilityForTransaction = (tx, batch_id, feed_type, callback, errorCallback) => {
   const normalizedFeedType = normalizeFeedType(feed_type);
 
@@ -1231,13 +1258,14 @@ const loadFeedAvailabilityForTransaction = (tx, batch_id, feed_type, callback, e
   );
 };
 
+// Exposes feed availability to screens before recording feed usage.
 export const getFeedAvailability = (batch_id, feed_type, callback, errorCallback) => {
   db.transaction(tx => {
     loadFeedAvailabilityForTransaction(tx, batch_id, feed_type, callback, errorCallback);
   });
 };
 
-//ADD FEED RECORD
+// Adds feed usage after verifying enough farm feed stock is available.
 export const addFeedRecord = (batch_id, feed_type, feed_quantity, date_recorded, callback, errorCallback) => {
   const quantityValue = parseNumber(feed_quantity);
 
@@ -1289,6 +1317,7 @@ export const addFeedRecord = (batch_id, feed_type, feed_quantity, date_recorded,
   });
 };
 
+// Normalizes expense input for both farm-level and batch-level expenses.
 const buildExpenseRecordValues = record => {
   const expenseScope = record.expense_scope || (record.farm_id != null && record.batch_id == null ? 'farm' : 'batch');
   const normalizedFeedType = record.feed_type ? normalizeFeedType(record.feed_type) : null;
@@ -1310,7 +1339,7 @@ const buildExpenseRecordValues = record => {
   ];
 };
 
-// ADD EXPENSE
+// Adds an expense record and marks it pending backup sync.
 export const addExpenseRecord = (input, description, amount, expense_date, callback) => {
   const record = typeof input === 'object' && input !== null
     ? input
@@ -1339,6 +1368,7 @@ export const addExpenseRecord = (input, description, amount, expense_date, callb
   });
 };
 
+// Fills missing feed costs from farm feed purchase data when old records lack cost.
 const resolveFeedRecordCosts = (tx, batch_id, records, callback) => {
   const safeRecords = records || [];
 
@@ -1425,7 +1455,7 @@ const resolveFeedRecordCosts = (tx, batch_id, records, callback) => {
   );
 };
 
-//GET FEED RECORDS BY BATCH ID
+// Loads active feed records for a batch and resolves any missing costs.
 export const getFeedRecordsByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1443,9 +1473,10 @@ export const getFeedRecordsByBatchId = (batch_id, callback) => {
   });
 };
 
+// Keeps the older getFeedRecordsByBatch name available for existing imports.
 export const getFeedRecordsByBatch = getFeedRecordsByBatchId;
 
-//UPDATE FEED RECORD
+// Updates a feed record and marks it pending backup sync.
 export const updateFeedRecord = (feed_id, feed_quantity, feed_cost, date_recorded) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1457,7 +1488,7 @@ export const updateFeedRecord = (feed_id, feed_quantity, feed_cost, date_recorde
   });
 };
 
-//DELETE FEED RECORD
+// Soft-deletes a feed record.
 export const deleteFeedRecord = (feed_id) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1469,7 +1500,7 @@ export const deleteFeedRecord = (feed_id) => {
   });
 };
 
-// ADD MORTALITY RECORD
+// Adds a mortality record and marks it pending backup sync.
 export const addMortalityRecord = (batch_id, number_dead, cause_of_death, date_recorded, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1488,7 +1519,7 @@ export const addMortalityRecord = (batch_id, number_dead, cause_of_death, date_r
   });
 };
 
-// GET MORTALITY RECORDS BY BATCH ID
+// Loads active mortality records for a batch.
 export const getMortalityRecordsByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1506,6 +1537,7 @@ export const getMortalityRecordsByBatchId = (batch_id, callback) => {
   });
 };
 
+// Soft-deletes a mortality record.
 export const deleteMortalityRecord = (mortality_id) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1517,7 +1549,7 @@ export const deleteMortalityRecord = (mortality_id) => {
   });
 };
 
-// ADD VACCINATION RECORD
+// Adds a vaccination record and optional next due date.
 export const addVaccinationRecord = (batch_id, vaccine_name, vaccination_date, next_due_date, notes, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1536,6 +1568,7 @@ export const addVaccinationRecord = (batch_id, vaccine_name, vaccination_date, n
   });
 };
 
+// Marks a vaccination follow-up as completed.
 export const markVaccinationDueCompleted = (vaccination_id, completedAt, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1555,7 +1588,7 @@ export const markVaccinationDueCompleted = (vaccination_id, completedAt, callbac
   });
 };
 
-// GET VACCINATION RECORDS BY BATCH ID
+// Loads active vaccination records for a batch.
 export const getVaccinationRecordsByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1573,6 +1606,7 @@ export const getVaccinationRecordsByBatchId = (batch_id, callback) => {
   });
 };
 
+// Soft-deletes a vaccination record.
 export const deleteVaccinationRecord = (vaccination_id) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1584,7 +1618,7 @@ export const deleteVaccinationRecord = (vaccination_id) => {
   });
 };
 
-// GET EXPENSES BY BATCH ID
+// Loads active batch-specific expenses.
 export const getExpensesByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1607,6 +1641,7 @@ export const getExpensesByBatchId = (batch_id, callback) => {
   });
 };
 
+// Loads active farm-level expenses.
 export const getExpensesByFarmId = (farm_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1630,6 +1665,7 @@ export const getExpensesByFarmId = (farm_id, callback) => {
   });
 };
 
+// Soft-deletes an expense record.
 export const deleteExpenseRecord = (expense_id) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1641,7 +1677,7 @@ export const deleteExpenseRecord = (expense_id) => {
   });
 };
 
-// ADD SALE
+// Adds a sale record and calculates total revenue.
 export const addSaleRecord = (batch_id, birds_sold, price_per_bird, sale_date, callback) => {
   const total_revenue = Number(birds_sold) * Number(price_per_bird);
 
@@ -1662,7 +1698,7 @@ export const addSaleRecord = (batch_id, birds_sold, price_per_bird, sale_date, c
   });
 };
 
-// GET SALES BY BATCH ID
+// Loads active sales records for a batch.
 export const getSalesByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1680,6 +1716,7 @@ export const getSalesByBatchId = (batch_id, callback) => {
   });
 };
 
+// Soft-deletes a sale record.
 export const deleteSaleRecord = (sale_id) => {
   db.transaction(tx => {
     tx.executeSql(
@@ -1691,6 +1728,7 @@ export const deleteSaleRecord = (sale_id) => {
   });
 };
 
+// Runs a list of SQL steps in sequence inside one transaction.
 const executeTransactionSteps = (tx, steps) =>
   new Promise((resolve, reject) => {
     const runStep = index => {
@@ -1715,6 +1753,7 @@ const executeTransactionSteps = (tx, steps) =>
     runStep(0);
   });
 
+// Imports backup-server data into the local database after a successful bootstrap login.
 export const importBootstrapData = (authenticatedUser, bootstrapData) =>
   new Promise((resolve, reject) => {
     const safeData = bootstrapData || {};
@@ -1874,5 +1913,5 @@ export const importBootstrapData = (authenticatedUser, bootstrapData) =>
     );
   });
 
-// Export DB
+// Exports the database connection for lower-level services that need direct SQL.
 export default db;

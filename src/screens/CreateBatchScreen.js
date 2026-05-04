@@ -3,6 +3,7 @@ import { View, Text, TextInput, Button, Alert, StyleSheet, TouchableOpacity, Pla
 import { createBatch, getUserById } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 
+// Loads the optional native date picker when the dependency is available.
 let DateTimePicker = null;
 try {
     DateTimePicker = require('@react-native-community/datetimepicker').default;
@@ -10,7 +11,9 @@ try {
     DateTimePicker = null;
 }
 
+// Lets owners and managers create a new poultry batch for a selected farm.
 export default function CreateBatchScreen({ navigation, route }) {
+    // Stores batch form fields, validation messages, and current user role.
     const farmId = route?.params?.farmId;
     const userId = route?.params?.userId;
 
@@ -27,6 +30,7 @@ export default function CreateBatchScreen({ navigation, route }) {
         return new Date(now.getFullYear(), now.getMonth(), now.getDate());
     }, []);
 
+    // Loads the current user to enforce batch creation permissions.
     useEffect(() => {
         if (!userId) {
             setCurrentUser(null);
@@ -38,6 +42,7 @@ export default function CreateBatchScreen({ navigation, route }) {
         });
     }, [userId]);
 
+    // Computes role access and overall form validity.
     const canManageBatches = ['owner', 'manager'].includes(currentUser?.role);
     const isFormValid = useMemo(() => {
         const isDateValid = startDate.trim() !== '';
@@ -48,6 +53,7 @@ export default function CreateBatchScreen({ navigation, route }) {
         return isDateValid && isBreedValid && isChicksValid && isCostValid;
     }, [startDate, breed, initialChicks, purchaseCost]);
 
+    // Restricts chick count to a positive whole number with a short field length.
     const handleChicksChange = (text) => {
         if (/^\d{0,4}$/.test(text)) {
             setInitialChicks(text);
@@ -57,6 +63,7 @@ export default function CreateBatchScreen({ navigation, route }) {
         }
     };
 
+    // Restricts purchase cost to a numeric currency value.
     const handlePurchaseCostChange = text => {
         if (/^\d*(\.\d{0,2})?$/.test(text)) {
             setPurchaseCost(text);
@@ -66,10 +73,12 @@ export default function CreateBatchScreen({ navigation, route }) {
         }
     };
 
+    // Formats dates for storage as YYYY-MM-DD.
     const formatDate = (date) => {
         return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     };
 
+    // Parses stored date strings without timezone shifts.
     const parseLocalDate = (dateString) => {
         const [year, month, day] = dateString.split('-').map(Number);
 
@@ -80,6 +89,7 @@ export default function CreateBatchScreen({ navigation, route }) {
         return new Date(year, month - 1, day);
     };
 
+    // Accepts a selected date only when it is not in the future.
     const handlePickerChange = (_, selectedDate) => {
         if (Platform.OS !== 'ios') {
             setShowDatePicker(false);
@@ -101,6 +111,7 @@ export default function CreateBatchScreen({ navigation, route }) {
         }
     };
 
+    // Opens the native date picker when it is available.
     const openDatePicker = () => {
         if (!DateTimePicker) {
             Alert.alert('Date Picker Not Ready', 'Rebuild the app to use the calendar picker. You can still use the Today button for now.');
@@ -110,11 +121,13 @@ export default function CreateBatchScreen({ navigation, route }) {
         setShowDatePicker(true);
     };
 
+    // Quickly fills the start date with today's local date.
     const setToday = () => {
         setShowDatePicker(false);
         setStartDate(formatDate(new Date()));
     };
 
+    // Validates permissions and form data before creating the batch.
     const handleCreate = () => {
         if (!canManageBatches) {
             Alert.alert('Access denied', 'Only owner and manager users can create batches.');
@@ -153,6 +166,7 @@ export default function CreateBatchScreen({ navigation, route }) {
                 : 'You can view batches, but only owners and managers can create them.'}
         </Text>
 
+        {/* Chooses the batch start date using the picker or Today shortcut. */}
         <View style={styles.dateContainer}>
             <TouchableOpacity onPress={openDatePicker} style={[styles.input, styles.dateInput, styles.dateField]}>
                 <Text style={startDate ? styles.dateValue : styles.datePlaceholder}>
@@ -173,6 +187,7 @@ export default function CreateBatchScreen({ navigation, route }) {
             />
         ) : null}
 
+        {/* Collects batch identity, initial bird count, and chick purchase cost. */}
         <TextInput
             placeholder="Breed"
             placeholderTextColor="#666"
@@ -207,6 +222,7 @@ export default function CreateBatchScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
+    // Batch creation form, date selector, and validation styles.
     container: { flex: 1, padding: 20 },
     title: { fontSize: 20, marginBottom: 20, color: '#fff', fontWeight: '700' },
     helperText: { color: '#e2e8f0', marginBottom: 12 },

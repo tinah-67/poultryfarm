@@ -4,6 +4,7 @@ import { getUserById } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 import { checkOnlineHelpAvailable, openOnlineHelp } from '../services/onlineHelp';
 
+// Provides role-specific offline help content for signed-in users.
 const roleHelpContent = {
   owner: {
     title: 'Owner Help',
@@ -31,6 +32,7 @@ const roleHelpContent = {
   },
 };
 
+// Provides fallback offline help when no user role is available.
 const defaultRoleHelp = {
   title: 'User Help',
   items: [
@@ -40,6 +42,7 @@ const defaultRoleHelp = {
   ],
 };
 
+// Renders a titled help card with bullet-point guidance.
 const SectionCard = ({ title, items }) => (
   <View style={styles.sectionCard}>
     <Text style={styles.sectionTitle}>{title}</Text>
@@ -51,12 +54,14 @@ const SectionCard = ({ title, items }) => (
   </View>
 );
 
+// Maps online manual availability states to user-facing messages.
 const onlineHelpMessages = {
   checking: 'Checking online user manual availability...',
   available: 'The online user manual is available. It will open in your browser.',
   unavailable: 'The online user manual is unavailable right now. Offline help below is still available.',
 };
 
+// Shows the online manual action while preserving offline help as the fallback.
 const OnlineHelpCard = ({ status, onCheck, onOpen }) => {
   const isChecking = status === 'checking';
   const isAvailable = status === 'available';
@@ -95,12 +100,15 @@ const OnlineHelpCard = ({ status, onCheck, onOpen }) => {
   );
 };
 
+// Displays login help or role-aware app help, plus an optional online user manual link.
 export default function HelpScreen({ route, extraBottomPadding = 0 }) {
+  // Tracks help mode, current user role, and online manual availability.
   const userId = route?.params?.userId;
   const helpMode = route?.params?.mode || 'general';
   const [currentUser, setCurrentUser] = useState(null);
   const [onlineHelpStatus, setOnlineHelpStatus] = useState('checking');
 
+  // Checks whether the online user manual can be reached.
   const refreshOnlineHelpStatus = useCallback(async () => {
     setOnlineHelpStatus('checking');
 
@@ -113,6 +121,7 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
     }
   }, []);
 
+  // Rechecks availability and opens the online user manual in the browser.
   const handleOpenOnlineHelp = useCallback(async () => {
     try {
       setOnlineHelpStatus('checking');
@@ -132,10 +141,12 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
     }
   }, []);
 
+  // Checks online manual availability when the Help screen loads.
   useEffect(() => {
     refreshOnlineHelpStatus();
   }, [refreshOnlineHelpStatus]);
 
+  // Loads the signed-in user unless the screen is being used for login help.
   useEffect(() => {
     if (helpMode === 'login') {
       setCurrentUser(null);
@@ -161,6 +172,7 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
     [currentUser?.role]
   );
 
+  // Renders the help variant used from the login screen.
   if (helpMode === 'login') {
     return (
       <ScreenBackground scroll contentContainerStyle={[styles.container, extraBottomPadding ? { paddingBottom: extraBottomPadding } : null]}>
@@ -211,6 +223,7 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
     );
   }
 
+  // Renders the signed-in help variant with role-aware guidance.
   return (
     <ScreenBackground scroll contentContainerStyle={[styles.container, extraBottomPadding ? { paddingBottom: extraBottomPadding } : null]}>
       <Text style={styles.title}>Help</Text>
@@ -259,6 +272,7 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
 }
 
 const styles = StyleSheet.create({
+  // Page layout and heading styles.
   container: {
     flexGrow: 1,
     padding: 20,
@@ -273,6 +287,7 @@ const styles = StyleSheet.create({
     color: '#e2e8f0',
     marginBottom: 18,
   },
+  // Help card and bullet text styles.
   sectionCard: {
     backgroundColor: 'rgba(248, 250, 252, 0.96)',
     borderRadius: 16,
@@ -297,6 +312,7 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginBottom: 12,
   },
+  // Online manual action button styles.
   onlineHelpActions: {
     flexDirection: 'row',
     gap: 10,

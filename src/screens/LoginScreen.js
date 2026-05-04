@@ -4,13 +4,16 @@ import { clearRememberedSession, loginUser, saveRememberedSession } from '../dat
 import ScreenBackground from '../components/ScreenBackground';
 import { bootstrapDeviceLogin } from '../services/bootstrapLogin';
 
+// Handles account login, remembered sessions, and backup restore for missing local users.
 export default function LoginScreen({ navigation }) {
+  // Stores form fields and lightweight UI state for the login form.
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Validates credentials, tries local login, and falls back to backup bootstrap.
   const handleLogin = () => {
     if (!email || !password) {
       Alert.alert('Error', 'Enter email and password');
@@ -19,6 +22,7 @@ export default function LoginScreen({ navigation }) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
+    // Completes a successful login after role and recovery-question checks.
     const finishLogin = user => {
       if (user.role !== 'owner' && !user.owner_user_id) {
         Alert.alert('Access denied', 'This staff account is not linked to an owner yet.');
@@ -98,6 +102,7 @@ export default function LoginScreen({ navigation }) {
     });
   };
 
+  // Provides a small pull-to-refresh affordance on the login screen.
   const handleRefresh = () => {
     setRefreshing(true);
     setTimeout(() => {
@@ -114,6 +119,7 @@ export default function LoginScreen({ navigation }) {
     >
       <Text style={styles.title}>Login</Text>
 
+      {/* Collects the account email and password. */}
       <TextInput
         placeholder="Email"
         placeholderTextColor="#999"
@@ -142,6 +148,7 @@ export default function LoginScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
+      {/* Lets the user keep a short-lived remembered session. */}
       <TouchableOpacity style={styles.rememberRow} onPress={() => setRememberMe(!rememberMe)} activeOpacity={0.7}>
         <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
           {rememberMe ? <View style={styles.checkboxIndicator} /> : null}
@@ -151,6 +158,7 @@ export default function LoginScreen({ navigation }) {
 
       <Button title="Login" onPress={handleLogin} />
 
+      {/* Provides navigation to recovery, login help, and owner registration. */}
       <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
         <Text style={styles.forgotPasswordLink}>
           Forgot Password?
@@ -173,6 +181,7 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  // Login form layout and input styles.
   container: {
     flexGrow: 1,
     padding: 20,
@@ -217,6 +226,7 @@ const styles = StyleSheet.create({
   passwordToggleText: {
     fontSize: 18,
   },
+  // Remember-me checkbox styles.
   rememberRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -245,6 +255,7 @@ const styles = StyleSheet.create({
   rememberText: {
     color: '#fff',
   },
+  // Secondary action link styles.
   registerLink: {
     marginTop: 10,
     color: '#bfdbfe',

@@ -13,15 +13,19 @@ import {
   getVaccinationRecordsByBatchId,
 } from '../database/db';
 
+// Defines the searchable record groups shown as filter chips.
 const SEARCH_TYPES = ['all', 'farms', 'batches', 'sales', 'expenses', 'feed', 'mortality', 'vaccinations'];
 
+// Combines searchable values into one lowercase string for simple matching.
 const buildSearchText = values =>
   values
     .filter(value => value !== null && value !== undefined)
     .map(value => String(value).toLowerCase())
     .join(' ');
 
+// Provides cross-module search across farms, batches, and batch records.
 export default function SearchScreen({ route }) {
+  // Stores the query, selected type, refresh state, and indexed records.
   const userId = route?.params?.userId;
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
@@ -36,6 +40,7 @@ export default function SearchScreen({ route }) {
     vaccinations: [],
   });
 
+  // Loads accessible data and flattens it into search result records.
   const loadSearchData = useCallback((done) => {
     if (!userId) {
       setRecords({
@@ -248,17 +253,20 @@ export default function SearchScreen({ route }) {
     });
   }, [userId]);
 
+  // Rebuilds the search index whenever the screen receives focus.
   useFocusEffect(
     useCallback(() => {
       loadSearchData();
     }, [loadSearchData])
   );
 
+  // Handles pull-to-refresh for search data.
   const handleRefresh = () => {
     setRefreshing(true);
     loadSearchData(() => setRefreshing(false));
   };
 
+  // Combines every indexed record type for the "All" search mode.
   const allRecords = useMemo(() => ([
     ...records.farms,
     ...records.batches,
@@ -269,6 +277,7 @@ export default function SearchScreen({ route }) {
     ...records.vaccinations,
   ]), [records]);
 
+  // Applies the selected type filter and text search.
   const filteredResults = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     const source = selectedType === 'all' ? allRecords : records[selectedType] || [];
@@ -280,6 +289,7 @@ export default function SearchScreen({ route }) {
     return source.filter(item => item.searchText.includes(normalizedQuery));
   }, [allRecords, query, records, selectedType]);
 
+  // Defines the result table columns.
   const columns = [
     { key: 'type', title: 'Type', width: 130 },
     { key: 'farmName', title: 'Farm', width: 140 },
@@ -288,6 +298,7 @@ export default function SearchScreen({ route }) {
     { key: 'summary', title: 'Result', width: 320 },
   ];
 
+  // Summarizes total indexed records and currently visible results.
   const stats = {
     total: allRecords.length,
     shown: filteredResults.length,
@@ -301,6 +312,7 @@ export default function SearchScreen({ route }) {
     >
       <Text style={styles.title}>Search</Text>
 
+      {/* Search input and type filters. */}
       <View style={styles.panel}>
         <TextInput
           value={query}
@@ -331,6 +343,7 @@ export default function SearchScreen({ route }) {
         </View>
       </View>
 
+      {/* Shows total indexed records and result count. */}
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>All Records</Text>
@@ -342,6 +355,7 @@ export default function SearchScreen({ route }) {
         </View>
       </View>
 
+      {/* Displays matching results in a reusable table. */}
       <View style={styles.resultsCard}>
         <DataTable
           columns={columns}
@@ -365,6 +379,7 @@ export default function SearchScreen({ route }) {
 }
 
 const styles = StyleSheet.create({
+  // Search layout, filters, summary cards, and result table styles.
   container: {
     flexGrow: 1,
     padding: 20,
