@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { getUserById } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 import { checkOnlineHelpAvailable, openOnlineHelp } from '../services/onlineHelp';
@@ -42,6 +42,61 @@ const defaultRoleHelp = {
   ],
 };
 
+// Answers common questions users may have before contacting support.
+const loginFaqItems = [
+  'Can I create a staff account from the login screen? No. Public registration creates owner accounts, and owners create staff accounts after signing in.',
+  'What should I do if my account is not found? Check the email address first, then try again when the device can reach the backup server.',
+  'Can I reset my password without internet? Yes, if your account and recovery question are already saved on this device.',
+];
+
+const appFaqItems = [
+  'Do I need internet to use the app? No. Records are saved on the device first and backed up when the server is reachable.',
+  'Why are some buttons hidden or disabled? Your owner, manager, or worker role controls which actions you can use.',
+  'Why do reports look incomplete? Confirm each record was saved under the correct farm and batch, then refresh the report.',
+  'Can deleted records be restored from the list? Deleted farms, batches, and records are hidden to preserve history for backup sync.',
+];
+
+const CONTACT_EMAIL = 'c2515124@gmail.com';
+const CONTACT_PHONE = '+254114906046';
+const CONTACT_WHATSAPP_NUMBER = '254114906046';
+
+const contactMethods = [
+  {
+    label: 'Email',
+    value: CONTACT_EMAIL,
+    url: `mailto:${CONTACT_EMAIL}`,
+    fallbackMessage: `Email ${CONTACT_EMAIL} for help.`,
+  },
+  {
+    label: 'Call',
+    value: CONTACT_PHONE,
+    url: `tel:${CONTACT_PHONE}`,
+    fallbackMessage: `Call ${CONTACT_PHONE} for help.`,
+  },
+  {
+    label: 'WhatsApp',
+    value: CONTACT_PHONE,
+    url: `https://wa.me/${CONTACT_WHATSAPP_NUMBER}`,
+    fallbackMessage: `Open WhatsApp and message ${CONTACT_PHONE} for help.`,
+  },
+];
+
+const contactItems = [
+  `Email: ${CONTACT_EMAIL}`,
+  `Phone: ${CONTACT_PHONE}`,
+  `WhatsApp: ${CONTACT_PHONE}`,
+  'Include your farm name, batch, screen name, and any error message when asking for help.',
+];
+
+// Opens the selected contact method through the device's installed apps.
+const openContactMethod = async (url, fallbackMessage) => {
+  try {
+    await Linking.openURL(url);
+  } catch (error) {
+    Alert.alert('Could not open contact option', fallbackMessage);
+  }
+};
+
 // Renders a titled help card with bullet-point guidance.
 const SectionCard = ({ title, items }) => (
   <View style={styles.sectionCard}>
@@ -54,97 +109,70 @@ const SectionCard = ({ title, items }) => (
   </View>
 );
 
-// Maps online manual availability states to user-facing messages.
-const onlineHelpMessages = {
-  checking: 'Checking online user manual availability...',
-  available: 'The online user manual is available. It will open in your browser.',
-  unavailable: 'The online user manual is unavailable right now. Offline help below is still available.',
-};
-
-// Shows the online manual action while preserving offline help as the fallback.
-const OnlineHelpCard = ({ status, onCheck, onOpen }) => {
-  const isChecking = status === 'checking';
-  const isAvailable = status === 'available';
-
-  return (
-    <View style={styles.sectionCard}>
-      <Text style={styles.sectionTitle}>Online User Manual</Text>
-      <Text style={styles.sectionDescription}>
-        {onlineHelpMessages[status] || onlineHelpMessages.unavailable}
+// Renders direct contact details and quick actions for email, phone, and WhatsApp.
+const ContactCard = () => (
+  <View style={styles.sectionCard}>
+    <Text style={styles.sectionTitle}>Contact Us</Text>
+    {contactItems.map(item => (
+      <Text key={item} style={styles.sectionItem}>
+        {`\u2022 ${item}`}
       </Text>
+    ))}
 
-      <View style={styles.onlineHelpActions}>
+    <View style={styles.contactActions}>
+      {contactMethods.map(method => (
         <TouchableOpacity
-          style={[styles.primaryAction, !isAvailable ? styles.disabledAction : null]}
+          key={method.label}
+          style={styles.contactAction}
           activeOpacity={0.85}
-          disabled={!isAvailable}
-          onPress={onOpen}
+          onPress={() => openContactMethod(method.url, method.fallbackMessage)}
         >
-          <Text style={[styles.primaryActionText, !isAvailable ? styles.disabledActionText : null]}>
-            Open User Manual
-          </Text>
+          <Text style={styles.contactActionLabel}>{method.label}</Text>
+          <Text style={styles.contactActionValue}>{method.value}</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.secondaryAction, isChecking ? styles.disabledAction : null]}
-          activeOpacity={0.85}
-          disabled={isChecking}
-          onPress={onCheck}
-        >
-          <Text style={[styles.secondaryActionText, isChecking ? styles.disabledActionText : null]}>
-            {isChecking ? 'Checking...' : 'Check Again'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      ))}
     </View>
-  );
-};
+  </View>
+);
+
+// Renders a large menu action for choosing the type of help to open.
+const HelpMenuButton = ({ title, detail, onPress }) => (
+  <TouchableOpacity style={styles.menuButton} activeOpacity={0.85} onPress={onPress}>
+    <Text style={styles.menuButtonTitle}>{title}</Text>
+    <Text style={styles.menuButtonDetail}>{detail}</Text>
+  </TouchableOpacity>
+);
+
+// Renders a compact button used to return from a detail help panel.
+const BackToHelpButton = ({ onPress }) => (
+  <TouchableOpacity style={styles.backButton} activeOpacity={0.85} onPress={onPress}>
+    <Text style={styles.backButtonText}>Back to Help</Text>
+  </TouchableOpacity>
+);
 
 // Displays login help or role-aware app help, plus an optional online user manual link.
 export default function HelpScreen({ route, extraBottomPadding = 0 }) {
-  // Tracks help mode, current user role, and online manual availability.
+  // Tracks help mode, current user role, and the selected in-app help panel.
   const userId = route?.params?.userId;
   const helpMode = route?.params?.mode || 'general';
   const [currentUser, setCurrentUser] = useState(null);
-  const [onlineHelpStatus, setOnlineHelpStatus] = useState('checking');
-
-  // Checks whether the online user manual can be reached.
-  const refreshOnlineHelpStatus = useCallback(async () => {
-    setOnlineHelpStatus('checking');
-
-    try {
-      const isAvailable = await checkOnlineHelpAvailable();
-      setOnlineHelpStatus(isAvailable ? 'available' : 'unavailable');
-    } catch (error) {
-      console.log('Online help unavailable:', error);
-      setOnlineHelpStatus('unavailable');
-    }
-  }, []);
+  const [activeHelpPanel, setActiveHelpPanel] = useState('menu');
 
   // Rechecks availability and opens the online user manual in the browser.
   const handleOpenOnlineHelp = useCallback(async () => {
     try {
-      setOnlineHelpStatus('checking');
       const isAvailable = await checkOnlineHelpAvailable();
 
       if (!isAvailable) {
-        setOnlineHelpStatus('unavailable');
         Alert.alert('Online user manual unavailable', 'Connect to the internet and check again before opening the user manual.');
         return;
       }
 
-      setOnlineHelpStatus('available');
       await openOnlineHelp();
     } catch (error) {
-      setOnlineHelpStatus('unavailable');
       Alert.alert('Could not open user manual', error?.message || 'Try again when internet is available.');
     }
   }, []);
-
-  // Checks online manual availability when the Help screen loads.
-  useEffect(() => {
-    refreshOnlineHelpStatus();
-  }, [refreshOnlineHelpStatus]);
 
   // Loads the signed-in user unless the screen is being used for login help.
   useEffect(() => {
@@ -163,6 +191,11 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
     });
   }, [helpMode, userId]);
 
+  // Returns to the main help menu when the screen mode changes.
+  useEffect(() => {
+    setActiveHelpPanel('menu');
+  }, [helpMode, userId]);
+
   const roleLabel = currentUser?.role
     ? currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1)
     : null;
@@ -172,72 +205,95 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
     [currentUser?.role]
   );
 
-  // Renders the help variant used from the login screen.
-  if (helpMode === 'login') {
-    return (
-      <ScreenBackground scroll contentContainerStyle={[styles.container, extraBottomPadding ? { paddingBottom: extraBottomPadding } : null]}>
-        <Text style={styles.title}>Login Help</Text>
-        <Text style={styles.subtitle}>Quick guidance for signing in</Text>
+  const isLoginHelp = helpMode === 'login';
+  const mainTitle = isLoginHelp ? 'Login Help' : 'Help';
+  const mainSubtitle = isLoginHelp
+    ? 'Choose the type of help you need'
+    : roleLabel
+      ? `Guidance for ${roleLabel} users`
+      : 'Choose the type of help you need';
+  const offlineSubtitle = isLoginHelp
+    ? 'Quick guidance for signing in'
+    : roleLabel
+      ? `Offline guidance for ${roleLabel} users`
+      : 'Offline guidance for using the app';
+  const faqItems = isLoginHelp ? loginFaqItems : appFaqItems;
 
-        <OnlineHelpCard
-          status={onlineHelpStatus}
-          onCheck={refreshOnlineHelpStatus}
-          onOpen={handleOpenOnlineHelp}
+  const renderMenu = () => (
+    <>
+      <Text style={styles.title}>{mainTitle}</Text>
+      <Text style={styles.subtitle}>{mainSubtitle}</Text>
+
+      <View style={styles.menuCard}>
+        <HelpMenuButton
+          title="Offline Help"
+          detail={isLoginHelp ? 'Open sign-in guidance saved in the app.' : 'Open role-based app guidance saved on this device.'}
+          onPress={() => setActiveHelpPanel('offline')}
         />
-
-        <SectionCard
-          title="Before You Login"
-          items={[
-            'Enter the same email address that was used when the account was created.',
-            'Email is checked without case sensitivity, so upper or lower case does not matter.',
-            'Make sure the device has the correct app data if you recently reinstalled the app.',
-          ]}
+        <HelpMenuButton
+          title="Online User Manual"
+          detail="Open the full user manual in your browser."
+          onPress={handleOpenOnlineHelp}
         />
-
-        <SectionCard
-          title="Password Tips"
-          items={[
-            'Enter the exact password linked to that account.',
-            'Use the eye button to show the password if you want to confirm what you typed.',
-            'If the app says the password is incorrect, check the password and try again.',
-          ]}
+        <HelpMenuButton
+          title="FAQs"
+          detail="Open answers to common questions."
+          onPress={() => setActiveHelpPanel('faqs')}
         />
+      </View>
 
-        <SectionCard
-          title="Remember Me"
-          items={[
-            'Turn on Remember Me if you want the app to keep your session during that app use period.',
-            'If you do not select Remember Me, the app signs in only for the current session.',
-          ]}
-        />
+      <ContactCard />
+    </>
+  );
 
-        <SectionCard
-          title="If Login Fails"
-          items={[
-            'If the account is not found on the device, the app may try to restore it from backup when internet is available.',
-            'If backup restore also fails, confirm the backend is reachable and try again shortly.',
-            'If you need a new owner account, use the Register option on the login screen.',
-          ]}
-        />
-      </ScreenBackground>
-    );
-  }
+  const renderLoginOfflineHelp = () => (
+    <>
+      <BackToHelpButton onPress={() => setActiveHelpPanel('menu')} />
+      <Text style={styles.title}>Offline Help</Text>
+      <Text style={styles.subtitle}>{offlineSubtitle}</Text>
 
-  // Renders the signed-in help variant with role-aware guidance.
-  return (
-    <ScreenBackground scroll contentContainerStyle={[styles.container, extraBottomPadding ? { paddingBottom: extraBottomPadding } : null]}>
-      <Text style={styles.title}>Help</Text>
-      <Text style={styles.subtitle}>
-        {roleLabel
-          ? `Guidance for ${roleLabel} users`
-          : 'Quick guidance for using the app'}
-      </Text>
-
-      <OnlineHelpCard
-        status={onlineHelpStatus}
-        onCheck={refreshOnlineHelpStatus}
-        onOpen={handleOpenOnlineHelp}
+      <SectionCard
+        title="Before You Login"
+        items={[
+          'Enter the same email address that was used when the account was created.',
+          'Email is checked without case sensitivity, so upper or lower case does not matter.',
+          'Make sure the device has the correct app data if you recently reinstalled the app.',
+        ]}
       />
+
+      <SectionCard
+        title="Password Tips"
+        items={[
+          'Enter the exact password linked to that account.',
+          'Use the eye button to show the password if you want to confirm what you typed.',
+          'If the app says the password is incorrect, check the password and try again.',
+        ]}
+      />
+
+      <SectionCard
+        title="Remember Me"
+        items={[
+          'Turn on Remember Me if you want the app to keep your session during that app use period.',
+          'If you do not select Remember Me, the app signs in only for the current session.',
+        ]}
+      />
+
+      <SectionCard
+        title="If Login Fails"
+        items={[
+          'If the account is not found on the device, the app may try to restore it from backup when internet is available.',
+          'If backup restore also fails, confirm the backend is reachable and try again shortly.',
+          'If you need a new owner account, use the Register option on the login screen.',
+        ]}
+      />
+    </>
+  );
+
+  const renderAppOfflineHelp = () => (
+    <>
+      <BackToHelpButton onPress={() => setActiveHelpPanel('menu')} />
+      <Text style={styles.title}>Offline Help</Text>
+      <Text style={styles.subtitle}>{offlineSubtitle}</Text>
 
       <SectionCard
         title="Getting Started"
@@ -267,6 +323,34 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
           'If reports look incomplete, check that records were saved under the correct farm and batch.',
         ]}
       />
+    </>
+  );
+
+  const renderFaqs = () => (
+    <>
+      <BackToHelpButton onPress={() => setActiveHelpPanel('menu')} />
+      <Text style={styles.title}>FAQs</Text>
+      <Text style={styles.subtitle}>Answers to common questions</Text>
+      <SectionCard title="FAQs" items={faqItems} />
+    </>
+  );
+
+  const renderContent = () => {
+    if (activeHelpPanel === 'offline') {
+      return isLoginHelp ? renderLoginOfflineHelp() : renderAppOfflineHelp();
+    }
+
+    if (activeHelpPanel === 'faqs') {
+      return renderFaqs();
+    }
+
+    return renderMenu();
+  };
+
+  // Renders the selected help panel.
+  return (
+    <ScreenBackground scroll contentContainerStyle={[styles.container, extraBottomPadding ? { paddingBottom: extraBottomPadding } : null]}>
+      {renderContent()}
     </ScreenBackground>
   );
 }
@@ -287,10 +371,45 @@ const styles = StyleSheet.create({
     color: '#e2e8f0',
     marginBottom: 18,
   },
+  menuCard: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  menuButton: {
+    backgroundColor: 'rgba(248, 250, 252, 0.96)',
+    borderRadius: 8,
+    padding: 16,
+    borderLeftWidth: 5,
+    borderLeftColor: '#16a34a',
+  },
+  menuButtonTitle: {
+    color: '#0f172a',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 5,
+  },
+  menuButtonDetail: {
+    color: '#475569',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  backButton: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  backButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
   // Help card and bullet text styles.
   sectionCard: {
     backgroundColor: 'rgba(248, 250, 252, 0.96)',
-    borderRadius: 16,
+    borderRadius: 8,
     padding: 16,
     marginBottom: 14,
   },
@@ -306,44 +425,29 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginBottom: 8,
   },
-  sectionDescription: {
-    color: '#334155',
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: 12,
-  },
-  // Online manual action button styles.
-  onlineHelpActions: {
+  // Contact action button styles.
+  contactActions: {
     flexDirection: 'row',
     gap: 10,
     flexWrap: 'wrap',
+    marginTop: 4,
   },
-  primaryAction: {
-    backgroundColor: '#16a34a',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  primaryActionText: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-  secondaryAction: {
+  contactAction: {
+    minWidth: 120,
+    flexGrow: 1,
     borderWidth: 1,
     borderColor: '#16a34a',
     borderRadius: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  secondaryActionText: {
+  contactActionLabel: {
     color: '#166534',
     fontWeight: '700',
+    marginBottom: 3,
   },
-  disabledAction: {
-    backgroundColor: '#e2e8f0',
-    borderColor: '#cbd5e1',
-  },
-  disabledActionText: {
-    color: '#64748b',
+  contactActionValue: {
+    color: '#334155',
+    fontSize: 12,
   },
 });
