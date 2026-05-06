@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { deleteVaccinationRecord, getUserById, getVaccinationRecordsByBatchId } from '../database/db';
 import DataTable from '../components/DataTable';
@@ -12,6 +12,7 @@ export default function ViewVaccinationsScreen({ route, navigation }) {
   const userId = route?.params?.userId;
   const [records, setRecords] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Loads active vaccination records for the selected batch.
   const loadRecords = useCallback(() => {
@@ -41,6 +42,31 @@ export default function ViewVaccinationsScreen({ route, navigation }) {
   const canRecordVaccination = ['owner', 'worker'].includes(currentUser?.role);
   const hasNextDueDate = value => String(value || '').trim().length > 0;
   const isDueCompleted = value => String(value || '').trim().length > 0;
+  const filteredRecords = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return records;
+    }
+
+    return records.filter(item => {
+      const dueStatus = !hasNextDueDate(item.next_due_date)
+        ? 'No follow-up'
+        : isDueCompleted(item.due_completed_at)
+          ? 'Completed'
+          : 'Pending';
+
+      return [
+        item.vaccine_name,
+        item.vaccination_date,
+        item.next_due_date,
+        dueStatus,
+        item.notes,
+      ]
+        .filter(value => value !== null && value !== undefined)
+        .some(value => String(value).toLowerCase().includes(normalizedQuery));
+    });
+  }, [records, searchQuery]);
   const columns = [
     { key: 'vaccine_name', title: 'Vaccine', width: 170 },
     { key: 'vaccination_date', title: 'Date Given', width: 140 },
@@ -90,13 +116,20 @@ export default function ViewVaccinationsScreen({ route, navigation }) {
       <View style={styles.actions}>
         <ButtonLink title="Record Vaccination" onPress={() => navigation.navigate('Vaccination', { batchId, userId })} />
       </View>
+      <TextInput
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        style={styles.searchInput}
+        placeholder="Search by vaccine, date, due status, or notes"
+        placeholderTextColor="#64748b"
+      />
       {/* Displays vaccination records and row-level actions in a reusable table. */}
       <View style={styles.tableWrapper}>
         <DataTable
           columns={columns}
-          data={records}
+          data={filteredRecords}
           keyExtractor={(item, index) => (item.vaccination_id || index).toString()}
-          emptyText="No vaccination records yet"
+          emptyText={searchQuery.trim() ? 'No vaccination records match your search.' : 'No vaccination records yet'}
           renderCell={(item, column) => {
             const showFollowUpAction = hasNextDueDate(item.next_due_date) && !isDueCompleted(item.due_completed_at);
 
@@ -151,6 +184,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
   title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
   actions: { marginBottom: 14 },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    color: '#0f172a',
+    marginBottom: 14,
+  },
   tableWrapper: { marginTop: 8 },
   rowActions: { gap: 8 },
   cellText: { color: '#334155' },

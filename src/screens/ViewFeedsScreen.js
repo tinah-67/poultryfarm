@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { deleteFeedRecord, getFeedRecordsByBatch, getUserById } from '../database/db';
 import DataTable from '../components/DataTable';
@@ -13,6 +13,7 @@ export default function ViewFeedsScreen({ route, navigation }) {
 
     const [records, setRecords] = useState([]);
     const [currentUser, setCurrentUser] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Loads active feed records for the selected batch.
     const loadFeed = useCallback(() => {
@@ -44,6 +45,24 @@ export default function ViewFeedsScreen({ route, navigation }) {
     // Computes summary values and table columns for the feed list.
     const canDeleteFeed = ['owner', 'worker'].includes(currentUser?.role);
     const totalQuantity = records.reduce((sum, item) => sum + Number(item.feed_quantity || item.quantity || 0), 0);
+    const filteredRecords = useMemo(() => {
+        const normalizedQuery = searchQuery.trim().toLowerCase();
+
+        if (!normalizedQuery) {
+        return records;
+        }
+
+        return records.filter(item =>
+        [
+            item.feed_type,
+            item.feed_quantity || item.quantity,
+            item.feed_cost,
+            item.date_recorded || item.date,
+        ]
+            .filter(value => value !== null && value !== undefined)
+            .some(value => String(value).toLowerCase().includes(normalizedQuery))
+        );
+    }, [records, searchQuery]);
     const columns = [
         { key: 'feed_type', title: 'Feed Type', width: 120 },
         { key: 'quantity', title: 'Quantity (kg)', width: 130 },
@@ -85,13 +104,21 @@ export default function ViewFeedsScreen({ route, navigation }) {
             <ButtonLink title="Record Feed" onPress={() => navigation.navigate('Feed', { batchId, userId })} />
         </View>
 
+        <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            style={styles.searchInput}
+            placeholder="Search by feed type, quantity, cost, or date"
+            placeholderTextColor="#64748b"
+        />
+
         {/* Displays the feed records in a reusable table. */}
         <View style={styles.tableWrapper}>
             <DataTable
             columns={columns}
-            data={records}
+            data={filteredRecords}
             keyExtractor={(item, index) => (item.feed_id || item.id || index).toString()}
-            emptyText="No feed records yet"
+            emptyText={searchQuery.trim() ? 'No feed records match your search.' : 'No feed records yet'}
             renderCell={(item, column) => {
                 if (column.key === 'feed_type') {
                 const label = item.feed_type
@@ -151,6 +178,16 @@ export default function ViewFeedsScreen({ route, navigation }) {
         color: '#fff',
     },
     actions: {
+        marginBottom: 14,
+    },
+    searchInput: {
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        backgroundColor: '#fff',
+        color: '#0f172a',
         marginBottom: 14,
     },
     tableWrapper: {

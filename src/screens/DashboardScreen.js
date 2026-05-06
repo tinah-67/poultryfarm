@@ -153,13 +153,6 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
             <Text style={styles.cardText}>Reports</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => navigation.navigate('Search', { userId })}
-          >
-            <Text style={styles.cardText}>Search / Queries</Text>
-          </TouchableOpacity>
-
           {!showBottomTabs ? (
             <TouchableOpacity
               style={styles.card}

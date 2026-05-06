@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { deleteExpenseRecord, getExpensesByBatchId, getExpensesByFarmId, getUserById } from '../database/db';
 import DataTable from '../components/DataTable';
@@ -14,6 +14,7 @@ export default function ViewExpensesScreen({ route, navigation }) {
   const userId = route?.params?.userId;
   const [records, setRecords] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const isFarmExpenseView = farmId != null && !batchId;
 
   // Loads the correct expense list depending on whether the target is a farm or batch.
@@ -48,6 +49,27 @@ export default function ViewExpensesScreen({ route, navigation }) {
   const canDeleteExpense = ['owner', 'manager'].includes(currentUser?.role);
   const totalExpenses = records.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const title = isFarmExpenseView ? 'Farm Expense Records' : 'Batch Expense Records';
+  const filteredRecords = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return records;
+    }
+
+    return records.filter(item =>
+      [
+        item.description,
+        item.amount,
+        item.expense_date,
+        item.expense_scope,
+        item.feed_type,
+        item.vaccine_name,
+        item.quantity_bought,
+      ]
+        .filter(value => value !== null && value !== undefined)
+        .some(value => String(value).toLowerCase().includes(normalizedQuery))
+    );
+  }, [records, searchQuery]);
   const columns = [
     { key: 'description', title: 'Description', width: 200 },
     { key: 'amount', title: 'Amount', width: 120 },
@@ -87,13 +109,20 @@ export default function ViewExpensesScreen({ route, navigation }) {
           onPress={() => navigation.navigate('Expense', { batchId, farmId, farmName, userId })}
         />
       </View>
+      <TextInput
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        style={styles.searchInput}
+        placeholder="Search by description, amount, date, or type"
+        placeholderTextColor="#64748b"
+      />
       {/* Displays expense records in a reusable table. */}
       <View style={styles.tableWrapper}>
         <DataTable
           columns={columns}
-          data={records}
+          data={filteredRecords}
           keyExtractor={(item, index) => (item.expense_id || index).toString()}
-          emptyText="No expense records yet"
+          emptyText={searchQuery.trim() ? 'No expense records match your search.' : 'No expense records yet'}
           renderCell={(item, column) => {
             if (column.key === 'description') return <Text style={styles.cellText}>{item.description}</Text>;
             if (column.key === 'amount') return <Text style={styles.cellText}>{item.amount}</Text>;
@@ -127,6 +156,16 @@ const styles = StyleSheet.create({
   contextText: { color: '#e2e8f0', marginBottom: 6 },
   summary: { marginBottom: 12, fontWeight: '700', color: '#fff' },
   actions: { marginBottom: 14 },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    color: '#0f172a',
+    marginBottom: 14,
+  },
   tableWrapper: { marginTop: 8 },
   cellText: { color: '#334155' },
   primaryAction: { backgroundColor: '#1d4ed8', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, alignSelf: 'flex-start' },

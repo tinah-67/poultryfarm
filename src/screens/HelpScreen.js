@@ -44,16 +44,37 @@ const defaultRoleHelp = {
 
 // Answers common questions users may have before contacting support.
 const loginFaqItems = [
-  'Can I create a staff account from the login screen? No. Public registration creates owner accounts, and owners create staff accounts after signing in.',
-  'What should I do if my account is not found? Check the email address first, then try again when the device can reach the backup server.',
-  'Can I reset my password without internet? Yes, if your account and recovery question are already saved on this device.',
+  {
+    question: 'Can I create a staff account from the login screen?',
+    answer: 'No. Public registration creates owner accounts, and owners create staff accounts after signing in.',
+  },
+  {
+    question: 'What should I do if my account is not found?',
+    answer: 'Check the email address first, then try again when the device can reach the backup server.',
+  },
+  {
+    question: 'Can I reset my password without internet?',
+    answer: 'Yes, if your account and recovery question are already saved on this device.',
+  },
 ];
 
 const appFaqItems = [
-  'Do I need internet to use the app? No. Records are saved on the device first and backed up when the server is reachable.',
-  'Why are some buttons hidden or disabled? Your owner, manager, or worker role controls which actions you can use.',
-  'Why do reports look incomplete? Confirm each record was saved under the correct farm and batch, then refresh the report.',
-  'Can deleted records be restored from the list? Deleted farms, batches, and records are hidden to preserve history for backup sync.',
+  {
+    question: 'Do I need internet to use the app?',
+    answer: 'No. Records are saved on the device first and backed up when the server is reachable.',
+  },
+  {
+    question: 'Why are some buttons hidden or disabled?',
+    answer: 'Your owner, manager, or worker role controls which actions you can use.',
+  },
+  {
+    question: 'Why do reports look incomplete?',
+    answer: 'Confirm each record was saved under the correct farm and batch, then refresh the report.',
+  },
+  {
+    question: 'Can deleted records be restored from the list?',
+    answer: 'Deleted farms, batches, and records are hidden to preserve history for backup sync.',
+  },
 ];
 
 const CONTACT_EMAIL = 'c2515124@gmail.com';
@@ -135,6 +156,28 @@ const ContactCard = () => (
   </View>
 );
 
+// Renders FAQ questions as tappable links and reveals the selected answer.
+const FaqCard = ({ items, activeQuestion, onToggleQuestion }) => (
+  <View style={styles.sectionCard}>
+    <Text style={styles.sectionTitle}>FAQs</Text>
+    {items.map(item => {
+      const isActive = activeQuestion === item.question;
+
+      return (
+        <View key={item.question} style={styles.faqItem}>
+          <TouchableOpacity
+            activeOpacity={0.75}
+            onPress={() => onToggleQuestion(isActive ? null : item.question)}
+          >
+            <Text style={styles.faqQuestion}>{item.question}</Text>
+          </TouchableOpacity>
+          {isActive ? <Text style={styles.faqAnswer}>{item.answer}</Text> : null}
+        </View>
+      );
+    })}
+  </View>
+);
+
 // Renders a large menu action for choosing the type of help to open.
 const HelpMenuButton = ({ title, detail, onPress }) => (
   <TouchableOpacity style={styles.menuButton} activeOpacity={0.85} onPress={onPress}>
@@ -157,6 +200,7 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
   const helpMode = route?.params?.mode || 'general';
   const [currentUser, setCurrentUser] = useState(null);
   const [activeHelpPanel, setActiveHelpPanel] = useState('menu');
+  const [activeFaqQuestion, setActiveFaqQuestion] = useState(null);
 
   // Rechecks availability and opens the online user manual in the browser.
   const handleOpenOnlineHelp = useCallback(async () => {
@@ -194,6 +238,7 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
   // Returns to the main help menu when the screen mode changes.
   useEffect(() => {
     setActiveHelpPanel('menu');
+    setActiveFaqQuestion(null);
   }, [helpMode, userId]);
 
   const roleLabel = currentUser?.role
@@ -218,6 +263,10 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
       ? `Offline guidance for ${roleLabel} users`
       : 'Offline guidance for using the app';
   const faqItems = isLoginHelp ? loginFaqItems : appFaqItems;
+  const openFaqs = () => {
+    setActiveFaqQuestion(null);
+    setActiveHelpPanel('faqs');
+  };
 
   const renderMenu = () => (
     <>
@@ -238,7 +287,7 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
         <HelpMenuButton
           title="FAQs"
           detail="Open answers to common questions."
-          onPress={() => setActiveHelpPanel('faqs')}
+          onPress={openFaqs}
         />
       </View>
 
@@ -331,7 +380,11 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
       <BackToHelpButton onPress={() => setActiveHelpPanel('menu')} />
       <Text style={styles.title}>FAQs</Text>
       <Text style={styles.subtitle}>Answers to common questions</Text>
-      <SectionCard title="FAQs" items={faqItems} />
+      <FaqCard
+        items={faqItems}
+        activeQuestion={activeFaqQuestion}
+        onToggleQuestion={setActiveFaqQuestion}
+      />
     </>
   );
 
@@ -424,6 +477,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
     marginBottom: 8,
+  },
+  faqItem: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  faqQuestion: {
+    color: '#1d4ed8',
+    fontSize: 15,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+  faqAnswer: {
+    color: '#334155',
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 8,
   },
   // Contact action button styles.
   contactActions: {

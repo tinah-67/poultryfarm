@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { deleteMortalityRecord, getMortalityRecordsByBatchId, getUserById } from '../database/db';
 import DataTable from '../components/DataTable';
@@ -12,6 +12,7 @@ export default function ViewMortalityScreen({ route, navigation }) {
   const userId = route?.params?.userId;
   const [records, setRecords] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Loads active mortality records for the selected batch.
   const loadRecords = useCallback(() => {
@@ -39,6 +40,19 @@ export default function ViewMortalityScreen({ route, navigation }) {
   // Computes summary values and table columns for the mortality list.
   const canDeleteMortality = ['owner', 'worker'].includes(currentUser?.role);
   const totalDead = records.reduce((sum, item) => sum + Number(item.number_dead || 0), 0);
+  const filteredRecords = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return records;
+    }
+
+    return records.filter(item =>
+      [item.number_dead, item.cause_of_death, item.date_recorded]
+        .filter(value => value !== null && value !== undefined)
+        .some(value => String(value).toLowerCase().includes(normalizedQuery))
+    );
+  }, [records, searchQuery]);
   const columns = [
     { key: 'number_dead', title: 'Number Dead', width: 120 },
     { key: 'cause', title: 'Cause', width: 180 },
@@ -71,13 +85,20 @@ export default function ViewMortalityScreen({ route, navigation }) {
       <View style={styles.actions}>
         <ButtonLink title="Record Mortality" onPress={() => navigation.navigate('Mortality', { batchId, userId })} />
       </View>
+      <TextInput
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        style={styles.searchInput}
+        placeholder="Search by number dead, cause, or date"
+        placeholderTextColor="#64748b"
+      />
       {/* Displays mortality records in a reusable table. */}
       <View style={styles.tableWrapper}>
         <DataTable
           columns={columns}
-          data={records}
+          data={filteredRecords}
           keyExtractor={(item, index) => (item.mortality_id || index).toString()}
-          emptyText="No mortality records yet"
+          emptyText={searchQuery.trim() ? 'No mortality records match your search.' : 'No mortality records yet'}
           renderCell={(item, column) => {
             if (column.key === 'number_dead') return <Text style={styles.cellText}>{item.number_dead}</Text>;
             if (column.key === 'cause') return <Text style={styles.cellText}>{item.cause_of_death}</Text>;
@@ -110,6 +131,16 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
   summary: { marginBottom: 12, fontWeight: '700', color: '#fff' },
   actions: { marginBottom: 14 },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#fff',
+    color: '#0f172a',
+    marginBottom: 14,
+  },
   tableWrapper: { marginTop: 8 },
   cellText: { color: '#334155' },
   primaryAction: { backgroundColor: '#1d4ed8', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, alignSelf: 'flex-start' },
