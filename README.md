@@ -1,97 +1,123 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Poultry Farm
 
-# Getting Started
+A React Native mobile application for managing poultry farming operations.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## Overview
 
-## Step 1: Start Metro
+Poultry Farm is a mobile app designed to help farmers efficiently manage their poultry operations. Whether you're tracking livestock, managing feed inventory, or monitoring farm activities, this app provides an intuitive interface to streamline your daily tasks.
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+## Features
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+- 🐔 Livestock management
+- 📊 Inventory tracking
+- 📅 Activity logging
+- 📱 Cross-platform support (iOS & Android)
 
-```sh
-# Using npm
+## Tech Stack
+
+- **React Native** - Cross-platform mobile development
+- **TypeScript** - Type-safe development
+- **Metro** - JavaScript bundler for React Native
+
+## Getting Started
+
+### Prerequisites
+
+Before you begin, ensure you have the following installed:
+- Node.js (v14 or higher)
+- npm or Yarn
+- For iOS: Xcode and CocoaPods
+- For Android: Android Studio and Android SDK
+
+### Installation
+
+1. Clone the repository
+```bash
+git clone https://github.com/tinah-67/poultryfarm.git
+cd poultryfarm
+```
+
+2. Install dependencies
+```bash
+npm install
+# or
+yarn install
+```
+
+### Running the App
+
+#### Start Metro (development server)
+```bash
 npm start
-
-# OR using Yarn
+# or
 yarn start
 ```
 
-## Step 2: Build and run your app
-
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
-
-```sh
-# Using npm
+#### Run on Android
+```bash
 npm run android
-
-# OR using Yarn
+# or
 yarn android
 ```
 
-### iOS
-
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
+#### Run on iOS
+First, install CocoaPods dependencies:
+```bash
 bundle install
-```
-
-Then, and every time you update your native dependencies, run:
-
-```sh
 bundle exec pod install
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
+Then run the app:
+```bash
 npm run ios
-
-# OR using Yarn
+# or
 yarn ios
 ```
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+### Development
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+To make changes to the app:
 
-## Step 3: Modify your app
+1. Edit files (particularly `App.tsx`)
+2. Changes will automatically reload with **Fast Refresh**
+3. To force a full reload:
+   - **Android**: Press `R` twice or access Dev Menu with `Ctrl + M` (Windows/Linux) or `Cmd + M` (macOS)
+   - **iOS**: Press `R` in the iOS Simulator
 
-Now that you have successfully run the app, let's make changes!
+## Troubleshooting
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+If you encounter issues:
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+1. Clear cache and reinstall dependencies:
+```bash
+npm install --legacy-peer-deps
+# or
+yarn install
+```
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+2. For iOS issues, try:
+```bash
+cd ios && rm -rf Pods Podfile.lock
+cd ..
+bundle exec pod install
+```
 
-## Congratulations! :tada:
+3. Consult the [React Native Troubleshooting Guide](https://reactnative.dev/docs/troubleshooting)
 
-You've successfully run and modified your React Native App. :partying_face:
+## Learn More
 
-### Now what?
+- [React Native Documentation](https://reactnative.dev/docs/getting-started)
+- [React Native Blog](https://reactnative.dev/blog)
+- [CocoaPods Guide](https://guides.cocoapods.org)
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+## License
 
-# Troubleshooting
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+## Contributing
 
-# Learn More
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-To learn more about React Native, take a look at the following resources:
+---
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+Happy farming! 🚜
