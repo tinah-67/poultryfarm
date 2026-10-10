@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1100" viewBox="0 0 1800 1100">
+  <defs>
+    <style>
+      .title { font-family: Arial, Helvetica, sans-serif; font-size: 34px; font-weight: 700; fill: #111; }
+      .subtitle { font-family: Arial, Helvetica, sans-serif; font-size: 18px; fill: #444; }
+      .group { fill: #f8fafc; stroke: #334155; stroke-width: 2.5; rx: 18; ry: 18; }
+      .box { fill: #ffffff; stroke: #1f2937; stroke-width: 2.5; rx: 12; ry: 12; }
+      .db { fill: #ffffff; stroke: #1f2937; stroke-width: 2.5; }
+      .label { font-family: Arial, Helvetica, sans-serif; font-size: 24px; font-weight: 700; fill: #111; }
+      .body { font-family: Arial, Helvetica, sans-serif; font-size: 18px; fill: #111; }
+      .small { font-family: Arial, Helvetica, sans-serif; font-size: 16px; fill: #334155; }
+      .arrow { stroke: #111827; stroke-width: 2.8; fill: none; marker-end: url(#arrowhead); }
+      .dashed { stroke-dasharray: 10 8; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#111827" />
+    </marker>
+  </defs>
+
+  <text x="900" y="55" text-anchor="middle" class="title">System Architecture Diagram - BroilerHub</text>
+  <text x="900" y="88" text-anchor="middle" class="subtitle">Offline-first poultry farm management system</text>
+
+  <!-- users -->
+  <rect x="70" y="180" width="240" height="360" class="group"/>
+  <text x="190" y="220" text-anchor="middle" class="label">Users</text>
+
+  <rect x="110" y="260" width="160" height="80" class="box"/>
+  <text x="190" y="308" text-anchor="middle" class="body">Owner</text>
+
+  <rect x="110" y="370" width="160" height="80" class="box"/>
+  <text x="190" y="418" text-anchor="middle" class="body">Manager</text>
+
+  <rect x="110" y="480" width="160" height="80" class="box"/>
+  <text x="190" y="528" text-anchor="middle" class="body">Worker</text>
+
+  <!-- mobile app -->
+  <rect x="410" y="120" width="640" height="760" class="group"/>
+  <text x="730" y="160" text-anchor="middle" class="label">Mobile Application Layer</text>
+
+  <rect x="470" y="210" width="520" height="120" class="box"/>
+  <text x="730" y="255" text-anchor="middle" class="label">React Native App UI</text>
+  <text x="730" y="290" text-anchor="middle" class="small">Dashboard, Farm Management, Batch Management, Reports, Notifications</text>
+
+  <rect x="470" y="380" width="240" height="120" class="box"/>
+  <text x="590" y="425" text-anchor="middle" class="body">Business Logic</text>
+  <text x="590" y="455" text-anchor="middle" class="small">Validation, summaries,</text>
+  <text x="590" y="478" text-anchor="middle" class="small">performance calculations</text>
+
+  <rect x="750" y="380" width="240" height="120" class="box"/>
+  <text x="870" y="425" text-anchor="middle" class="body">Service Layer</text>
+  <text x="870" y="455" text-anchor="middle" class="small">backupSync.js,</text>
+  <text x="870" y="478" text-anchor="middle" class="small">bootstrapLogin.js</text>
+
+  <!-- local db cylinder -->
+  <ellipse cx="590" cy="610" rx="120" ry="32" class="db"/>
+  <rect x="470" y="610" width="240" height="120" class="db"/>
+  <ellipse cx="590" cy="730" rx="120" ry="32" class="db"/>
+  <text x="590" y="650" text-anchor="middle" class="body">Local SQLite Database</text>
+  <text x="590" y="680" text-anchor="middle" class="small">db.js</text>
+  <text x="590" y="705" text-anchor="middle" class="small">offline operational data store</text>
+
+  <rect x="750" y="575" width="240" height="170" class="box"/>
+  <text x="870" y="620" text-anchor="middle" class="body">Local Device Services</text>
+  <text x="870" y="652" text-anchor="middle" class="small">Local notifications</text>
+  <text x="870" y="676" text-anchor="middle" class="small">Session persistence</text>
+  <text x="870" y="700" text-anchor="middle" class="small">Excel export</text>
+
+  <!-- backend -->
+  <rect x="1180" y="180" width="550" height="700" class="group"/>
+  <text x="1455" y="220" text-anchor="middle" class="label">Backend / Server Layer</text>
+
+  <rect x="1250" y="290" width="410" height="130" class="box"/>
+  <text x="1455" y="340" text-anchor="middle" class="label">Node.js / Express API</text>
+  <text x="1455" y="372" text-anchor="middle" class="small">server.js</text>
+  <text x="1455" y="398" text-anchor="middle" class="small">Authentication, bootstrap login, backup sync endpoints</text>
+
+  <ellipse cx="1455" cy="590" rx="140" ry="34" class="db"/>
+  <rect x="1315" y="590" width="280" height="150" class="db"/>
+  <ellipse cx="1455" cy="740" rx="140" ry="34" class="db"/>
+  <text x="1455" y="635" text-anchor="middle" class="body">MySQL Database</text>
+  <text x="1455" y="668" text-anchor="middle" class="small">central backup / restore store</text>
+  <text x="1455" y="694" text-anchor="middle" class="small">users, farms, batches, records, expenses, sales</text>
+
+  <!-- arrows -->
+  <line x1="310" y1="380" x2="470" y2="270" class="arrow"/>
+  <text x="360" y="300" text-anchor="middle" class="small">use app</text>
+
+  <line x1="730" y1="330" x2="590" y2="380" class="arrow"/>
+  <line x1="730" y1="330" x2="870" y2="380" class="arrow"/>
+  <text x="730" y="360" text-anchor="middle" class="small">calls</text>
+
+  <line x1="590" y1="500" x2="590" y2="578" class="arrow"/>
+  <text x="610" y="548" class="small">CRUD</text>
+
+  <line x1="870" y1="500" x2="870" y2="575" class="arrow"/>
+  <text x="890" y="545" class="small">uses</text>
+
+  <line x1="710" y1="640" x2="750" y2="640" class="arrow"/>
+  <text x="730" y="625" text-anchor="middle" class="small">triggers</text>
+
+  <line x1="990" y1="430" x2="1250" y2="355" class="arrow"/>
+  <text x="1115" y="370" text-anchor="middle" class="small">HTTP sync / bootstrap</text>
+
+  <line x1="1250" y1="390" x2="990" y2="470" class="arrow dashed"/>
+  <text x="1110" y="445" text-anchor="middle" class="small">responses / restore data</text>
+
+  <line x1="1455" y1="420" x2="1455" y2="556" class="arrow"/>
+  <text x="1485" y="505" class="small">read / write</text>
+
+  <!-- side notes -->
+  <text x="730" y="830" text-anchor="middle" class="small">Primary operating mode: local-first using SQLite</text>
+  <text x="1455" y="830" text-anchor="middle" class="small">Server role: authentication, backup, restore, synchronization</text>
+</svg>

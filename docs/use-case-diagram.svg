@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1000" viewBox="0 0 1700 1000">
+  <defs>
+    <style>
+      .title { font: 700 30px Arial, sans-serif; fill: #0f172a; }
+      .label { font: 700 20px Arial, sans-serif; fill: #0f172a; }
+      .text { font: 16px Arial, sans-serif; fill: #1e293b; }
+      .small { font: 14px Arial, sans-serif; fill: #475569; }
+      .actor { fill: #ffffff; stroke: #0f172a; stroke-width: 3; }
+      .system { fill: #f8fafc; stroke: #1d4ed8; stroke-width: 3; rx: 24; ry: 24; }
+      .usecase { fill: #ffffff; stroke: #2563eb; stroke-width: 2.2; }
+      .line { stroke: #64748b; stroke-width: 2; fill: none; }
+    </style>
+  </defs>
+
+  <rect width="1700" height="1000" fill="#ffffff"/>
+  <text x="850" y="48" text-anchor="middle" class="title">Use Case Diagram for Owner and Worker</text>
+
+  <rect x="380" y="90" width="940" height="840" class="system"/>
+  <text x="850" y="125" text-anchor="middle" class="label">Poultry Farm Management System</text>
+
+  <ellipse cx="650" cy="180" rx="120" ry="34" class="usecase"/>
+  <text x="650" y="186" text-anchor="middle" class="text">Register / Login</text>
+
+  <ellipse cx="1050" cy="180" rx="110" ry="34" class="usecase"/>
+  <text x="1050" y="186" text-anchor="middle" class="text">View Dashboard</text>
+
+  <ellipse cx="650" cy="280" rx="108" ry="34" class="usecase"/>
+  <text x="650" y="286" text-anchor="middle" class="text">Manage Farms</text>
+
+  <ellipse cx="1050" cy="280" rx="128" ry="34" class="usecase"/>
+  <text x="1050" y="286" text-anchor="middle" class="text">Create Staff Account</text>
+
+  <ellipse cx="650" cy="380" rx="118" ry="34" class="usecase"/>
+  <text x="650" y="386" text-anchor="middle" class="text">Manage Batches</text>
+
+  <ellipse cx="1050" cy="380" rx="132" ry="34" class="usecase"/>
+  <text x="1050" y="386" text-anchor="middle" class="text">View Batch Details</text>
+
+  <ellipse cx="650" cy="480" rx="92" ry="34" class="usecase"/>
+  <text x="650" y="486" text-anchor="middle" class="text">Record Feed</text>
+
+  <ellipse cx="1050" cy="480" rx="110" ry="34" class="usecase"/>
+  <text x="1050" y="486" text-anchor="middle" class="text">Record Mortality</text>
+
+  <ellipse cx="650" cy="580" rx="122" ry="34" class="usecase"/>
+  <text x="650" y="586" text-anchor="middle" class="text">Record Vaccination</text>
+
+  <ellipse cx="1050" cy="580" rx="104" ry="34" class="usecase"/>
+  <text x="1050" y="586" text-anchor="middle" class="text">Record Expenses</text>
+
+  <ellipse cx="650" cy="680" rx="90" ry="34" class="usecase"/>
+  <text x="650" y="686" text-anchor="middle" class="text">Record Sales</text>
+
+  <ellipse cx="1050" cy="680" rx="134" ry="34" class="usecase"/>
+  <text x="1050" y="686" text-anchor="middle" class="text">View Batch Performance</text>
+
+  <ellipse cx="650" cy="780" rx="150" ry="34" class="usecase"/>
+  <text x="650" y="786" text-anchor="middle" class="text">View Farm Performance Summary</text>
+
+  <ellipse cx="1050" cy="780" rx="96" ry="34" class="usecase"/>
+  <text x="1050" y="786" text-anchor="middle" class="text">View Reports</text>
+
+  <ellipse cx="850" cy="870" rx="114" ry="34" class="usecase"/>
+  <text x="850" y="876" text-anchor="middle" class="text">View Notifications</text>
+
+  <ellipse cx="850" cy="930" rx="148" ry="34" class="usecase"/>
+  <text x="850" y="936" text-anchor="middle" class="text">Complete / Reactivate Batch</text>
+
+  <circle cx="150" cy="290" r="22" class="actor"/>
+  <line x1="150" y1="312" x2="150" y2="380" class="line"/>
+  <line x1="108" y1="335" x2="192" y2="335" class="line"/>
+  <line x1="150" y1="380" x2="120" y2="430" class="line"/>
+  <line x1="150" y1="380" x2="180" y2="430" class="line"/>
+  <text x="150" y="462" text-anchor="middle" class="label">Worker</text>
+
+  <circle cx="1550" cy="430" r="22" class="actor"/>
+  <line x1="1550" y1="452" x2="1550" y2="520" class="line"/>
+  <line x1="1508" y1="475" x2="1592" y2="475" class="line"/>
+  <line x1="1550" y1="520" x2="1520" y2="570" class="line"/>
+  <line x1="1550" y1="520" x2="1580" y2="570" class="line"/>
+  <text x="1550" y="602" text-anchor="middle" class="label">Owner</text>
+
+  <line x1="192" y1="290" x2="530" y2="180" class="line"/>
+  <line x1="192" y1="305" x2="532" y2="380" class="line"/>
+  <line x1="192" y1="320" x2="918" y2="380" class="line"/>
+  <line x1="192" y1="335" x2="558" y2="480" class="line"/>
+  <line x1="192" y1="350" x2="940" y2="480" class="line"/>
+  <line x1="192" y1="365" x2="528" y2="580" class="line"/>
+  <line x1="192" y1="380" x2="918" y2="680" class="line"/>
+  <line x1="192" y1="395" x2="954" y2="780" class="line"/>
+  <line x1="192" y1="410" x2="736" y2="870" class="line"/>
+
+  <line x1="1508" y1="360" x2="1160" y2="180" class="line"/>
+  <line x1="1508" y1="372" x2="770" y2="180" class="line"/>
+  <line x1="1508" y1="384" x2="758" y2="280" class="line"/>
+  <line x1="1508" y1="396" x2="1178" y2="280" class="line"/>
+  <line x1="1508" y1="408" x2="768" y2="380" class="line"/>
+  <line x1="1508" y1="420" x2="1182" y2="380" class="line"/>
+  <line x1="1508" y1="432" x2="742" y2="480" class="line"/>
+  <line x1="1508" y1="444" x2="1162" y2="580" class="line"/>
+  <line x1="1508" y1="456" x2="740" y2="680" class="line"/>
+  <line x1="1508" y1="468" x2="1184" y2="680" class="line"/>
+  <line x1="1508" y1="480" x2="800" y2="780" class="line"/>
+  <line x1="1508" y1="492" x2="1146" y2="780" class="line"/>
+  <line x1="1508" y1="504" x2="964" y2="870" class="line"/>
+  <line x1="1508" y1="516" x2="998" y2="930" class="line"/>
+
+  <text x="850" y="980" text-anchor="middle" class="small">Owner has full access. Worker can record feed, mortality, vaccination, and access operational batch views only.</text>
+</svg>

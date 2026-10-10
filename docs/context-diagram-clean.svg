@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900">
+  <defs>
+    <style>
+      .box { fill: #ffffff; stroke: #111111; stroke-width: 2.5; }
+      .process { fill: #ffffff; stroke: #111111; stroke-width: 3; }
+      .title { font-family: Arial, Helvetica, sans-serif; font-size: 28px; font-weight: 700; fill: #111111; }
+      .label { font-family: Arial, Helvetica, sans-serif; font-size: 24px; font-weight: 700; fill: #111111; }
+      .text { font-family: Arial, Helvetica, sans-serif; font-size: 18px; fill: #111111; }
+      .arrow { stroke: #111111; stroke-width: 2.5; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#111111" />
+    </marker>
+  </defs>
+
+  <text x="700" y="70" text-anchor="middle" class="title">Context Diagram</text>
+
+  <rect x="520" y="300" width="360" height="240" rx="26" ry="26" class="process" />
+  <text x="700" y="390" text-anchor="middle" class="label">BroilerHub</text>
+  <text x="700" y="430" text-anchor="middle" class="label">Poultry Farm</text>
+  <text x="700" y="470" text-anchor="middle" class="label">Management System</text>
+
+  <rect x="110" y="120" width="220" height="90" rx="8" ry="8" class="box" />
+  <text x="220" y="175" text-anchor="middle" class="label">Owner</text>
+
+  <rect x="1080" y="120" width="220" height="90" rx="8" ry="8" class="box" />
+  <text x="1190" y="175" text-anchor="middle" class="label">Manager</text>
+
+  <rect x="110" y="650" width="220" height="90" rx="8" ry="8" class="box" />
+  <text x="220" y="705" text-anchor="middle" class="label">Worker</text>
+
+  <line x1="330" y1="150" x2="520" y2="150" class="arrow" />
+  <line x1="520" y1="205" x2="330" y2="205" class="arrow" />
+  <text x="425" y="128" text-anchor="middle" class="text">farm and batch data,</text>
+  <text x="425" y="152" text-anchor="middle" class="text">expenses, sales, reports</text>
+  <text x="425" y="238" text-anchor="middle" class="text">dashboards, reports,</text>
+  <text x="425" y="262" text-anchor="middle" class="text">summaries, notifications</text>
+
+  <line x1="880" y1="150" x2="1080" y2="150" class="arrow" />
+  <line x1="1080" y1="205" x2="880" y2="205" class="arrow" />
+  <text x="980" y="128" text-anchor="middle" class="text">expense details,</text>
+  <text x="980" y="152" text-anchor="middle" class="text">report requests</text>
+  <text x="980" y="238" text-anchor="middle" class="text">summaries, reports,</text>
+  <text x="980" y="262" text-anchor="middle" class="text">notifications</text>
+
+  <line x1="330" y1="680" x2="520" y2="680" class="arrow" />
+  <line x1="520" y1="625" x2="330" y2="625" class="arrow" />
+  <text x="425" y="658" text-anchor="middle" class="text">feed, mortality,</text>
+  <text x="425" y="682" text-anchor="middle" class="text">vaccination records</text>
+  <text x="425" y="603" text-anchor="middle" class="text">assigned batch details,</text>
+  <text x="425" y="627" text-anchor="middle" class="text">reminders, notifications</text>
+</svg>
