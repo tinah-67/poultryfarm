@@ -7,7 +7,7 @@ import ScreenBackground from '../components/ScreenBackground';
 // Lets owner and manager users record farm-level or batch-level expenses.
 export default function ExpenseScreen({ route, navigation }) {
   // Defines dropdown options for expense categories and inventory purchase types.
-  const feedTypeOptions = ['starter', 'grower', 'finisher'];
+  const feedTypeOptions = ['Layer ration', 'Flock ration', 'Breeder ration', 'Supplement', 'Other'];
   const vaccineOptions = [
     'Newcastle disease',
     'Gumboro / IBD',
@@ -85,7 +85,7 @@ export default function ExpenseScreen({ route, navigation }) {
 
     if (isFeedPurchase) {
       return feedType
-        ? `${feedType.charAt(0).toUpperCase() + feedType.slice(1)} feed purchase`
+        ? `${feedType} purchase`
         : 'Feed purchase';
     }
 

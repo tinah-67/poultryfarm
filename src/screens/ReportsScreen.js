@@ -724,9 +724,12 @@ export default function ReportsScreen({ route }) {
         summary: [
           { label: 'Feed Entries', value: String(feedData.length) },
           { label: 'Feed Used', value: `${formatNumber(feedTotalKg)} kg` },
-          { label: 'Starter Left', value: `${formatNumber(remainingFeedByType.starter || 0)} kg` },
-          { label: 'Grower Left', value: `${formatNumber(remainingFeedByType.grower || 0)} kg` },
-          { label: 'Finisher Left', value: `${formatNumber(remainingFeedByType.finisher || 0)} kg` },
+          ...(Object.keys(remainingFeedByType).length
+            ? Object.entries(remainingFeedByType).slice(0, 3).map(([key, value]) => ({
+                label: `${key.charAt(0).toUpperCase() + key.slice(1)} Left`,
+                value: `${formatNumber(value)} kg`,
+              }))
+            : [{ label: 'Feed Remaining', value: '0.00 kg' }]),
           { label: 'Farms Covered', value: String(getUniqueFarmCount(feedData)) },
           ...(currentUser?.role === 'worker'
             ? []

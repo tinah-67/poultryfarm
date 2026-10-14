@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Alert, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, ImageBackground, View } from 'react-native';
+import { Alert, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearRememberedSession, getUserById } from '../database/db';
 import { syncPendingBackup } from '../services/backupSync';
@@ -96,17 +96,13 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
     });
   };
 
-  const roleLabel = currentUser?.role ? currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1) : null;
+  const firstName = currentUser?.first_name;
   const isOwner = currentUser?.role === 'owner';
   const canAccessFarmManagement = ['owner', 'manager'].includes(currentUser?.role);
 
   // Renders role-aware navigation cards for the main app workflows.
   return (
-    <ImageBackground
-      source={require('../Broilers-Chickens.webp')}
-      style={styles.background}
-      imageStyle={styles.backgroundImage}
-    >
+    <View style={styles.background}>
       <View style={styles.overlay}>
         <ScrollView
           contentContainerStyle={styles.container}
@@ -114,8 +110,8 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ffffff" />
           }
         >
-          <Text style={styles.title}>BroilerHub Dashboard</Text>
-          {roleLabel ? <Text style={styles.subtitle}>Signed in as {roleLabel}</Text> : null}
+          <Text style={styles.title}>KIKO FARM</Text>
+          {firstName ? <Text style={styles.subtitle}>Signed in as {firstName}</Text> : null}
           {syncingBackup ? <Text style={styles.syncStatus}>Syncing backup...</Text> : null}
 
           {/* Owner and manager users can access farm-level workflows. */}
@@ -191,7 +187,7 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
           </TouchableOpacity>
         </ScrollView>
       </View>
-    </ImageBackground>
+    </View>
   );
 }
 
@@ -199,9 +195,7 @@ const styles = StyleSheet.create({
   // Background, overlay, and dashboard layout styles.
   background: {
     flex: 1,
-  },
-  backgroundImage: {
-    resizeMode: 'cover',
+    backgroundColor: '#0f172a',
   },
   overlay: {
     flex: 1,

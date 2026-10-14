@@ -17,7 +17,7 @@
   </defs>
 
   <text x="850" y="55" text-anchor="middle" class="title">High-Level Data Flow Overview Diagram</text>
-  <text x="850" y="88" text-anchor="middle" class="subtitle">BroilerHub Poultry Farm Management System</text>
+  <text x="850" y="88" text-anchor="middle" class="subtitle">KikoFarm Poultry Farm Management System</text>
 
   <!-- User -->
   <rect x="80" y="350" width="220" height="110" class="box"/>

@@ -197,14 +197,12 @@ export default function BatchPerformanceScreen({ route }) {
         { key: 'note', title: 'Note' },
       ],
       data: [
-        { metric: 'Birds Alive', value: String(metrics.totalBirdsAlive), note: `Initial chicks: ${batch.initial_chicks ?? 0}` },
+        { metric: 'Birds Alive', value: String(metrics.totalBirdsAlive), note: `Initial flock: ${batch.initial_chicks ?? 0}` },
         { metric: 'Total Dead', value: String(metrics.totalMortality), note: `Mortality rate: ${formatNumber(metrics.mortalityRate)}%` },
         { metric: 'Total Sold', value: String(metrics.totalBirdsSold), note: 'Birds sold from this batch' },
         { metric: 'Total Feed Used', value: `${formatNumber(metrics.totalFeedUsed)} kg`, note: `Feed cost: ${formatCurrency(metrics.totalFeedCost)}` },
-        { metric: 'Starter Feed Cost', value: formatCurrency(metrics.feedCostByType?.starter || 0), note: `Feed used: ${formatNumber(metrics.feedUsedByType?.starter || 0)} kg` },
-        { metric: 'Grower Feed Cost', value: formatCurrency(metrics.feedCostByType?.grower || 0), note: `Feed used: ${formatNumber(metrics.feedUsedByType?.grower || 0)} kg` },
-        { metric: 'Finisher Feed Cost', value: formatCurrency(metrics.feedCostByType?.finisher || 0), note: `Feed used: ${formatNumber(metrics.feedUsedByType?.finisher || 0)} kg` },
-        { metric: 'Total Expenses', value: formatCurrency(metrics.totalExpenses), note: `Chick purchase: ${formatCurrency(metrics.purchaseCost)}` },
+        { metric: 'Feed Cost', value: formatCurrency(metrics.totalFeedCost), note: 'Feed cost across all recorded feed types' },
+        { metric: 'Total Expenses', value: formatCurrency(metrics.totalExpenses), note: `Initial flock purchase: ${formatCurrency(metrics.purchaseCost)}` },
         { metric: 'Revenue', value: formatCurrency(metrics.totalRevenue), note: 'Total sales revenue' },
         { metric: 'Profit', value: formatCurrency(metrics.profit), note: metrics.profit >= 0 ? 'Revenue minus expenses' : 'This batch is currently at a loss' },
       ],
@@ -261,27 +259,13 @@ export default function BatchPerformanceScreen({ route }) {
         <>
           {/* Shows the calculated performance metrics. */}
           <View style={styles.metricsGrid}>
-            <MetricCard label="Total Birds Alive" value={String(metrics.totalBirdsAlive)} helper={`Initial chicks: ${batch?.initial_chicks ?? 0}`} />
+            <MetricCard label="Total Birds Alive" value={String(metrics.totalBirdsAlive)} helper={`Initial flock: ${batch?.initial_chicks ?? 0}`} />
             <MetricCard label="Total Dead" value={String(metrics.totalMortality)} helper={`Mortality rate: ${formatNumber(metrics.mortalityRate)}%`} />
             <MetricCard label="Total Sold" value={String(metrics.totalBirdsSold)} />
-            <MetricCard label="Mortality Rate" value={`${formatNumber(metrics.mortalityRate)}%`} helper={`Based on ${batch?.initial_chicks ?? 0} initial chicks`} />
+            <MetricCard label="Mortality Rate" value={`${formatNumber(metrics.mortalityRate)}%`} helper={`Based on ${batch?.initial_chicks ?? 0} initial birds`} />
             <MetricCard label="Total Feed Used" value={`${formatNumber(metrics.totalFeedUsed)} kg`} helper={`Feed cost: ${formatCurrency(metrics.totalFeedCost)}`} />
-            <MetricCard
-              label="Starter Feed Cost"
-              value={formatCurrency(metrics.feedCostByType?.starter || 0)}
-              helper={`Feed used: ${formatNumber(metrics.feedUsedByType?.starter || 0)} kg`}
-            />
-            <MetricCard
-              label="Grower Feed Cost"
-              value={formatCurrency(metrics.feedCostByType?.grower || 0)}
-              helper={`Feed used: ${formatNumber(metrics.feedUsedByType?.grower || 0)} kg`}
-            />
-            <MetricCard
-              label="Finisher Feed Cost"
-              value={formatCurrency(metrics.feedCostByType?.finisher || 0)}
-              helper={`Feed used: ${formatNumber(metrics.feedUsedByType?.finisher || 0)} kg`}
-            />
-            <MetricCard label="Total Expenses" value={formatCurrency(metrics.totalExpenses)} helper={`Chick purchase: ${formatCurrency(metrics.purchaseCost)}`} />
+            <MetricCard label="Feed Cost" value={formatCurrency(metrics.totalFeedCost)} helper={'Feed cost across all recorded feed types'} />
+            <MetricCard label="Total Expenses" value={formatCurrency(metrics.totalExpenses)} helper={`Initial flock purchase: ${formatCurrency(metrics.purchaseCost)}`} />
             <MetricCard label="Revenue" value={formatCurrency(metrics.totalRevenue)} />
             <MetricCard label="Profit" value={formatCurrency(metrics.profit)} helper={metrics.profit >= 0 ? 'Revenue minus expenses' : 'This batch is currently at a loss'} />
           </View>

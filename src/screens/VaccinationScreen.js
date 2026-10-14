@@ -12,79 +12,6 @@ try {
   DateTimePicker = null;
 }
 
-// Lists common broiler vaccines and suggested follow-up timing.
-const VACCINE_OPTIONS = [
-  {
-    name: 'Newcastle disease',
-    scheduleLabel: 'Usually first dose around day 5-7, booster around day 18-21',
-    nextDueAgeDays: 21,
-  },
-  {
-    name: 'Gumboro / IBD',
-    scheduleLabel: 'Usually around day 10-14, repeat around day 18-21',
-    nextDueAgeDays: 21,
-  },
-  {
-    name: 'Infectious bronchitis',
-    scheduleLabel: 'Commonly given at day 1 or within the first week',
-    nextDueAgeDays: null,
-  },
-  {
-    name: 'Marek’s disease',
-    scheduleLabel: 'Usually given at day-old chick stage',
-    nextDueAgeDays: null,
-  },
-  {
-    name: 'Coccidiosis',
-    scheduleLabel: 'Often handled at day-old stage depending on farm program',
-    nextDueAgeDays: null,
-  },
-];
-
-// Calculates the batch age in whole days for vaccination suggestions.
-const getAgeInDays = startDate => {
-  const parsedStartDate = new Date(String(startDate || '').trim());
-
-  if (Number.isNaN(parsedStartDate.getTime())) {
-    return null;
-  }
-
-  const today = new Date();
-  const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const normalizedStartDate = new Date(
-    parsedStartDate.getFullYear(),
-    parsedStartDate.getMonth(),
-    parsedStartDate.getDate()
-  );
-
-  return Math.floor((normalizedToday.getTime() - normalizedStartDate.getTime()) / (24 * 60 * 60 * 1000));
-};
-
-// Suggests vaccines based on the batch's current age.
-const getSuggestedVaccinesForAge = ageInDays => {
-  if (ageInDays == null || ageInDays < 0) {
-    return [];
-  }
-
-  if (ageInDays <= 3) {
-    return ['Marek’s disease', 'Infectious bronchitis', 'Coccidiosis'];
-  }
-
-  if (ageInDays <= 8) {
-    return ['Newcastle disease', 'Infectious bronchitis'];
-  }
-
-  if (ageInDays <= 15) {
-    return ['Gumboro / IBD'];
-  }
-
-  if (ageInDays <= 24) {
-    return ['Newcastle disease', 'Gumboro / IBD'];
-  }
-
-  return [];
-};
-
 // Lets owner and worker users record vaccinations and complete follow-up reminders.
 export default function VaccinationScreen({ route, navigation }) {
   // Stores route context, vaccination fields, picker state, and role/batch data.
@@ -97,7 +24,6 @@ export default function VaccinationScreen({ route, navigation }) {
   const [nextDueDate, setNextDueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [pickerField, setPickerField] = useState(null);
-  const [showVaccineDropdown, setShowVaccineDropdown] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [batch, setBatch] = useState(null);
 
@@ -121,7 +47,6 @@ export default function VaccinationScreen({ route, navigation }) {
       }
 
       setVaccineName(prefilledVaccineName ? String(prefilledVaccineName) : '');
-      setShowVaccineDropdown(false);
     }, [batchId, prefilledVaccineName, userId])
   );
 
@@ -153,38 +78,12 @@ export default function VaccinationScreen({ route, navigation }) {
 
   const todayDate = getTodayDate();
 
-  // Adds days to a local date for suggested follow-up dates.
-  const addDays = (date, days) => {
-    const nextDate = new Date(date);
-    nextDate.setDate(nextDate.getDate() + days);
-    return nextDate;
-  };
-
   // Formats today's date for the vaccination date field.
   const formatToday = () => {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   };
   const todayText = formatToday();
-  const selectedVaccineOption = VACCINE_OPTIONS.find(option => option.name === vaccineName) || null;
-  const batchAgeInDays = getAgeInDays(batch?.start_date);
-  const suggestedVaccines = getSuggestedVaccinesForAge(batchAgeInDays);
-
-  // Suggests the next due date based on the vaccine schedule and batch start date.
-  const getSuggestedNextDueDate = selectedVaccine => {
-    const matchingVaccine = VACCINE_OPTIONS.find(option => option.name === selectedVaccine);
-    const batchStartDate = parseComparableDate(batch?.start_date);
-
-    if (!matchingVaccine?.nextDueAgeDays || !batchStartDate) {
-      return '';
-    }
-
-    const dueDate = addDays(batchStartDate, matchingVaccine.nextDueAgeDays - 1);
-    const normalizedDueDate = dueDate < todayDate ? todayDate : dueDate;
-
-    return formatTodayFromDate(normalizedDueDate);
-  };
-
   // Updates the selected date picker field and prevents past follow-up dates.
   const handlePickerChange = (_, selectedDate) => {
     if (Platform.OS !== 'ios') {
@@ -221,19 +120,6 @@ export default function VaccinationScreen({ route, navigation }) {
     }
 
     setPickerField(field);
-  };
-
-  // Applies a vaccine selection and fills a suggested next due date when possible.
-  const handleSelectVaccine = selectedVaccine => {
-    setVaccineName(selectedVaccine);
-    setShowVaccineDropdown(false);
-
-    if (prefilledDueDate) {
-      return;
-    }
-
-    const suggestedDueDate = getSuggestedNextDueDate(selectedVaccine);
-    setNextDueDate(suggestedDueDate);
   };
 
   // Sets a date field to today's date.
@@ -326,16 +212,9 @@ export default function VaccinationScreen({ route, navigation }) {
           Recording the follow-up dose for the vaccination that was due on {prefilledDueDate}.
         </Text>
       ) : null}
-      {batchAgeInDays != null ? (
-        <Text style={styles.noteText}>
-          Batch age: {batchAgeInDays} day{batchAgeInDays === 1 ? '' : 's'}.
-        </Text>
-      ) : null}
-      {suggestedVaccines.length ? (
-        <Text style={styles.suggestionText}>
-          Suggested for this age: {suggestedVaccines.join(', ')}.
-        </Text>
-      ) : null}
+      <Text style={styles.noteText}>
+        Follow the vaccination plan from your local veterinarian or extension officer. Recommended vaccines and timing vary by location and flock health.
+      </Text>
       {isBatchCompleted ? (
         <Text style={styles.lockedNote}>
           This batch is completed. New vaccination entries are disabled, but you can still view the existing records.
@@ -350,45 +229,9 @@ export default function VaccinationScreen({ route, navigation }) {
             value={vaccineName}
             onChangeText={text => {
               setVaccineName(text);
-              setShowVaccineDropdown(false);
             }}
             style={styles.input}
           />
-          <View style={styles.dropdownContainer}>
-            <TouchableOpacity
-              style={styles.dropdownTrigger}
-              activeOpacity={0.8}
-              onPress={() => setShowVaccineDropdown(previous => !previous)}
-            >
-              <Text style={styles.dropdownTriggerText}>
-                {selectedVaccineOption?.name || 'Choose vaccine from list'}
-              </Text>
-              <Text style={styles.dropdownChevron}>{showVaccineDropdown ? '^' : 'v'}</Text>
-            </TouchableOpacity>
-            {showVaccineDropdown ? (
-              <View style={styles.dropdownMenu}>
-                {VACCINE_OPTIONS.map(option => {
-                  const isSelected = option.name === vaccineName;
-
-                  return (
-                    <TouchableOpacity
-                      key={option.name}
-                      style={[styles.dropdownOption, isSelected ? styles.dropdownOptionSelected : null]}
-                      activeOpacity={0.8}
-                      onPress={() => handleSelectVaccine(option.name)}
-                    >
-                      <Text style={[styles.dropdownOptionText, isSelected ? styles.dropdownOptionTextSelected : null]}>
-                        {option.name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ) : null}
-          </View>
-          {selectedVaccineOption ? (
-            <Text style={styles.scheduleHint}>{selectedVaccineOption.scheduleLabel}</Text>
-          ) : null}
           <View style={[styles.input, styles.dateField, styles.fixedDateField]}>
             <Text style={styles.fixedDateLabel}>Vaccination Date</Text>
             <Text style={styles.dateValue}>{todayText}</Text>
@@ -443,8 +286,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
   lockedNote: { color: '#fecaca', marginBottom: 12 },
   noteText: { color: '#cbd5e1', marginBottom: 12 },
-  suggestionText: { color: '#fde68a', marginBottom: 12, fontWeight: '600' },
-  scheduleHint: { color: '#bfdbfe', marginBottom: 10 },
   input: { borderWidth: 1, padding: 10, marginBottom: 10, borderRadius: 5, backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: '#cbd5e1' },
   dropdownContainer: { marginBottom: 10 },
   dropdownTrigger: {

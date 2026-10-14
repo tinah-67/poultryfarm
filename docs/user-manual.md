@@ -1,12 +1,12 @@
-# BroilerHub User Manual
+# KIKO FARM User Manual
 
 ## Introduction
 
-BroilerHub helps poultry farm owners, managers, and workers record and review daily broiler farm activities. The app supports farm setup, batch management, feed records, mortality records, vaccination schedules, expenses, sales, reports, reminders, and offline data entry.
+KIKO FARM helps improved kienyeji poultry owners, managers, and workers record and review daily farm activities. The app supports farm setup, flock management, feed records, mortality records, vaccination schedules, expenses, sales, reports, reminders, and offline data entry.
 
 ## Who Uses The App
 
-BroilerHub has three main user roles:
+KIKO FARM has three main user roles:
 
 - Owner: manages farms, creates staff accounts, records farm activity, views reports, and reviews performance.
 - Manager: supervises farm operations, manages batches, records expenses and sales, and views reports.
@@ -14,7 +14,7 @@ BroilerHub has three main user roles:
 
 ## Getting Started
 
-Open the BroilerHub app on your Android device. If you already have an account, enter your email and password, then tap **Login**.
+Open the KIKO FARM app on your Android device. If you already have an account, enter your email and password, then tap **Login**.
 
 If you are the farm owner and do not have an account yet, tap **Register** from the login screen and create the owner account first. Staff accounts should be created by the owner from inside the app.
 
@@ -185,7 +185,7 @@ The reminders screen shows important alerts such as vaccination follow-ups and o
 
 ## Offline Use
 
-BroilerHub is designed to work offline first. Records entered without internet are saved on the device.
+KIKO FARM is designed to work offline first. Records entered without internet are saved on the device.
 
 When internet access becomes available, the app can sync pending backup data. If sync fails, keep using the app and try refreshing again later.
 

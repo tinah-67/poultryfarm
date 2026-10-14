@@ -19,7 +19,7 @@
   </defs>
 
   <text x="900" y="48" text-anchor="middle" class="title">Synchronization Workflow Diagram</text>
-  <text x="900" y="80" text-anchor="middle" class="subtitle">BroilerHub offline-first backup, sync, and bootstrap restore flow</text>
+  <text x="900" y="80" text-anchor="middle" class="subtitle">KikoFarm offline-first backup, sync, and bootstrap restore flow</text>
 
   <!-- swimlanes -->
   <rect x="60" y="120" width="380" height="980" class="lane"/>

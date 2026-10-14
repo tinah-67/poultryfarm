@@ -1,10 +1,10 @@
-# Poultry Farm
+# KIKO FARM
 
 A React Native mobile application for managing poultry farming operations.
 
 ## Overview
 
-Poultry Farm is a mobile app designed to help farmers efficiently manage their poultry operations. Whether you're tracking livestock, managing feed inventory, or monitoring farm activities, this app provides an intuitive interface to streamline your daily tasks.
+KIKO FARM is a mobile app for managing improved kienyeji poultry operations, including farms, flocks, feed, health records, expenses, sales, and reports.
 
 ## Features
 

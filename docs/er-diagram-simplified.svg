@@ -12,7 +12,7 @@
     </style>
   </defs>
 
-  <text x="850" y="55" text-anchor="middle" class="title">Simplified ER Diagram - BroilerHub</text>
+  <text x="850" y="55" text-anchor="middle" class="title">Simplified ER Diagram - KikoFarm</text>
   <text x="850" y="88" text-anchor="middle" class="note">Each entity shows PK, FK, and two main attributes</text>
 
   <!-- USERS -->

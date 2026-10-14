@@ -15,9 +15,6 @@ export const SEVERITY_ORDER = {
   info: 2,
 };
 
-// Defines age checkpoints where active batches should produce milestone reminders.
-const MILESTONE_DAYS = [7, 14, 21, 28, 35, 42];
-
 // Parses stored date strings as local dates to avoid timezone shifts in reminder math.
 const parseLocalDate = value => {
   if (!value) {
@@ -48,20 +45,20 @@ const getDaysBetween = (firstDate, secondDate) => {
   return Math.floor((startOfDay(firstDate).getTime() - startOfDay(secondDate).getTime()) / millisecondsPerDay);
 };
 
-// Builds a readable label for batch-related reminders.
-const getBatchLabel = batch => {
-  const breed = String(batch?.breed || '').trim();
-  const startDate = String(batch?.start_date || '').trim();
+// Builds a readable label for flock-related reminders.
+const getFlockLabel = flock => {
+  const breed = String(flock?.breed || '').trim();
+  const startDate = String(flock?.start_date || '').trim();
 
   if (breed && startDate) {
-    return `${breed} batch (${startDate})`;
+    return `${breed} flock (${startDate})`;
   }
 
   if (breed) {
-    return `${breed} batch`;
+    return `${breed} flock`;
   }
 
-  return `Batch #${batch?.batch_id ?? 'N/A'}`;
+  return `Flock #${flock?.batch_id ?? 'N/A'}`;
 };
 
 // Determines which reminder categories each role is allowed to see.
@@ -74,10 +71,9 @@ export const canRoleSeeNotification = (role, notificationType) => {
     return [
       'Vaccination',
       'Mortality',
-      'Sale readiness',
       'Feed records',
       'Low birds',
-      'Batch status',
+      'Flock status',
     ].includes(notificationType);
   }
 
@@ -186,7 +182,7 @@ export const loadNotificationsForUser = async userId => {
             (sum, item) => sum + Number(item.birds_sold || 0),
             0
           );
-          const batchLabel = getBatchLabel(batch);
+          const batchLabel = getFlockLabel(batch);
           const birdsAlive = Math.max(initialChicks - totalDead - totalSold, 0);
           const mortalityRate = initialChicks > 0 ? (totalDead / initialChicks) * 100 : 0;
           const batchStartDate = parseLocalDate(batch.start_date);
@@ -199,21 +195,6 @@ export const loadNotificationsForUser = async userId => {
           const daysSinceLastFeed = latestFeedDate ? getDaysBetween(today, latestFeedDate) : null;
           const lowBirdThreshold = Math.max(10, Math.ceil(initialChicks * 0.1));
           const items = [];
-
-          // Creates milestone reminders when a batch reaches key growth days.
-          if (isActive && ageInDays != null && MILESTONE_DAYS.includes(ageInDays)) {
-            items.push({
-              id: `milestone-${batch.batch_id}-${ageInDays}`,
-              severity: 'info',
-              type: 'Age milestone',
-              farmName: farm.farm_name,
-              farmLocation: farm.location || 'N/A',
-              batchLabel,
-              batchId: batch.batch_id,
-              title: `Batch reached day ${ageInDays}`,
-              detail: `${batch.breed || 'Broiler'} batch has reached an important growth milestone.`,
-            });
-          }
 
           // Warns when mortality rises above the normal operating threshold.
           if (isActive && mortalityRate >= 5) {
@@ -230,21 +211,6 @@ export const loadNotificationsForUser = async userId => {
             });
           }
 
-          // Flags active batches that are close to market age with birds available.
-          if (isActive && ageInDays != null && ageInDays >= 49 && birdsAlive > 0) {
-            items.push({
-              id: `sale-ready-${batch.batch_id}`,
-              severity: 'warning',
-              type: 'Sale readiness',
-              farmName: farm.farm_name,
-              farmLocation: farm.location || 'N/A',
-              batchLabel,
-              batchId: batch.batch_id,
-              title: 'Batch is near or at market age',
-              detail: `${birdsAlive} birds are still available at approximately day ${ageInDays}.`,
-            });
-          }
-
           // Notes batches where only a small number of birds remain unsold.
           if (isActive && birdsAlive > 0 && birdsAlive <= lowBirdThreshold && totalSold > 0) {
             items.push({
@@ -255,7 +221,7 @@ export const loadNotificationsForUser = async userId => {
               farmLocation: farm.location || 'N/A',
               batchLabel,
               batchId: batch.batch_id,
-              title: 'Few birds remain in this batch',
+              title: 'Few birds remain in this flock',
               detail: `${birdsAlive} birds are left unsold.`,
             });
           }
@@ -271,7 +237,7 @@ export const loadNotificationsForUser = async userId => {
               batchLabel,
               batchId: batch.batch_id,
               title: 'No feed records have been entered',
-              detail: 'Record feed usage to keep the batch history complete.',
+              detail: 'Record feed usage to keep the flock history complete.',
             });
           } else if (isActive && daysSinceLastFeed != null && daysSinceLastFeed >= 2) {
             items.push({
@@ -335,12 +301,12 @@ export const loadNotificationsForUser = async userId => {
             items.push({
               id: `completed-with-birds-${batch.batch_id}`,
               severity: 'warning',
-              type: 'Batch status',
+              type: 'Flock status',
               farmName: farm.farm_name,
               farmLocation: farm.location || 'N/A',
               batchLabel,
               batchId: batch.batch_id,
-              title: 'Batch is closed but birds still remain',
+              title: 'Flock is closed but birds still remain',
               detail: `${birdsAlive} birds are still recorded as alive in this completed batch.`,
             });
           }

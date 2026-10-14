@@ -67,7 +67,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
         { key: 'batch_id', title: 'Batch ID', width: 100 },
         { key: 'start_date', title: 'Start Date', width: 130 },
         { key: 'breed', title: 'Breed', width: 160 },
-        { key: 'initial_chicks', title: 'Chicks', width: 110 },
+        { key: 'initial_chicks', title: 'Birds', width: 110 },
         { key: 'status', title: 'Status', width: 120 },
         { key: 'actions', title: 'Actions', width: canManageBatches ? 310 : 140 },
     ], [canManageBatches]);
@@ -131,12 +131,12 @@ export default function ViewBatchesScreen({ navigation, route }) {
         }
 
         if (!editedStartDate.trim() || !editedBreed.trim() || !editedInitialChicks.trim()) {
-            Alert.alert('Error', 'Enter start date, breed, and initial chicks.');
+            Alert.alert('Error', 'Enter start date, breed, and initial birds.');
             return;
         }
 
         if (!/^\d+$/.test(editedInitialChicks.trim()) || Number(editedInitialChicks) <= 0) {
-            Alert.alert('Error', 'Initial chicks must be a positive number.');
+            Alert.alert('Error', 'Initial birds must be a positive number.');
             return;
         }
 
@@ -211,7 +211,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
             value={searchQuery}
             onChangeText={setSearchQuery}
             style={styles.searchInput}
-            placeholder="Search by batch ID, date, breed, chicks, or status"
+            placeholder="Search by batch ID, date, breed, birds, or status"
             placeholderTextColor="#64748b"
         />
 
@@ -290,7 +290,7 @@ export default function ViewBatchesScreen({ navigation, route }) {
                                     <TextInput
                                         value={editedInitialChicks}
                                         onChangeText={setEditedInitialChicks}
-                                        placeholder="Chicks"
+                                        placeholder="Birds"
                                         keyboardType="numeric"
                                         style={styles.input}
                                     />

@@ -18,7 +18,7 @@
   </defs>
 
   <text x="950" y="55" text-anchor="middle" class="title">Level 1 Data Flow Diagram</text>
-  <text x="950" y="88" text-anchor="middle" class="subtitle">BroilerHub Poultry Farm Management System</text>
+  <text x="950" y="88" text-anchor="middle" class="subtitle">KikoFarm Poultry Farm Management System</text>
 
   <!-- External entities -->
   <rect x="60" y="170" width="220" height="90" class="entity"/>

@@ -2,20 +2,15 @@ import { Alert } from 'react-native';
 import SQLite from 'react-native-sqlite-2';
 
 // Opens the local SQLite database used by the offline-first app.
-const db = SQLite.openDatabase(
-  'poultry.db',
-  '1.0',
-  'Poultry Database',
-  200000
-);
+const db = SQLite.openDatabase('poultry.db', '1.0', 'Poultry Database', 200000);
 
 // Controls how long a remembered login session remains valid.
 const REMEMBERED_SESSION_TTL_MS = 30 * 60 * 1000;
 
-console.log("DB initialized");
+console.log('DB initialized');
 
 // Converts SQLite result rows into a regular JavaScript array.
-const rowsToArray = (rows) => {
+const rowsToArray = rows => {
   if (!rows) {
     return [];
   }
@@ -35,9 +30,15 @@ const rowsToArray = (rows) => {
 // Shared formatting and normalization helpers used before saving records.
 const getCurrentTimestamp = () => new Date().toISOString();
 const roundCurrency = value => Number(Number(value || 0).toFixed(2));
-const normalizeFeedType = value => String(value || '').trim().toLowerCase();
+const normalizeFeedType = value =>
+  String(value || '')
+    .trim()
+    .toLowerCase();
 const normalizeRecoveryQuestion = value => String(value || '').trim();
-const normalizeRecoveryAnswer = value => String(value || '').trim().toLowerCase();
+const normalizeRecoveryAnswer = value =>
+  String(value || '')
+    .trim()
+    .toLowerCase();
 const parseNumber = value => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -53,67 +54,68 @@ const softDeleteBatchDescendants = (tx, batchId, deletedAt) => {
     { tableName: 'sales', idColumn: 'batch_id' },
   ];
 
-    childTables.forEach(({ tableName, idColumn }) => {
-      tx.executeSql(
-        `UPDATE ${tableName}
+  childTables.forEach(({ tableName, idColumn }) => {
+    tx.executeSql(
+      `UPDATE ${tableName}
         SET deleted_at = ?, synced = 0
         WHERE ${idColumn} = ?
           AND deleted_at IS NULL`,
-        [deletedAt, batchId],
-        () => console.log(`${tableName} children marked deleted for batch`, batchId),
-        (_, error) => {
+      [deletedAt, batchId],
+      () =>
+        console.log(`${tableName} children marked deleted for batch`, batchId),
+      (_, error) => {
         console.log(`Error cascading delete for ${tableName}`, error);
         return false;
-      }
+      },
     );
   });
 };
 
-  // Marks all records belonging to a deleted farm as deleted without removing history.
-  const softDeleteFarmDescendants = (tx, farmId, deletedAt) => {
-    tx.executeSql(
-      `UPDATE expenses
+// Marks all records belonging to a deleted farm as deleted without removing history.
+const softDeleteFarmDescendants = (tx, farmId, deletedAt) => {
+  tx.executeSql(
+    `UPDATE expenses
       SET deleted_at = ?, synced = 0
       WHERE farm_id = ?
         AND deleted_at IS NULL`,
-      [deletedAt, farmId],
-      () => console.log("Farm expenses marked deleted", farmId),
-      (_, error) => {
-        console.log("Error cascading delete for farm expenses", error);
-        return false;
-      }
+    [deletedAt, farmId],
+    () => console.log('Farm expenses marked deleted', farmId),
+    (_, error) => {
+      console.log('Error cascading delete for farm expenses', error);
+      return false;
+    },
   );
 
-    tx.executeSql(
-      `SELECT batch_id
+  tx.executeSql(
+    `SELECT batch_id
       FROM batches
       WHERE farm_id = ?
         AND deleted_at IS NULL`,
-      [farmId],
-      (_, result) => {
-        const batches = rowsToArray(result.rows);
+    [farmId],
+    (_, result) => {
+      const batches = rowsToArray(result.rows);
 
       batches.forEach(batch => {
         softDeleteBatchDescendants(tx, batch.batch_id, deletedAt);
       });
 
-        tx.executeSql(
-          `UPDATE batches
+      tx.executeSql(
+        `UPDATE batches
           SET deleted_at = ?, synced = 0
           WHERE farm_id = ?
             AND deleted_at IS NULL`,
-          [deletedAt, farmId],
-          () => console.log("Farm batches marked deleted", farmId),
-          (_, error) => {
-            console.log("Error cascading delete for batches", error);
-            return false;
-        }
+        [deletedAt, farmId],
+        () => console.log('Farm batches marked deleted', farmId),
+        (_, error) => {
+          console.log('Error cascading delete for batches', error);
+          return false;
+        },
       );
     },
     (_, error) => {
-      console.log("Error loading farm batches for cascade delete", error);
+      console.log('Error loading farm batches for cascade delete', error);
       return false;
-    }
+    },
   );
 };
 
@@ -135,26 +137,29 @@ const ensureColumnExists = (tx, tableName, columnName, definition) => {
         [],
         () => console.log(`${columnName} column added to ${tableName}`),
         (_transaction, error) => {
-          console.log(`Error adding ${columnName} column to ${tableName}`, error);
+          console.log(
+            `Error adding ${columnName} column to ${tableName}`,
+            error,
+          );
           return false;
-        }
+        },
       );
     },
     (_, error) => {
       console.log(`Error reading schema for ${tableName}`, error);
       return false;
-    }
+    },
   );
 };
 
 // ================= INIT DATABASE =================
 // Creates or upgrades all local tables required by the app.
 export const initDB = () => {
-  console.log("initDB called");
+  console.log('initDB called');
   db.transaction(tx => {
-
     // USERS
-    tx.executeSql(`
+    tx.executeSql(
+      `
       CREATE TABLE IF NOT EXISTS users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
         first_name TEXT,
@@ -168,14 +173,19 @@ export const initDB = () => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         synced INTEGER DEFAULT 0
       );
-    `, [], () => console.log("Users table created"), (_, err) => console.log("Users table error", err));
+    `,
+      [],
+      () => console.log('Users table created'),
+      (_, err) => console.log('Users table error', err),
+    );
 
     ensureColumnExists(tx, 'users', 'owner_user_id', 'INTEGER');
     ensureColumnExists(tx, 'users', 'recovery_question', 'TEXT');
     ensureColumnExists(tx, 'users', 'recovery_answer', 'TEXT');
 
     // FARMS
-    tx.executeSql(`
+    tx.executeSql(
+      `
       CREATE TABLE IF NOT EXISTS farms (
         farm_id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -185,12 +195,17 @@ export const initDB = () => {
         deleted_at TEXT,
         synced INTEGER DEFAULT 0
       );
-    `, [], () => console.log("Farms table created"), (_, err) => console.log("Farms table error", err));
+    `,
+      [],
+      () => console.log('Farms table created'),
+      (_, err) => console.log('Farms table error', err),
+    );
 
     ensureColumnExists(tx, 'farms', 'deleted_at', 'TEXT');
 
     // BATCHES
-    tx.executeSql(`
+    tx.executeSql(
+      `
       CREATE TABLE IF NOT EXISTS batches (
         batch_id INTEGER PRIMARY KEY AUTOINCREMENT,
         farm_id INTEGER,
@@ -202,13 +217,18 @@ export const initDB = () => {
         deleted_at TEXT,
         synced INTEGER DEFAULT 0
       );
-    `, [], () => console.log("Batches table created"), (_, err) => console.log("Batches table error", err));
+    `,
+      [],
+      () => console.log('Batches table created'),
+      (_, err) => console.log('Batches table error', err),
+    );
 
     ensureColumnExists(tx, 'batches', 'purchase_cost', 'REAL DEFAULT 0');
     ensureColumnExists(tx, 'batches', 'deleted_at', 'TEXT');
 
     // FEED RECORDS
-    tx.executeSql(`
+    tx.executeSql(
+      `
       CREATE TABLE IF NOT EXISTS feed_records (
         feed_id INTEGER PRIMARY KEY AUTOINCREMENT,
         batch_id INTEGER,
@@ -219,13 +239,18 @@ export const initDB = () => {
         deleted_at TEXT,
         synced INTEGER DEFAULT 0
       );
-    `, [], () => console.log("Feed records table created"), (_, err) => console.log("Feed records table error", err));
+    `,
+      [],
+      () => console.log('Feed records table created'),
+      (_, err) => console.log('Feed records table error', err),
+    );
 
     ensureColumnExists(tx, 'feed_records', 'feed_type', 'TEXT');
     ensureColumnExists(tx, 'feed_records', 'deleted_at', 'TEXT');
 
     // MORTALITY
-    tx.executeSql(`
+    tx.executeSql(
+      `
       CREATE TABLE IF NOT EXISTS mortality_records (
         mortality_id INTEGER PRIMARY KEY AUTOINCREMENT,
         batch_id INTEGER,
@@ -235,12 +260,17 @@ export const initDB = () => {
         deleted_at TEXT,
         synced INTEGER DEFAULT 0
       );
-    `, [], () => console.log("Mortality records table created"), (_, err) => console.log("Mortality records table error", err));
+    `,
+      [],
+      () => console.log('Mortality records table created'),
+      (_, err) => console.log('Mortality records table error', err),
+    );
 
     ensureColumnExists(tx, 'mortality_records', 'deleted_at', 'TEXT');
 
     // VACCINATION
-    tx.executeSql(`
+    tx.executeSql(
+      `
       CREATE TABLE IF NOT EXISTS vaccination_records (
         vaccination_id INTEGER PRIMARY KEY AUTOINCREMENT,
         batch_id INTEGER,
@@ -252,13 +282,18 @@ export const initDB = () => {
         deleted_at TEXT,
         synced INTEGER DEFAULT 0
       );
-    `, [], () => console.log("Vaccination records table created"), (_, err) => console.log("Vaccination records table error", err));
+    `,
+      [],
+      () => console.log('Vaccination records table created'),
+      (_, err) => console.log('Vaccination records table error', err),
+    );
 
     ensureColumnExists(tx, 'vaccination_records', 'deleted_at', 'TEXT');
     ensureColumnExists(tx, 'vaccination_records', 'due_completed_at', 'TEXT');
 
     // EXPENSES
-    tx.executeSql(`
+    tx.executeSql(
+      `
       CREATE TABLE IF NOT EXISTS expenses (
         expense_id INTEGER PRIMARY KEY AUTOINCREMENT,
         farm_id INTEGER,
@@ -273,7 +308,11 @@ export const initDB = () => {
         deleted_at TEXT,
         synced INTEGER DEFAULT 0
       );
-    `, [], () => console.log("Expenses table created"), (_, err) => console.log("Expenses table error", err));
+    `,
+      [],
+      () => console.log('Expenses table created'),
+      (_, err) => console.log('Expenses table error', err),
+    );
 
     ensureColumnExists(tx, 'expenses', 'farm_id', 'INTEGER');
     ensureColumnExists(tx, 'expenses', 'expense_scope', `TEXT DEFAULT 'batch'`);
@@ -283,7 +322,8 @@ export const initDB = () => {
     ensureColumnExists(tx, 'expenses', 'deleted_at', 'TEXT');
 
     // SALES
-    tx.executeSql(`
+    tx.executeSql(
+      `
       CREATE TABLE IF NOT EXISTS sales (
         sale_id INTEGER PRIMARY KEY AUTOINCREMENT,
         batch_id INTEGER,
@@ -294,28 +334,43 @@ export const initDB = () => {
         deleted_at TEXT,
         synced INTEGER DEFAULT 0
       );
-    `, [], () => console.log("Sales table created"), (_, err) => console.log("Sales table error", err));
+    `,
+      [],
+      () => console.log('Sales table created'),
+      (_, err) => console.log('Sales table error', err),
+    );
 
     ensureColumnExists(tx, 'sales', 'deleted_at', 'TEXT');
 
-    tx.executeSql(`
+    tx.executeSql(
+      `
       CREATE TABLE IF NOT EXISTS app_session (
         session_id INTEGER PRIMARY KEY CHECK (session_id = 1),
         user_id INTEGER,
         remembered_at TEXT
       );
-    `, [], () => console.log("App session table created"), (_, err) => console.log("App session table error", err));
+    `,
+      [],
+      () => console.log('App session table created'),
+      (_, err) => console.log('App session table error', err),
+    );
 
     ensureColumnExists(tx, 'app_session', 'remembered_at', 'TEXT');
 
-    tx.executeSql(`
+    tx.executeSql(
+      `
       CREATE TABLE IF NOT EXISTS notification_delivery_log (
         notification_id TEXT PRIMARY KEY,
         delivered_at TEXT NOT NULL
       );
-    `, [], () => console.log("Notification delivery log table created"), (_, err) => console.log("Notification delivery log table error", err));
+    `,
+      [],
+      () => console.log('Notification delivery log table created'),
+      (_, err) => console.log('Notification delivery log table error', err),
+    );
 
-    tx.executeSql(`
+    tx.executeSql(
+      `
       CREATE TABLE IF NOT EXISTS notification_inbox (
         notification_id TEXT PRIMARY KEY,
         user_id INTEGER NOT NULL,
@@ -330,10 +385,13 @@ export const initDB = () => {
         delivered_at TEXT NOT NULL,
         read_at TEXT
       );
-    `, [], () => console.log("Notification inbox table created"), (_, err) => console.log("Notification inbox table error", err));
+    `,
+      [],
+      () => console.log('Notification inbox table created'),
+      (_, err) => console.log('Notification inbox table error', err),
+    );
 
     ensureColumnExists(tx, 'notification_inbox', 'read_at', 'TEXT');
-
   });
 };
 
@@ -349,7 +407,7 @@ export const createUser = (
   ownerUserId = null,
   recoveryQuestion = null,
   recoveryAnswer = null,
-  callback
+  callback,
 ) => {
   return new Promise((resolve, reject) => {
     db.transaction(tx => {
@@ -367,22 +425,22 @@ export const createUser = (
           normalizeRecoveryAnswer(recoveryAnswer) || null,
         ],
         (_, result) => {
-          console.log("User created");
+          console.log('User created');
           callback && callback();
           resolve(result);
         },
         (_, error) => {
-          console.log("Error creating user", error);
+          console.log('Error creating user', error);
           reject(error);
           return false;
-        }
+        },
       );
     });
   });
 };
 
 // Loads all users from the local database.
-export const getUsers = (callback) => {
+export const getUsers = callback => {
   db.transaction(tx => {
     tx.executeSql(
       `SELECT * FROM users`,
@@ -391,8 +449,8 @@ export const getUsers = (callback) => {
         callback(rowsToArray(result.rows));
       },
       (_, error) => {
-        console.log("Error fetching users", error);
-      }
+        console.log('Error fetching users', error);
+      },
     );
   });
 };
@@ -411,8 +469,8 @@ export const getUserById = (userId, callback) => {
         }
       },
       (_, error) => {
-        console.log("Error fetching user by id", error);
-      }
+        console.log('Error fetching user by id', error);
+      },
     );
   });
 };
@@ -447,13 +505,13 @@ export const loginUser = (email, password, callback) => {
         }
       },
       (_, error) => {
-        console.log("Login error", error);
+        console.log('Login error', error);
         callback({
           status: 'error',
           user: null,
         });
         return false;
-      }
+      },
     );
   });
 };
@@ -462,14 +520,14 @@ export const loginUser = (email, password, callback) => {
 export const syncUsers = async () => {
   db.transaction(tx => {
     tx.executeSql(
-      "SELECT * FROM users WHERE synced = 0",
+      'SELECT * FROM users WHERE synced = 0',
       [],
       async (_, results) => {
         const users = results.rows.raw();
 
         for (let user of users) {
           try {
-            await fetch('http://192.168.100.26:3000/users', {
+            await fetch('http://192.168.100.73:3000/users', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -485,17 +543,15 @@ export const syncUsers = async () => {
             });
 
             db.transaction(tx2 => {
-              tx2.executeSql(
-                "UPDATE users SET synced = 1 WHERE user_id = ?",
-                [user.user_id]
-              );
+              tx2.executeSql('UPDATE users SET synced = 1 WHERE user_id = ?', [
+                user.user_id,
+              ]);
             });
-
           } catch (err) {
-            console.log("Sync failed", err);
+            console.log('Sync failed', err);
           }
         }
-      }
+      },
     );
   });
 };
@@ -504,33 +560,37 @@ export const syncUsers = async () => {
 
 // Creates a farm for an owner and marks it pending backup sync.
 export const createFarm = (user_id, farm_name, location, callback) => {
-  console.log("createFarm called with:", { user_id, farm_name, location });
+  console.log('createFarm called with:', { user_id, farm_name, location });
   let insertId = null;
 
   db.transaction(
     tx => {
-      console.log("createFarm tx started");
+      console.log('createFarm tx started');
       tx.executeSql(
         `INSERT INTO farms (user_id, farm_name, location, synced) VALUES (?, ?, ?, 0)`,
         [user_id, farm_name, location],
         (_, result) => {
           insertId = result.insertId;
-          console.log("Farm added successfully", insertId, { user_id, farm_name, location });
+          console.log('Farm added successfully', insertId, {
+            user_id,
+            farm_name,
+            location,
+          });
         },
         (_, error) => {
-          console.log("Error adding farm", error);
-          Alert.alert("Error", "Failed to add farm: " + error.message);
+          console.log('Error adding farm', error);
+          Alert.alert('Error', 'Failed to add farm: ' + error.message);
           return false;
-        }
+        },
       );
     },
     error => {
-      console.log("createFarm transaction error", error);
+      console.log('createFarm transaction error', error);
     },
     () => {
-      console.log("createFarm transaction committed", insertId);
+      console.log('createFarm transaction committed', insertId);
       callback && callback(insertId);
-    }
+    },
   );
 };
 
@@ -541,7 +601,7 @@ export const farmExistsForUser = (userId, farmName, location, callback) => {
 
   db.transaction(tx => {
     tx.executeSql(
-        `SELECT farm_id FROM farms
+      `SELECT farm_id FROM farms
         WHERE user_id = ?
         AND LOWER(TRIM(farm_name)) = ?
         AND LOWER(TRIM(location)) = ?
@@ -551,10 +611,10 @@ export const farmExistsForUser = (userId, farmName, location, callback) => {
         callback(result.rows.length > 0);
       },
       (_, error) => {
-        console.log("Error checking duplicate farm", error);
+        console.log('Error checking duplicate farm', error);
         callback(false);
         return false;
-      }
+      },
     );
   });
 };
@@ -572,14 +632,15 @@ export const getAccessibleOwnerId = (userId, callback) => {
         }
 
         const user = result.rows.item(0);
-        const ownerId = user.role === 'owner' ? user.user_id : user.owner_user_id;
+        const ownerId =
+          user.role === 'owner' ? user.user_id : user.owner_user_id;
         callback(ownerId ?? null, user);
       },
       (_, error) => {
-        console.log("Error resolving accessible owner id", error);
+        console.log('Error resolving accessible owner id', error);
         callback(null, null);
         return false;
-      }
+      },
     );
   });
 };
@@ -598,16 +659,21 @@ export const getUserByEmail = (email, callback) => {
         }
       },
       (_, error) => {
-        console.log("Error fetching user by email", error);
+        console.log('Error fetching user by email', error);
         callback(null);
         return false;
-      }
+      },
     );
   });
 };
 
 // Saves or updates the recovery question used during password reset.
-export const updateUserRecoveryQuestion = (userId, recoveryQuestion, recoveryAnswer, callback) => {
+export const updateUserRecoveryQuestion = (
+  userId,
+  recoveryQuestion,
+  recoveryAnswer,
+  callback,
+) => {
   db.transaction(tx => {
     tx.executeSql(
       `UPDATE users
@@ -619,14 +685,14 @@ export const updateUserRecoveryQuestion = (userId, recoveryQuestion, recoveryAns
         userId,
       ],
       () => {
-        console.log("Recovery question updated");
+        console.log('Recovery question updated');
         callback && callback(true);
       },
       (_, error) => {
-        console.log("Error updating recovery question", error);
+        console.log('Error updating recovery question', error);
         callback && callback(false);
         return false;
-      }
+      },
     );
   });
 };
@@ -640,14 +706,14 @@ export const updateUserPassword = (userId, password, callback) => {
        WHERE user_id = ?`,
       [password, userId],
       () => {
-        console.log("User password updated");
+        console.log('User password updated');
         callback && callback(true);
       },
       (_, error) => {
-        console.log("Error updating user password", error);
+        console.log('Error updating user password', error);
         callback && callback(false);
         return false;
-      }
+      },
     );
   });
 };
@@ -656,30 +722,34 @@ export const updateUserPassword = (userId, password, callback) => {
 export const getFarms = (userId, callback) => {
   const normalizedUserId = userId != null ? Number(userId) : null;
 
-  console.log("getFarms called with userId:", userId, "normalized:", normalizedUserId);
+  console.log(
+    'getFarms called with userId:',
+    userId,
+    'normalized:',
+    normalizedUserId,
+  );
 
   db.transaction(tx => {
     const query =
       normalizedUserId != null
-        ? "SELECT * FROM farms WHERE user_id = ? AND deleted_at IS NULL"
-        : "SELECT * FROM farms WHERE deleted_at IS NULL";
+        ? 'SELECT * FROM farms WHERE user_id = ? AND deleted_at IS NULL'
+        : 'SELECT * FROM farms WHERE deleted_at IS NULL';
 
-    const params =
-      normalizedUserId != null ? [normalizedUserId] : [];
+    const params = normalizedUserId != null ? [normalizedUserId] : [];
 
-    console.log("getFarms query:", query, "params:", params);
+    console.log('getFarms query:', query, 'params:', params);
 
     tx.executeSql(
       query,
       params,
       (_, result) => {
         const data = rowsToArray(result.rows);
-        console.log("getFarms result:", data);
+        console.log('getFarms result:', data);
         callback(data);
       },
       (_, error) => {
-        console.log("Error fetching farms", error);
-      }
+        console.log('Error fetching farms', error);
+      },
     );
   });
 };
@@ -690,14 +760,14 @@ export const updateFarm = (farm_id, farm_name, location) => {
     tx.executeSql(
       `UPDATE farms SET farm_name = ?, location = ?, deleted_at = NULL, synced = 0 WHERE farm_id = ?`,
       [farm_name, location, farm_id],
-      () => console.log("Farm updated"),
-      (_, error) => console.log("Update error", error)
+      () => console.log('Farm updated'),
+      (_, error) => console.log('Update error', error),
     );
   });
 };
 
 // Soft-deletes a farm and cascades the soft delete to related records.
-export const deleteFarm = (farm_id) => {
+export const deleteFarm = farm_id => {
   db.transaction(tx => {
     const deletedAt = getCurrentTimestamp();
 
@@ -706,15 +776,28 @@ export const deleteFarm = (farm_id) => {
     tx.executeSql(
       `UPDATE farms SET deleted_at = ?, synced = 0 WHERE farm_id = ?`,
       [deletedAt, farm_id],
-      () => console.log("Farm marked deleted"),
-      (_, error) => console.log("Delete error", error)
+      () => console.log('Farm marked deleted'),
+      (_, error) => console.log('Delete error', error),
     );
   });
 };
 
 // Creates an active batch for a farm and marks it pending backup sync.
-export const createBatch = (farm_id, start_date, breed, initial_chicks, purchase_cost, callback) => {
-  console.log("createBatch called:", { farm_id, start_date, breed, initial_chicks, purchase_cost });
+export const createBatch = (
+  farm_id,
+  start_date,
+  breed,
+  initial_chicks,
+  purchase_cost,
+  callback,
+) => {
+  console.log('createBatch called:', {
+    farm_id,
+    start_date,
+    breed,
+    initial_chicks,
+    purchase_cost,
+  });
 
   db.transaction(tx => {
     tx.executeSql(
@@ -722,13 +805,13 @@ export const createBatch = (farm_id, start_date, breed, initial_chicks, purchase
         VALUES (?, ?, ?, ?, ?, 'active', 0)`,
       [farm_id, start_date, breed, initial_chicks, purchase_cost],
       (_, result) => {
-        console.log("Batch created:", result.insertId);
+        console.log('Batch created:', result.insertId);
         callback && callback();
       },
       (_, error) => {
-        console.log("Error creating batch", error);
+        console.log('Error creating batch', error);
         return false;
-      }
+      },
     );
   });
 };
@@ -737,16 +820,16 @@ export const createBatch = (farm_id, start_date, breed, initial_chicks, purchase
 export const getBatchesByFarmId = (farm_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      "SELECT * FROM batches WHERE farm_id = ? AND deleted_at IS NULL",
+      'SELECT * FROM batches WHERE farm_id = ? AND deleted_at IS NULL',
       [farm_id],
       (_, result) => {
         const data = rowsToArray(result.rows);
-        console.log("Batches for farm:", farm_id, data);
+        console.log('Batches for farm:', farm_id, data);
         callback(data);
       },
       (_, error) => {
-        console.log("Error fetching batches", error);
-      }
+        console.log('Error fetching batches', error);
+      },
     );
   });
 };
@@ -760,13 +843,13 @@ export const saveRememberedSession = (userId, callback) => {
       `INSERT OR REPLACE INTO app_session (session_id, user_id, remembered_at) VALUES (1, ?, ?)`,
       [userId, rememberedAt],
       () => {
-        console.log("Remembered session saved");
+        console.log('Remembered session saved');
         callback && callback();
       },
       (_, error) => {
-        console.log("Error saving remembered session", error);
+        console.log('Error saving remembered session', error);
         return false;
-      }
+      },
     );
   });
 };
@@ -782,7 +865,7 @@ export const getAccessibleFarms = (userId, callback) => {
 
   db.transaction(tx => {
     tx.executeSql(
-        `SELECT farms.*
+      `SELECT farms.*
         FROM farms
         JOIN users ON users.user_id = ?
         WHERE farms.user_id = CASE
@@ -791,39 +874,39 @@ export const getAccessibleFarms = (userId, callback) => {
         END
         AND farms.deleted_at IS NULL
         ORDER BY farms.created_at DESC, farms.farm_id DESC`,
-        [normalizedUserId],
+      [normalizedUserId],
       (_, result) => {
         callback(rowsToArray(result.rows));
       },
       (_, error) => {
-        console.log("Error fetching accessible farms", error);
+        console.log('Error fetching accessible farms', error);
         callback([]);
         return false;
-      }
+      },
     );
   });
 };
 
 // Clears the remembered session on logout or app backgrounding.
-export const clearRememberedSession = (callback) => {
+export const clearRememberedSession = callback => {
   db.transaction(tx => {
     tx.executeSql(
       `DELETE FROM app_session WHERE session_id = 1`,
       [],
       () => {
-        console.log("Remembered session cleared");
+        console.log('Remembered session cleared');
         callback && callback();
       },
       (_, error) => {
-        console.log("Error clearing remembered session", error);
+        console.log('Error clearing remembered session', error);
         return false;
-      }
+      },
     );
   });
 };
 
 // Loads the remembered session and expires it when the TTL has passed.
-export const getRememberedSession = (callback) => {
+export const getRememberedSession = callback => {
   db.transaction(tx => {
     tx.executeSql(
       `SELECT user_id, remembered_at FROM app_session WHERE session_id = 1`,
@@ -835,7 +918,9 @@ export const getRememberedSession = (callback) => {
         }
 
         const session = result.rows.item(0);
-        const rememberedAtMs = session.remembered_at ? Date.parse(session.remembered_at) : NaN;
+        const rememberedAtMs = session.remembered_at
+          ? Date.parse(session.remembered_at)
+          : NaN;
         const isExpired =
           Number.isNaN(rememberedAtMs) ||
           Date.now() - rememberedAtMs > REMEMBERED_SESSION_TTL_MS;
@@ -845,13 +930,13 @@ export const getRememberedSession = (callback) => {
             `DELETE FROM app_session WHERE session_id = 1`,
             [],
             () => {
-              console.log("Expired remembered session cleared");
+              console.log('Expired remembered session cleared');
               callback(null);
             },
             () => {
               callback(null);
               return false;
-            }
+            },
           );
           return;
         }
@@ -859,10 +944,10 @@ export const getRememberedSession = (callback) => {
         callback(session);
       },
       (_, error) => {
-        console.log("Error fetching remembered session", error);
+        console.log('Error fetching remembered session', error);
         callback(null);
         return false;
-      }
+      },
     );
   });
 };
@@ -891,10 +976,10 @@ export const getNotificationDeliveryLog = (notificationIds, callback) => {
         callback(entries);
       },
       (_, error) => {
-        console.log("Error fetching notification delivery log", error);
+        console.log('Error fetching notification delivery log', error);
         callback({});
         return false;
-      }
+      },
     );
   });
 };
@@ -914,17 +999,17 @@ export const saveNotificationDeliveries = (notificationIds, callback) => {
         tx.executeSql(
           `INSERT OR REPLACE INTO notification_delivery_log (notification_id, delivered_at)
            VALUES (?, ?)`,
-          [notificationId, deliveredAt]
+          [notificationId, deliveredAt],
         );
       });
     },
     error => {
-      console.log("Error saving notification deliveries", error);
+      console.log('Error saving notification deliveries', error);
       callback && callback();
     },
     () => {
       callback && callback();
-    }
+    },
   );
 };
 
@@ -972,7 +1057,7 @@ export const saveNotificationInboxItems = (userId, items, callback) => {
           `INSERT OR IGNORE INTO notification_inbox
            (notification_id, user_id, title, detail, type, severity, farm_name, farm_location, batch_label, batch_id, delivered_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          values
+          values,
         );
 
         tx.executeSql(
@@ -998,17 +1083,17 @@ export const saveNotificationInboxItems = (userId, items, callback) => {
             batchLabel,
             batchId,
             notificationId,
-          ]
+          ],
         );
       });
     },
     error => {
-      console.log("Error saving notification inbox items", error);
+      console.log('Error saving notification inbox items', error);
       callback && callback();
     },
     () => {
       callback && callback();
-    }
+    },
   );
 };
 
@@ -1054,10 +1139,10 @@ export const getNotificationInboxItems = (userId, callback) => {
         callback(items);
       },
       (_, error) => {
-        console.log("Error fetching notification inbox items", error);
+        console.log('Error fetching notification inbox items', error);
         callback([]);
         return false;
-      }
+      },
     );
   });
 };
@@ -1083,22 +1168,22 @@ export const markNotificationInboxItemRead = (notificationId, callback) => {
         callback && callback(readAt);
       },
       (_, error) => {
-        console.log("Error marking notification inbox item read", error);
+        console.log('Error marking notification inbox item read', error);
         callback && callback(null);
         return false;
-      }
+      },
     );
   });
 };
 
 // Marks a user as synced after the backup server accepts it.
-export const markUserAsSynced = (userId) => {
+export const markUserAsSynced = userId => {
   db.transaction(tx => {
     tx.executeSql(
       `UPDATE users SET synced = 1 WHERE user_id = ?`,
       [userId],
-      () => console.log("User marked as synced"),
-      (_, error) => console.log("Error marking user as synced", error)
+      () => console.log('User marked as synced'),
+      (_, error) => console.log('Error marking user as synced', error),
     );
   });
 };
@@ -1120,16 +1205,24 @@ export const getBatchById = (batch_id, callback) => {
         }
       },
       (_, error) => {
-        console.log("Error fetching batch by id", error);
+        console.log('Error fetching batch by id', error);
         callback(null);
         return false;
-      }
+      },
     );
   });
 };
 
 // Updates batch details and marks the batch pending backup sync.
-export const updateBatchDetails = (batch_id, start_date, breed, initial_chicks, purchase_cost, status, callback) => {
+export const updateBatchDetails = (
+  batch_id,
+  start_date,
+  breed,
+  initial_chicks,
+  purchase_cost,
+  status,
+  callback,
+) => {
   db.transaction(tx => {
     tx.executeSql(
       `UPDATE batches
@@ -1137,13 +1230,13 @@ export const updateBatchDetails = (batch_id, start_date, breed, initial_chicks, 
         WHERE batch_id = ?`,
       [start_date, breed, initial_chicks, purchase_cost, status, batch_id],
       () => {
-        console.log("Batch details updated");
+        console.log('Batch details updated');
         callback && callback();
       },
       (_, error) => {
-        console.log("Batch detail update error", error);
+        console.log('Batch detail update error', error);
         return false;
-      }
+      },
     );
   });
 };
@@ -1154,14 +1247,14 @@ export const updateBatchStatus = (batch_id, status) => {
     tx.executeSql(
       `UPDATE batches SET status = ?, deleted_at = NULL, synced = 0 WHERE batch_id = ?`,
       [status, batch_id],
-      () => console.log("Batch status updated"),
-      (_, error) => console.log("Update error", error)
+      () => console.log('Batch status updated'),
+      (_, error) => console.log('Update error', error),
     );
   });
 };
 
 // Soft-deletes a batch and its related records.
-export const deleteBatch = (batch_id) => {
+export const deleteBatch = batch_id => {
   db.transaction(tx => {
     const deletedAt = getCurrentTimestamp();
 
@@ -1170,14 +1263,20 @@ export const deleteBatch = (batch_id) => {
     tx.executeSql(
       `UPDATE batches SET deleted_at = ?, synced = 0 WHERE batch_id = ?`,
       [deletedAt, batch_id],
-      () => console.log("Batch marked deleted"),
-      (_, error) => console.log("Delete error", error)
+      () => console.log('Batch marked deleted'),
+      (_, error) => console.log('Delete error', error),
     );
   });
 };
 
 // Calculates purchased, used, and remaining feed for a batch's farm.
-const loadFeedAvailabilityForTransaction = (tx, batch_id, feed_type, callback, errorCallback) => {
+const loadFeedAvailabilityForTransaction = (
+  tx,
+  batch_id,
+  feed_type,
+  callback,
+  errorCallback,
+) => {
   const normalizedFeedType = normalizeFeedType(feed_type);
 
   tx.executeSql(
@@ -1192,7 +1291,8 @@ const loadFeedAvailabilityForTransaction = (tx, batch_id, feed_type, callback, e
       const farmId = batchRows[0]?.farm_id;
 
       if (!farmId || !normalizedFeedType) {
-        errorCallback && errorCallback(new Error('A valid batch and feed type are required.'));
+        errorCallback &&
+          errorCallback(new Error('A valid batch and feed type are required.'));
         return false;
       }
 
@@ -1224,49 +1324,71 @@ const loadFeedAvailabilityForTransaction = (tx, batch_id, feed_type, callback, e
               const usageRows = rowsToArray(usageResult.rows);
               const usedQuantity = parseNumber(usageRows[0]?.used_quantity);
 
-              callback && callback({
-                farm_id: farmId,
-                feed_type: normalizedFeedType,
-                total_cost: roundCurrency(totalCost),
-                total_quantity: roundCurrency(totalQuantity),
-                used_quantity: roundCurrency(usedQuantity),
-                available_quantity: roundCurrency(Math.max(totalQuantity - usedQuantity, 0)),
-                unit_cost: totalQuantity > 0 && totalCost > 0
-                  ? roundCurrency(totalCost / totalQuantity)
-                  : 0,
-              });
+              callback &&
+                callback({
+                  farm_id: farmId,
+                  feed_type: normalizedFeedType,
+                  total_cost: roundCurrency(totalCost),
+                  total_quantity: roundCurrency(totalQuantity),
+                  used_quantity: roundCurrency(usedQuantity),
+                  available_quantity: roundCurrency(
+                    Math.max(totalQuantity - usedQuantity, 0),
+                  ),
+                  unit_cost:
+                    totalQuantity > 0 && totalCost > 0
+                      ? roundCurrency(totalCost / totalQuantity)
+                      : 0,
+                });
             },
             (_, error) => {
-              console.log("Error calculating used feed quantity", error);
+              console.log('Error calculating used feed quantity', error);
               errorCallback && errorCallback(error);
               return false;
-            }
+            },
           );
         },
         (_, error) => {
-          console.log("Error calculating feed purchase totals", error);
+          console.log('Error calculating feed purchase totals', error);
           errorCallback && errorCallback(error);
           return false;
-        }
+        },
       );
     },
     (_, error) => {
-      console.log("Error loading batch farm for feed availability", error);
+      console.log('Error loading batch farm for feed availability', error);
       errorCallback && errorCallback(error);
       return false;
-    }
+    },
   );
 };
 
 // Exposes feed availability to screens before recording feed usage.
-export const getFeedAvailability = (batch_id, feed_type, callback, errorCallback) => {
+export const getFeedAvailability = (
+  batch_id,
+  feed_type,
+  callback,
+  errorCallback,
+) => {
   db.transaction(tx => {
-    loadFeedAvailabilityForTransaction(tx, batch_id, feed_type, callback, errorCallback);
+    loadFeedAvailabilityForTransaction(
+      tx,
+      batch_id,
+      feed_type,
+      callback,
+      errorCallback,
+    );
   });
 };
 
 // Adds feed usage after verifying enough farm feed stock is available.
-export const addFeedRecord = (batch_id, feed_type, feed_quantity, date_recorded, callback, errorCallback) => {
+export const addFeedRecord = (
+  batch_id,
+  feed_type,
+  feed_quantity,
+  date_recorded,
+  callback,
+  errorCallback,
+) => {
   const quantityValue = parseNumber(feed_quantity);
 
   db.transaction(tx => {
@@ -1275,18 +1397,37 @@ export const addFeedRecord = (batch_id, feed_type, feed_quantity, date_recorded,
       batch_id,
       feed_type,
       availability => {
-        if (!availability?.farm_id || !availability?.feed_type || quantityValue <= 0) {
-          errorCallback && errorCallback(new Error('A valid batch, feed type, and quantity are required.'));
+        if (
+          !availability?.farm_id ||
+          !availability?.feed_type ||
+          quantityValue <= 0
+        ) {
+          errorCallback &&
+            errorCallback(
+              new Error('A valid batch, feed type, and quantity are required.'),
+            );
           return false;
         }
 
         if (availability.total_quantity <= 0 || availability.total_cost <= 0) {
-          errorCallback && errorCallback(new Error(`No farm feed purchase found for ${availability.feed_type}. Record it first under farm expenses.`));
+          errorCallback &&
+            errorCallback(
+              new Error(
+                `No farm feed purchase found for ${availability.feed_type}. Record it first under farm expenses.`,
+              ),
+            );
           return false;
         }
 
         if (quantityValue > availability.available_quantity) {
-          errorCallback && errorCallback(new Error(`Only ${availability.available_quantity.toFixed(2)} kg of ${availability.feed_type} is available from recorded farm purchases.`));
+          errorCallback &&
+            errorCallback(
+              new Error(
+                `Only ${availability.available_quantity.toFixed(2)} kg of ${
+                  availability.feed_type
+                } is available from recorded farm purchases.`,
+              ),
+            );
           return false;
         }
 
@@ -1295,36 +1436,52 @@ export const addFeedRecord = (batch_id, feed_type, feed_quantity, date_recorded,
         tx.executeSql(
           `INSERT INTO feed_records (batch_id, feed_type, feed_quantity, feed_cost, date_recorded, synced)
            VALUES (?, ?, ?, ?, ?, 0)`,
-          [batch_id, availability.feed_type, quantityValue, feedCost, date_recorded],
+          [
+            batch_id,
+            availability.feed_type,
+            quantityValue,
+            feedCost,
+            date_recorded,
+          ],
           (_, result) => {
-            console.log("Feed record added", result.insertId);
-            callback && callback({
-              feed_id: result.insertId,
-              feed_cost: feedCost,
-              unit_cost: availability.unit_cost,
-              available_quantity: roundCurrency(availability.available_quantity - quantityValue),
-            });
+            console.log('Feed record added', result.insertId);
+            callback &&
+              callback({
+                feed_id: result.insertId,
+                feed_cost: feedCost,
+                unit_cost: availability.unit_cost,
+                available_quantity: roundCurrency(
+                  availability.available_quantity - quantityValue,
+                ),
+              });
           },
           (_, error) => {
-            console.log("Error adding feed record", error);
+            console.log('Error adding feed record', error);
             errorCallback && errorCallback(error);
             return false;
-          }
+          },
         );
       },
-      errorCallback
+      errorCallback,
     );
   });
 };
 
 // Normalizes expense input for both farm-level and batch-level expenses.
 const buildExpenseRecordValues = record => {
-  const expenseScope = record.expense_scope || (record.farm_id != null && record.batch_id == null ? 'farm' : 'batch');
-  const normalizedFeedType = record.feed_type ? normalizeFeedType(record.feed_type) : null;
-  const normalizedVaccineName = record.vaccine_name ? String(record.vaccine_name).trim() : null;
-  const quantityBought = record.quantity_bought == null || record.quantity_bought === ''
-    ? null
-    : parseNumber(record.quantity_bought);
+  const expenseScope =
+    record.expense_scope ||
+    (record.farm_id != null && record.batch_id == null ? 'farm' : 'batch');
+  const normalizedFeedType = record.feed_type
+    ? normalizeFeedType(record.feed_type)
+    : null;
+  const normalizedVaccineName = record.vaccine_name
+    ? String(record.vaccine_name).trim()
+    : null;
+  const quantityBought =
+    record.quantity_bought == null || record.quantity_bought === ''
+      ? null
+      : parseNumber(record.quantity_bought);
 
   return [
     record.farm_id ?? null,
@@ -1340,15 +1497,22 @@ const buildExpenseRecordValues = record => {
 };
 
 // Adds an expense record and marks it pending backup sync.
-export const addExpenseRecord = (input, description, amount, expense_date, callback) => {
-  const record = typeof input === 'object' && input !== null
-    ? input
-    : {
-        batch_id: input,
-        description,
-        amount,
-        expense_date,
-      };
+export const addExpenseRecord = (
+  input,
+  description,
+  amount,
+  expense_date,
+  callback,
+) => {
+  const record =
+    typeof input === 'object' && input !== null
+      ? input
+      : {
+          batch_id: input,
+          description,
+          amount,
+          expense_date,
+        };
 
   db.transaction(tx => {
     tx.executeSql(
@@ -1356,14 +1520,15 @@ export const addExpenseRecord = (input, description, amount, expense_date, callb
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       buildExpenseRecordValues(record),
       (_, result) => {
-        console.log("Expense added", result.insertId);
-        const nextCallback = typeof input === 'object' && input !== null ? description : callback;
+        console.log('Expense added', result.insertId);
+        const nextCallback =
+          typeof input === 'object' && input !== null ? description : callback;
         nextCallback && nextCallback();
       },
       (_, error) => {
-        console.log("Error adding expense", error);
+        console.log('Error adding expense', error);
         return false;
-      }
+      },
     );
   });
 };
@@ -1427,9 +1592,12 @@ const resolveFeedRecordCosts = (tx, batch_id, records, callback) => {
               const existingFeedCost = parseNumber(record.feed_cost);
               const normalizedFeedType = normalizeFeedType(record.feed_type);
               const fallbackUnitCost = unitCostByType[normalizedFeedType] || 0;
-              const resolvedFeedCost = existingFeedCost > 0
-                ? roundCurrency(existingFeedCost)
-                : roundCurrency(parseNumber(record.feed_quantity) * fallbackUnitCost);
+              const resolvedFeedCost =
+                existingFeedCost > 0
+                  ? roundCurrency(existingFeedCost)
+                  : roundCurrency(
+                      parseNumber(record.feed_quantity) * fallbackUnitCost,
+                    );
 
               return {
                 ...record,
@@ -1437,21 +1605,21 @@ const resolveFeedRecordCosts = (tx, batch_id, records, callback) => {
                 stored_feed_cost: existingFeedCost,
                 feed_cost_source: existingFeedCost > 0 ? 'stored' : 'fallback',
               };
-            })
+            }),
           );
         },
         (_, error) => {
-          console.log("Error resolving fallback feed costs", error);
+          console.log('Error resolving fallback feed costs', error);
           callback(safeRecords);
           return false;
-        }
+        },
       );
     },
     (_, error) => {
-      console.log("Error loading batch for feed cost resolution", error);
+      console.log('Error loading batch for feed cost resolution', error);
       callback(safeRecords);
       return false;
-    }
+    },
   );
 };
 
@@ -1459,16 +1627,16 @@ const resolveFeedRecordCosts = (tx, batch_id, records, callback) => {
 export const getFeedRecordsByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      "SELECT * FROM feed_records WHERE batch_id = ? AND deleted_at IS NULL",
+      'SELECT * FROM feed_records WHERE batch_id = ? AND deleted_at IS NULL',
       [batch_id],
       (_, result) => {
         const data = rowsToArray(result.rows);
-        console.log("Feed records for batch:", batch_id, data);
+        console.log('Feed records for batch:', batch_id, data);
         resolveFeedRecordCosts(tx, batch_id, data, callback);
       },
       (_, error) => {
-        console.log("Error fetching feed records", error);
-      }
+        console.log('Error fetching feed records', error);
+      },
     );
   });
 };
@@ -1477,44 +1645,55 @@ export const getFeedRecordsByBatchId = (batch_id, callback) => {
 export const getFeedRecordsByBatch = getFeedRecordsByBatchId;
 
 // Updates a feed record and marks it pending backup sync.
-export const updateFeedRecord = (feed_id, feed_quantity, feed_cost, date_recorded) => {
+export const updateFeedRecord = (
+  feed_id,
+  feed_quantity,
+  feed_cost,
+  date_recorded,
+) => {
   db.transaction(tx => {
     tx.executeSql(
       `UPDATE feed_records SET feed_quantity = ?, feed_cost = ?, date_recorded = ?, deleted_at = NULL, synced = 0 WHERE feed_id = ?`,
       [feed_quantity, feed_cost, date_recorded, feed_id],
-      () => console.log("Feed record updated"),
-      (_, error) => console.log("Update error", error)
+      () => console.log('Feed record updated'),
+      (_, error) => console.log('Update error', error),
     );
   });
 };
 
 // Soft-deletes a feed record.
-export const deleteFeedRecord = (feed_id) => {
+export const deleteFeedRecord = feed_id => {
   db.transaction(tx => {
     tx.executeSql(
       `UPDATE feed_records SET deleted_at = ?, synced = 0 WHERE feed_id = ?`,
       [getCurrentTimestamp(), feed_id],
-      () => console.log("Feed record marked deleted"),
-      (_, error) => console.log("Delete error", error)
+      () => console.log('Feed record marked deleted'),
+      (_, error) => console.log('Delete error', error),
     );
   });
 };
 
 // Adds a mortality record and marks it pending backup sync.
-export const addMortalityRecord = (batch_id, number_dead, cause_of_death, date_recorded, callback) => {
+export const addMortalityRecord = (
+  batch_id,
+  number_dead,
+  cause_of_death,
+  date_recorded,
+  callback,
+) => {
   db.transaction(tx => {
     tx.executeSql(
       `INSERT INTO mortality_records (batch_id, number_dead, cause_of_death, date_recorded, synced)
       VALUES (?, ?, ?, ?, 0)`,
       [batch_id, number_dead, cause_of_death, date_recorded],
       (_, result) => {
-        console.log("Mortality record added", result.insertId);
+        console.log('Mortality record added', result.insertId);
         callback && callback();
       },
       (_, error) => {
-        console.log("Error adding mortality record", error);
+        console.log('Error adding mortality record', error);
         return false;
-      }
+      },
     );
   });
 };
@@ -1523,53 +1702,64 @@ export const addMortalityRecord = (batch_id, number_dead, cause_of_death, date_r
 export const getMortalityRecordsByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      "SELECT * FROM mortality_records WHERE batch_id = ? AND deleted_at IS NULL ORDER BY date_recorded DESC, mortality_id DESC",
+      'SELECT * FROM mortality_records WHERE batch_id = ? AND deleted_at IS NULL ORDER BY date_recorded DESC, mortality_id DESC',
       [batch_id],
       (_, result) => {
         const data = rowsToArray(result.rows);
-        console.log("Mortality records for batch:", batch_id, data);
+        console.log('Mortality records for batch:', batch_id, data);
         callback(data);
       },
       (_, error) => {
-        console.log("Error fetching mortality records", error);
-      }
+        console.log('Error fetching mortality records', error);
+      },
     );
   });
 };
 
 // Soft-deletes a mortality record.
-export const deleteMortalityRecord = (mortality_id) => {
+export const deleteMortalityRecord = mortality_id => {
   db.transaction(tx => {
     tx.executeSql(
       `UPDATE mortality_records SET deleted_at = ?, synced = 0 WHERE mortality_id = ?`,
       [getCurrentTimestamp(), mortality_id],
-      () => console.log("Mortality record marked deleted"),
-      (_, error) => console.log("Delete mortality error", error)
+      () => console.log('Mortality record marked deleted'),
+      (_, error) => console.log('Delete mortality error', error),
     );
   });
 };
 
 // Adds a vaccination record and optional next due date.
-export const addVaccinationRecord = (batch_id, vaccine_name, vaccination_date, next_due_date, notes, callback) => {
+export const addVaccinationRecord = (
+  batch_id,
+  vaccine_name,
+  vaccination_date,
+  next_due_date,
+  notes,
+  callback,
+) => {
   db.transaction(tx => {
     tx.executeSql(
       `INSERT INTO vaccination_records (batch_id, vaccine_name, vaccination_date, next_due_date, due_completed_at, notes, synced)
       VALUES (?, ?, ?, ?, NULL, ?, 0)`,
       [batch_id, vaccine_name, vaccination_date, next_due_date, notes],
       (_, result) => {
-        console.log("Vaccination record added", result.insertId);
+        console.log('Vaccination record added', result.insertId);
         callback && callback();
       },
       (_, error) => {
-        console.log("Error adding vaccination record", error);
+        console.log('Error adding vaccination record', error);
         return false;
-      }
+      },
     );
   });
 };
 
 // Marks a vaccination follow-up as completed.
-export const markVaccinationDueCompleted = (vaccination_id, completedAt, callback) => {
+export const markVaccinationDueCompleted = (
+  vaccination_id,
+  completedAt,
+  callback,
+) => {
   db.transaction(tx => {
     tx.executeSql(
       `UPDATE vaccination_records
@@ -1577,13 +1767,13 @@ export const markVaccinationDueCompleted = (vaccination_id, completedAt, callbac
        WHERE vaccination_id = ?`,
       [completedAt, vaccination_id],
       () => {
-        console.log("Vaccination due marked completed", vaccination_id);
+        console.log('Vaccination due marked completed', vaccination_id);
         callback && callback();
       },
       (_, error) => {
-        console.log("Error marking vaccination due completed", error);
+        console.log('Error marking vaccination due completed', error);
         return false;
-      }
+      },
     );
   });
 };
@@ -1592,28 +1782,28 @@ export const markVaccinationDueCompleted = (vaccination_id, completedAt, callbac
 export const getVaccinationRecordsByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      "SELECT * FROM vaccination_records WHERE batch_id = ? AND deleted_at IS NULL ORDER BY vaccination_date DESC, vaccination_id DESC",
+      'SELECT * FROM vaccination_records WHERE batch_id = ? AND deleted_at IS NULL ORDER BY vaccination_date DESC, vaccination_id DESC',
       [batch_id],
       (_, result) => {
         const data = rowsToArray(result.rows);
-        console.log("Vaccination records for batch:", batch_id, data);
+        console.log('Vaccination records for batch:', batch_id, data);
         callback(data);
       },
       (_, error) => {
-        console.log("Error fetching vaccination records", error);
-      }
+        console.log('Error fetching vaccination records', error);
+      },
     );
   });
 };
 
 // Soft-deletes a vaccination record.
-export const deleteVaccinationRecord = (vaccination_id) => {
+export const deleteVaccinationRecord = vaccination_id => {
   db.transaction(tx => {
     tx.executeSql(
       `UPDATE vaccination_records SET deleted_at = ?, synced = 0 WHERE vaccination_id = ?`,
       [getCurrentTimestamp(), vaccination_id],
-      () => console.log("Vaccination record marked deleted"),
-      (_, error) => console.log("Delete vaccination error", error)
+      () => console.log('Vaccination record marked deleted'),
+      (_, error) => console.log('Delete vaccination error', error),
     );
   });
 };
@@ -1631,12 +1821,12 @@ export const getExpensesByBatchId = (batch_id, callback) => {
       [batch_id],
       (_, result) => {
         const data = rowsToArray(result.rows);
-        console.log("Expenses for batch:", batch_id, data);
+        console.log('Expenses for batch:', batch_id, data);
         callback(data);
       },
       (_, error) => {
-        console.log("Error fetching expenses", error);
-      }
+        console.log('Error fetching expenses', error);
+      },
     );
   });
 };
@@ -1655,30 +1845,36 @@ export const getExpensesByFarmId = (farm_id, callback) => {
       [farm_id],
       (_, result) => {
         const data = rowsToArray(result.rows);
-        console.log("Farm expenses for farm:", farm_id, data);
+        console.log('Farm expenses for farm:', farm_id, data);
         callback(data);
       },
       (_, error) => {
-        console.log("Error fetching farm expenses", error);
-      }
+        console.log('Error fetching farm expenses', error);
+      },
     );
   });
 };
 
 // Soft-deletes an expense record.
-export const deleteExpenseRecord = (expense_id) => {
+export const deleteExpenseRecord = expense_id => {
   db.transaction(tx => {
     tx.executeSql(
       `UPDATE expenses SET deleted_at = ?, synced = 0 WHERE expense_id = ?`,
       [getCurrentTimestamp(), expense_id],
-      () => console.log("Expense marked deleted"),
-      (_, error) => console.log("Delete expense error", error)
+      () => console.log('Expense marked deleted'),
+      (_, error) => console.log('Delete expense error', error),
     );
   });
 };
 
 // Adds a sale record and calculates total revenue.
-export const addSaleRecord = (batch_id, birds_sold, price_per_bird, sale_date, callback) => {
+export const addSaleRecord = (
+  batch_id,
+  birds_sold,
+  price_per_bird,
+  sale_date,
+  callback,
+) => {
   const total_revenue = Number(birds_sold) * Number(price_per_bird);
 
   db.transaction(tx => {
@@ -1687,13 +1883,13 @@ export const addSaleRecord = (batch_id, birds_sold, price_per_bird, sale_date, c
       VALUES (?, ?, ?, ?, ?, 0)`,
       [batch_id, birds_sold, price_per_bird, total_revenue, sale_date],
       (_, result) => {
-        console.log("Sale added", result.insertId);
+        console.log('Sale added', result.insertId);
         callback && callback();
       },
       (_, error) => {
-        console.log("Error adding sale", error);
+        console.log('Error adding sale', error);
         return false;
-      }
+      },
     );
   });
 };
@@ -1702,28 +1898,28 @@ export const addSaleRecord = (batch_id, birds_sold, price_per_bird, sale_date, c
 export const getSalesByBatchId = (batch_id, callback) => {
   db.transaction(tx => {
     tx.executeSql(
-      "SELECT * FROM sales WHERE batch_id = ? AND deleted_at IS NULL ORDER BY sale_date DESC, sale_id DESC",
+      'SELECT * FROM sales WHERE batch_id = ? AND deleted_at IS NULL ORDER BY sale_date DESC, sale_id DESC',
       [batch_id],
       (_, result) => {
         const data = rowsToArray(result.rows);
-        console.log("Sales for batch:", batch_id, data);
+        console.log('Sales for batch:', batch_id, data);
         callback(data);
       },
       (_, error) => {
-        console.log("Error fetching sales", error);
-      }
+        console.log('Error fetching sales', error);
+      },
     );
   });
 };
 
 // Soft-deletes a sale record.
-export const deleteSaleRecord = (sale_id) => {
+export const deleteSaleRecord = sale_id => {
   db.transaction(tx => {
     tx.executeSql(
       `UPDATE sales SET deleted_at = ?, synced = 0 WHERE sale_id = ?`,
       [getCurrentTimestamp(), sale_id],
-      () => console.log("Sale marked deleted"),
-      (_, error) => console.log("Delete sale error", error)
+      () => console.log('Sale marked deleted'),
+      (_, error) => console.log('Delete sale error', error),
     );
   });
 };
@@ -1746,7 +1942,7 @@ const executeTransactionSteps = (tx, steps) =>
         (_transaction, error) => {
           reject(error);
           return false;
-        }
+        },
       );
     };
 
@@ -1761,8 +1957,13 @@ export const importBootstrapData = (authenticatedUser, bootstrapData) =>
       user_id: user.user_id,
       first_name: user.first_name || '',
       last_name: user.last_name || '',
-      email: String(user.email || '').trim().toLowerCase(),
-      password: user.user_id === authenticatedUser.user_id ? authenticatedUser.password : '',
+      email: String(user.email || '')
+        .trim()
+        .toLowerCase(),
+      password:
+        user.user_id === authenticatedUser.user_id
+          ? authenticatedUser.password
+          : '',
       role: user.role || '',
       owner_user_id: user.owner_user_id ?? null,
       recovery_question: user.recovery_question ?? null,
@@ -1796,7 +1997,14 @@ export const importBootstrapData = (authenticatedUser, bootstrapData) =>
           (farm_id, user_id, farm_name, location, created_at, deleted_at, synced)
           VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, 1)
         `,
-        params: [farm.farm_id, farm.user_id, farm.farm_name, farm.location, farm.created_at, farm.deleted_at ?? null],
+        params: [
+          farm.farm_id,
+          farm.user_id,
+          farm.farm_name,
+          farm.location,
+          farm.created_at,
+          farm.deleted_at ?? null,
+        ],
       })),
       ...(safeData.batches || []).map(batch => ({
         sql: `
@@ -1876,7 +2084,10 @@ export const importBootstrapData = (authenticatedUser, bootstrapData) =>
           record.description,
           record.amount,
           record.expense_date,
-          record.expense_scope ?? (record.farm_id != null && record.batch_id == null ? 'farm' : 'batch'),
+          record.expense_scope ??
+            (record.farm_id != null && record.batch_id == null
+              ? 'farm'
+              : 'batch'),
           record.feed_type ? normalizeFeedType(record.feed_type) : null,
           record.vaccine_name ?? null,
           record.quantity_bought ?? null,
@@ -1909,7 +2120,7 @@ export const importBootstrapData = (authenticatedUser, bootstrapData) =>
       },
       error => {
         reject(error);
-      }
+      },
     );
   });
 

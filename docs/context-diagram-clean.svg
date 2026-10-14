@@ -16,7 +16,7 @@
   <text x="700" y="70" text-anchor="middle" class="title">Context Diagram</text>
 
   <rect x="520" y="300" width="360" height="240" rx="26" ry="26" class="process" />
-  <text x="700" y="390" text-anchor="middle" class="label">BroilerHub</text>
+  <text x="700" y="390" text-anchor="middle" class="label">KikoFarm</text>
   <text x="700" y="430" text-anchor="middle" class="label">Poultry Farm</text>
   <text x="700" y="470" text-anchor="middle" class="label">Management System</text>
 

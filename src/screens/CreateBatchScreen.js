@@ -135,7 +135,7 @@ export default function CreateBatchScreen({ navigation, route }) {
         }
 
         if (!isFormValid) {
-            Alert.alert("Error", "Please fill all fields correctly, including chick purchase cost");
+            Alert.alert("Error", "Please fill all fields correctly, including flock purchase cost");
             return;
         }
 
@@ -187,7 +187,7 @@ export default function CreateBatchScreen({ navigation, route }) {
             />
         ) : null}
 
-        {/* Collects batch identity, initial bird count, and chick purchase cost. */}
+        {/* Collects batch identity, initial bird count, and flock purchase cost. */}
         <TextInput
             placeholder="Breed"
             placeholderTextColor="#666"
@@ -197,7 +197,7 @@ export default function CreateBatchScreen({ navigation, route }) {
         />
 
         <TextInput
-            placeholder="Initial Chicks"
+            placeholder="Initial Birds"
             placeholderTextColor="#666"
             value={initialChicks}
             onChangeText={handleChicksChange}
@@ -207,7 +207,7 @@ export default function CreateBatchScreen({ navigation, route }) {
         {chicksError ? <Text style={styles.errorText}>{chicksError}</Text> : null}
 
         <TextInput
-            placeholder="Chick Purchase Cost"
+            placeholder="Bird Purchase Cost"
             placeholderTextColor="#666"
             value={purchaseCost}
             onChangeText={handlePurchaseCostChange}

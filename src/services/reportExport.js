@@ -151,7 +151,7 @@ export const exportReportToExcel = async ({ reportType, report }) => {
   const dataSheet = XLSX.utils.json_to_sheet(buildDataSheetRows(report.columns, report.data));
   const exportDate = new Date();
   const reportLabel = sanitizeName(report.title || reportType);
-  const fileName = `BroilerHub-${reportLabel}-${formatFileDateTime(exportDate)}.xlsx`;
+  const fileName = `KIKO FARM-${reportLabel}-${formatFileDateTime(exportDate)}.xlsx`;
 
   XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
   XLSX.utils.book_append_sheet(workbook, dataSheet, 'Report Data');
@@ -159,10 +159,10 @@ export const exportReportToExcel = async ({ reportType, report }) => {
   const workbookBase64 = XLSX.write(workbook, { type: 'base64', bookType: 'xlsx' });
   const canWritePublicDownload = await ensureAndroidWritePermission();
   const preferredDirectory = Platform.OS === 'android' && canWritePublicDownload && RNFS.DownloadDirectoryPath
-    ? `${RNFS.DownloadDirectoryPath}/BroilerHubReports`
+    ? `${RNFS.DownloadDirectoryPath}/KIKO FARM Reports`
     : Platform.OS === 'android' && RNFS.ExternalDirectoryPath
-      ? `${RNFS.ExternalDirectoryPath}/BroilerHubReports`
-      : `${RNFS.DocumentDirectoryPath}/BroilerHubReports`;
+      ? `${RNFS.ExternalDirectoryPath}/KIKO FARM Reports`
+      : `${RNFS.DocumentDirectoryPath}/KIKO FARM Reports`;
   const filePath = `${preferredDirectory}/${fileName}`;
 
   await RNFS.mkdir(preferredDirectory);
@@ -175,7 +175,7 @@ export const exportReportToExcel = async ({ reportType, report }) => {
       throw error;
     }
 
-    const fallbackDirectory = `${RNFS.ExternalDirectoryPath}/BroilerHubReports`;
+    const fallbackDirectory = `${RNFS.ExternalDirectoryPath}/KIKO FARM Reports`;
     const fallbackPath = `${fallbackDirectory}/${fileName}`;
 
     await RNFS.mkdir(fallbackDirectory);

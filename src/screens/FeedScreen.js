@@ -3,14 +3,16 @@ import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity } fr
 import { addFeedRecord, getBatchById, getFeedAvailability, getUserById } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 
+export const getRecommendedFeedType = () => null;
+
 // Lets owner and worker users record feed usage for an active batch.
 export default function FeedScreen({ route, navigation }) {
     // Stores route ids, feed form fields, stock information, and role/batch data.
     const batchId = route?.params?.batchId;
     const userId = route?.params?.userId;
-    const feedTypeOptions = ['starter', 'grower', 'finisher'];
+    const feedTypeOptions = ['Layer ration', 'Flock ration', 'Breeder ration', 'Supplement', 'Other'];
 
-    const [feedType, setFeedType] = useState('starter');
+    const [feedType, setFeedType] = useState('Layer ration');
     const [showFeedTypeDropdown, setShowFeedTypeDropdown] = useState(false);
     const [quantity, setQuantity] = useState('');
     const [quantityError, setQuantityError] = useState('');
@@ -104,23 +106,6 @@ export default function FeedScreen({ route, navigation }) {
         return Math.max(Math.floor(diffMs / (1000 * 60 * 60 * 24)), 0);
     };
 
-    // Chooses the expected feed stage based on batch age.
-    const getRecommendedFeedType = ageInDays => {
-        if (ageInDays == null) {
-        return null;
-        }
-
-        if (ageInDays < 21) {
-        return 'starter';
-        }
-
-        if (ageInDays < 35) {
-        return 'grower';
-        }
-
-        return 'finisher';
-    };
-
     const ageInDays = getAgeInDays(batch?.start_date);
     const ageInWeeks = ageInDays == null ? null : (ageInDays / 7).toFixed(1);
     const recommendedFeedType = getRecommendedFeedType(ageInDays);
@@ -157,14 +142,6 @@ export default function FeedScreen({ route, navigation }) {
         return;
         }
 
-        if (recommendedFeedType && feedType !== recommendedFeedType) {
-        Alert.alert(
-            'Wrong feed stage',
-            `This batch is ${ageInDays} day(s) old (${ageInWeeks} weeks). Use ${recommendedFeedType.charAt(0).toUpperCase() + recommendedFeedType.slice(1)} feed.`
-        );
-        return;
-        }
-
         if (!/^\d{1,2}$/.test(quantity)) {
         Alert.alert('Error', 'Quantity must be numbers only, max 2 digits');
         return;
@@ -183,7 +160,7 @@ export default function FeedScreen({ route, navigation }) {
         quantityValue,
         new Date().toISOString(),
         result => {
-            setFeedType('starter');
+            setFeedType('Layer feed');
             setShowFeedTypeDropdown(false);
             setQuantity('');
             setQuantityError('');
@@ -207,13 +184,11 @@ export default function FeedScreen({ route, navigation }) {
             This batch is completed. New feed entries are disabled, but you can still view the existing records.
             </Text>
         ) : null}
-        {recommendedFeedType ? (
-            <Text style={styles.ageNote}>
-            Batch age: {ageInDays} day(s) ({ageInWeeks} weeks). Recommended feed: {recommendedFeedType.charAt(0).toUpperCase() + recommendedFeedType.slice(1)}.
-            </Text>
-        ) : null}
         <Text style={styles.noteText}>
         Feed cost is calculated automatically from farm feed purchases recorded under farm expenses.
+        </Text>
+        <Text style={styles.noteText}>
+        Use the feed type that matches your flock plan, farm practice, and production goals. Improved kienyeji flocks do not follow a single broiler feed schedule.
         </Text>
 
         {/* Shows feed type and quantity controls only when entry is allowed. */}
@@ -226,7 +201,7 @@ export default function FeedScreen({ route, navigation }) {
                 onPress={() => setShowFeedTypeDropdown(previous => !previous)}
                 >
                 <Text style={styles.dropdownTriggerText}>
-                    {feedType.charAt(0).toUpperCase() + feedType.slice(1)}
+                    {feedType}
                 </Text>
                 <Text style={styles.dropdownChevron}>{showFeedTypeDropdown ? '^' : 'v'}</Text>
                 </TouchableOpacity>
@@ -247,7 +222,7 @@ export default function FeedScreen({ route, navigation }) {
                         }}
                         >
                         <Text style={[styles.dropdownOptionText, isSelected ? styles.dropdownOptionTextSelected : null]}>
-                            {option.charAt(0).toUpperCase() + option.slice(1)}
+                            {option}
                         </Text>
                         </TouchableOpacity>
                     );

@@ -1,8 +1,8 @@
-# BroilerHub Project Documentation
+# KIKO FARM Project Documentation
 
 ## Project Overview
 
-BroilerHub is a React Native poultry farm management application. It records farm, batch, feed, mortality, vaccination, expense, and sales data using a local SQLite database, then produces operational reports and reminders for users.
+KIKO FARM is a React Native poultry farm management application focused on improved kienyeji operations. It records farm, batch, feed, mortality, vaccination, expense, and sales data using a local SQLite database, then produces operational reports and reminders for users.
 
 ## Main Modules
 

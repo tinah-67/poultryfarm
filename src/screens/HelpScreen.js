@@ -251,7 +251,7 @@ export default function HelpScreen({ route, extraBottomPadding = 0 }) {
   );
 
   const isLoginHelp = helpMode === 'login';
-  const mainTitle = isLoginHelp ? 'Login Help' : 'Help';
+  const mainTitle = isLoginHelp ? 'KIKO FARM Login Help' : 'KIKO FARM Help';
   const mainSubtitle = isLoginHelp
     ? 'Choose the type of help you need'
     : roleLabel

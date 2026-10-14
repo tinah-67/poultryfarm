@@ -280,7 +280,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
     {
       metric: 'Birds Alive',
       value: String(activeMetrics.birdsAlive),
-      note: `Initial chicks: ${activeMetrics.initialChicks}`,
+      note: `Initial flock: ${activeMetrics.initialChicks}`,
     },
     {
       metric: 'Total Dead',
@@ -295,7 +295,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
     {
       metric: 'Mortality Rate',
       value: `${formatNumber(activeMetrics.mortalityRate)}%`,
-      note: `Based on ${activeMetrics.initialChicks} initial chicks`,
+      note: `Based on ${activeMetrics.initialChicks} initial birds`,
     },
     {
       metric: 'Feed Used',
@@ -305,7 +305,7 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
     {
       metric: 'Expenses',
       value: formatCurrency(activeMetrics.totalExpenses),
-      note: 'Includes chick purchase and other costs',
+      note: 'Includes flock purchase and other costs',
     },
     {
       metric: 'Revenue',

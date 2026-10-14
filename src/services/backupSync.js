@@ -1,7 +1,7 @@
 import db from '../database/db';
 
 // Defines the backup API host and timeout used for offline-first sync.
-const BACKUP_BASE_URL = 'http://192.168.100.26:3000';
+const BACKUP_BASE_URL = 'http://192.168.100.73:3000';
 const BACKUP_REQUEST_TIMEOUT_MS = 15000; // 15 seconds
 
 // Maps each local table to the server endpoint and query used for pending records.

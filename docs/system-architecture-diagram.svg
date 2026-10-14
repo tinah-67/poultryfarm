@@ -17,7 +17,7 @@
     </marker>
   </defs>
 
-  <text x="900" y="55" text-anchor="middle" class="title">System Architecture Diagram - BroilerHub</text>
+  <text x="900" y="55" text-anchor="middle" class="title">System Architecture Diagram - KikoFarm</text>
   <text x="900" y="88" text-anchor="middle" class="subtitle">Offline-first poultry farm management system</text>
 
   <!-- users -->
