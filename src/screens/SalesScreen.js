@@ -1,8 +1,9 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   addSaleRecord,
+  getEggAvailabilityByBatchId,
   getBatchById,
   getMortalityRecordsByBatchId,
   getSalesByBatchId,
@@ -15,16 +16,19 @@ export default function SalesScreen({ route, navigation }) {
   // Stores route ids, sale fields, role data, available birds, and batch status.
   const batchId = route?.params?.batchId;
   const userId = route?.params?.userId;
-  const [birdsSold, setBirdsSold] = useState('');
-  const [pricePerBird, setPricePerBird] = useState('');
+  const [saleType, setSaleType] = useState(null);
+  const [quantitySold, setQuantitySold] = useState('');
+  const [pricePerUnit, setPricePerUnit] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
   const [availableBirds, setAvailableBirds] = useState(0);
+  const [availableEggs, setAvailableEggs] = useState(0);
   const [batch, setBatch] = useState(null);
 
-  // Calculates birds still available after mortality and previous sales.
-  const loadAvailableBirds = useCallback((done) => {
+  // Calculates bird and egg inventory after previous records and sales.
+  const loadSaleAvailability = useCallback((done) => {
     if (!batchId) {
       setAvailableBirds(0);
+      setAvailableEggs(0);
       done && done();
       return;
     }
@@ -33,11 +37,13 @@ export default function SalesScreen({ route, navigation }) {
       if (!batchRecord) {
         setBatch(null);
         setAvailableBirds(0);
+        setAvailableEggs(0);
         done && done();
         return;
       }
 
       setBatch(batchRecord);
+      getEggAvailabilityByBatchId(batchId, setAvailableEggs);
 
       getMortalityRecordsByBatchId(batchId, mortalityRecords => {
         getSalesByBatchId(batchId, salesRecords => {
@@ -47,7 +53,9 @@ export default function SalesScreen({ route, navigation }) {
             0
           );
           const totalBirdsSold = (salesRecords || []).reduce(
-            (sum, item) => sum + Number(item.birds_sold || 0),
+            (sum, item) => item.sale_type === 'eggs'
+              ? sum
+              : sum + Number(item.quantity_sold || 0),
             0
           );
 
@@ -69,8 +77,8 @@ export default function SalesScreen({ route, navigation }) {
         setCurrentUser(null);
       }
 
-      loadAvailableBirds();
-    }, [loadAvailableBirds, userId])
+      loadSaleAvailability();
+    }, [loadSaleAvailability, userId])
   );
 
   const canRecordSales = ['owner', 'manager'].includes(currentUser?.role);
@@ -93,42 +101,47 @@ export default function SalesScreen({ route, navigation }) {
       return;
     }
 
-    if (!birdsSold || !pricePerBird) {
-      Alert.alert('Error', 'Enter birds sold and price per bird');
+    if (!saleType) {
+      Alert.alert('Choose sale type', 'Select whether you are selling eggs or birds.');
       return;
     }
 
-    if (!/^\d+$/.test(birdsSold.trim()) || Number(birdsSold) <= 0) {
-      Alert.alert('Error', 'Birds sold must be a positive whole number');
+    if (!quantitySold || !pricePerUnit) {
+      Alert.alert('Error', `Enter ${saleType === 'eggs' ? 'eggs' : 'birds'} sold and the price per ${saleType === 'eggs' ? 'egg' : 'bird'}.`);
       return;
     }
 
-    const priceValue = Number(pricePerBird);
+    if (!/^\d+$/.test(quantitySold.trim()) || Number(quantitySold) <= 0) {
+      Alert.alert('Error', 'Quantity sold must be a positive whole number');
+      return;
+    }
+
+    const priceValue = Number(pricePerUnit);
 
     if (!Number.isFinite(priceValue) || priceValue <= 0) {
-      Alert.alert('Error', 'Price per bird must be a valid number greater than 0');
+      Alert.alert('Error', `Price per ${saleType === 'eggs' ? 'egg' : 'bird'} must be greater than 0.`);
       return;
     }
 
-    const birdsToSell = Number(birdsSold);
+    const quantityToSell = Number(quantitySold);
+    const availableQuantity = saleType === 'eggs' ? availableEggs : availableBirds;
 
-    if (birdsToSell > availableBirds) {
-      Alert.alert('Not enough birds', `Only ${availableBirds} birds are currently available for sale in this batch.`);
+    if (quantityToSell > availableQuantity) {
+      Alert.alert(
+        `Not enough ${saleType}`,
+        `Only ${availableQuantity} ${saleType} are currently available for sale in this batch.`,
+      );
       return;
     }
 
-    addSaleRecord(
-      batchId,
-      birdsToSell,
-      priceValue,
-      new Date().toISOString(),
-      () => {
-        setBirdsSold('');
-        setPricePerBird('');
-        loadAvailableBirds();
-        Alert.alert('Success', 'Sale recorded');
-      }
-    );
+    const onSaved = () => {
+      setQuantitySold('');
+      setPricePerUnit('');
+      loadSaleAvailability();
+      Alert.alert('Success', `${saleType === 'eggs' ? 'Egg' : 'Bird'} sale recorded.`);
+    };
+
+    addSaleRecord(batchId, saleType, quantityToSell, priceValue, new Date().toISOString(), onSaved);
   };
 
   return (
@@ -139,29 +152,57 @@ export default function SalesScreen({ route, navigation }) {
           This batch is completed. New sales entries are disabled, but you can still view the existing records.
         </Text>
       ) : null}
-      <Text style={styles.summary}>Birds Available for Sale: {availableBirds}</Text>
+      <View style={styles.saleTypeControl}>
+        {[
+          { key: 'birds', label: 'Birds' },
+          { key: 'eggs', label: 'Eggs' },
+        ].map(option => (
+          <TouchableOpacity
+            key={option.key}
+            style={[styles.saleTypeButton, saleType === option.key && styles.saleTypeButtonSelected]}
+            onPress={() => {
+              setSaleType(option.key);
+              setQuantitySold('');
+              setPricePerUnit('');
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ selected: saleType === option.key }}
+          >
+            <Text style={[styles.saleTypeText, saleType === option.key && styles.saleTypeTextSelected]}>
+              {option.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {saleType ? (
+        <Text style={styles.summary}>
+          {saleType === 'eggs' ? 'Eggs' : 'Birds'} Available for Sale: {saleType === 'eggs' ? availableEggs : availableBirds}
+        </Text>
+      ) : null}
       {/* Shows sale entry fields only when recording is allowed. */}
-      {canRecordSales && !isBatchCompleted ? (
+      {canRecordSales && !isBatchCompleted && saleType ? (
         <>
           <TextInput
-            placeholder="Birds Sold"
+            placeholder={saleType === 'eggs' ? 'Eggs Sold' : 'Birds Sold'}
             placeholderTextColor="#666"
-            value={birdsSold}
-            onChangeText={setBirdsSold}
+            value={quantitySold}
+            onChangeText={setQuantitySold}
             keyboardType="numeric"
             style={styles.input}
           />
           <TextInput
-            placeholder="Price Per Bird"
+            placeholder={saleType === 'eggs' ? 'Price Per Egg' : 'Price Per Bird'}
             placeholderTextColor="#666"
-            value={pricePerBird}
-            onChangeText={setPricePerBird}
+            value={pricePerUnit}
+            onChangeText={setPricePerUnit}
             keyboardType="numeric"
             style={styles.input}
           />
           <Button title="Add Sale" onPress={handleAdd} />
         </>
-      ) : isBatchCompleted ? null : (
+      ) : isBatchCompleted ? null : canRecordSales ? (
+        <Text style={styles.noteText}>Choose Eggs or Birds to begin recording a sale.</Text>
+      ) : (
         <Text style={styles.noteText}>You can review sales records, but only owners and managers can add sales entries.</Text>
       )}
 
@@ -174,12 +215,24 @@ export default function SalesScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  // Sales form, available-birds summary, locked-state, and action styles.
+  // Sales form, type selector, available inventory, and action styles.
   container: { flex: 1, padding: 20 },
   title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
   lockedNote: { color: '#fecaca', marginBottom: 12 },
   noteText: { color: '#cbd5e1', marginBottom: 12 },
   input: { borderWidth: 1, padding: 10, marginBottom: 10, borderRadius: 5, backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: '#cbd5e1' },
   summary: { marginVertical: 10, fontWeight: 'bold', color: '#fff' },
+  saleTypeControl: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  saleTypeButton: { flex: 1, alignItems: 'center', paddingVertical: 10, backgroundColor: '#fff' },
+  saleTypeButtonSelected: { backgroundColor: '#166534' },
+  saleTypeText: { color: '#0f172a', fontWeight: '600' },
+  saleTypeTextSelected: { color: '#fff' },
   actions: { marginTop: 14 },
 });

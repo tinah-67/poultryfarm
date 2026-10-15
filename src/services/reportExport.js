@@ -5,10 +5,10 @@ import XLSX from 'xlsx';
 const { ReportShareModule } = NativeModules;
 const EXCEL_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-const CURRENCY_KEYS = ['amount', 'feed_cost', 'price_per_bird', 'total_revenue', 'total_expenses'];
+const CURRENCY_KEYS = ['amount', 'feed_cost', 'unit_price', 'total_revenue', 'total_expenses'];
 const DECIMAL_KEYS = ['feed_quantity', 'feed_used'];
 const STATUS_KEYS = ['batch_status', 'status'];
-const ZERO_DEFAULT_KEYS = ['birds_alive', 'birds_sold', 'total_mortality', 'number_dead'];
+const ZERO_DEFAULT_KEYS = ['birds_alive', 'birds_sold', 'quantity_sold', 'total_mortality', 'number_dead'];
 
 // Formats numeric values for spreadsheet cells.
 const formatNumber = (value, digits = 2) => {

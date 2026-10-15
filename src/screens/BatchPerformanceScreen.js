@@ -123,7 +123,9 @@ export default function BatchPerformanceScreen({ route }) {
                 0
               );
               const totalBirdsSold = (saleRecords || []).reduce(
-                (sum, item) => sum + Number(item.birds_sold || 0),
+                (sum, item) => item.sale_type === 'birds'
+                  ? sum + Number(item.quantity_sold || 0)
+                  : sum,
                 0
               );
               const initialChicks = Number(batchRecord.initial_chicks || 0);

@@ -52,6 +52,7 @@ const softDeleteBatchDescendants = (tx, batchId, deletedAt) => {
     { tableName: 'vaccination_records', idColumn: 'batch_id' },
     { tableName: 'expenses', idColumn: 'batch_id' },
     { tableName: 'sales', idColumn: 'batch_id' },
+    { tableName: 'egg_collections', idColumn: 'batch_id' },
   ];
 
   childTables.forEach(({ tableName, idColumn }) => {
@@ -149,6 +150,110 @@ const ensureColumnExists = (tx, tableName, columnName, definition) => {
       console.log(`Error reading schema for ${tableName}`, error);
       return false;
     },
+  );
+};
+
+// Migrates old bird/egg sale fields, then rebuilds sales without legacy duplicates.
+const compactSalesTable = () => {
+  db.transaction(
+    tx => {
+      tx.executeSql(
+        'PRAGMA table_info(sales)',
+        [],
+        (_, schemaResult) => {
+          const existingColumns = rowsToArray(schemaResult.rows).map(column => column.name);
+          const hasLegacySaleColumns = [
+            'birds_sold',
+            'price_per_bird',
+            'legacy_egg_sale_id',
+          ].some(column => existingColumns.includes(column));
+
+          tx.executeSql(
+            `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'egg_sales'`,
+            [],
+            (_, tableResult) => {
+              const hasLegacyEggSales = tableResult.rows.length > 0;
+              const steps = [];
+
+              if (hasLegacySaleColumns) {
+                steps.push(`UPDATE sales
+                  SET sale_type = COALESCE(NULLIF(sale_type, ''), 'birds'),
+                      quantity_sold = COALESCE(quantity_sold, birds_sold),
+                      unit_price = COALESCE(unit_price, price_per_bird)
+                  WHERE quantity_sold IS NULL OR unit_price IS NULL OR sale_type IS NULL`);
+              }
+
+              if (hasLegacyEggSales) {
+                steps.push(`INSERT OR IGNORE INTO sales (
+                  sale_id, batch_id, sale_type, quantity_sold, unit_price,
+                  total_revenue, sale_date, deleted_at, synced
+                )
+                SELECT -egg_sale_id, batch_id, 'eggs', eggs_sold, price_per_egg,
+                       COALESCE(total_revenue, eggs_sold * price_per_egg, 0),
+                       sale_date, deleted_at, 0
+                FROM egg_sales`);
+                steps.push('DROP TABLE egg_sales');
+              }
+
+              if (hasLegacySaleColumns || hasLegacyEggSales) {
+                steps.push(
+                  'DROP TABLE IF EXISTS sales_compact',
+                  `CREATE TABLE sales_compact (
+                    sale_id INTEGER PRIMARY KEY,
+                    batch_id INTEGER,
+                    sale_type TEXT NOT NULL DEFAULT 'birds',
+                    quantity_sold INTEGER,
+                    unit_price REAL,
+                    total_revenue REAL,
+                    sale_date TEXT,
+                    deleted_at TEXT,
+                    synced INTEGER DEFAULT 0
+                  )`,
+                  `INSERT INTO sales_compact (
+                    sale_id, batch_id, sale_type, quantity_sold, unit_price,
+                    total_revenue, sale_date, deleted_at, synced
+                  )
+                  SELECT sale_id, batch_id, COALESCE(NULLIF(sale_type, ''), 'birds'),
+                         quantity_sold, unit_price, total_revenue, sale_date,
+                         deleted_at, synced
+                  FROM sales`,
+                  'DROP TABLE sales',
+                  'ALTER TABLE sales_compact RENAME TO sales',
+                  'CREATE INDEX IF NOT EXISTS idx_sales_batch_id ON sales(batch_id)',
+                );
+              }
+
+              const runStep = index => {
+                if (index >= steps.length) {
+                  return;
+                }
+
+                tx.executeSql(
+                  steps[index],
+                  [],
+                  () => runStep(index + 1),
+                  (_, error) => {
+                    console.log('Sales table migration step failed', error);
+                    return false;
+                  },
+                );
+              };
+
+              runStep(0);
+            },
+            (_, error) => {
+              console.log('Legacy egg-sales table check failed', error);
+              return false;
+            },
+          );
+        },
+        (_, error) => {
+          console.log('Sales table schema check failed', error);
+          return false;
+        },
+      );
+    },
+    error => console.log('Sales table migration error', error),
   );
 };
 
@@ -327,8 +432,9 @@ export const initDB = () => {
       CREATE TABLE IF NOT EXISTS sales (
         sale_id INTEGER PRIMARY KEY AUTOINCREMENT,
         batch_id INTEGER,
-        birds_sold INTEGER,
-        price_per_bird REAL,
+        sale_type TEXT DEFAULT 'birds',
+        quantity_sold INTEGER,
+        unit_price REAL,
         total_revenue REAL,
         sale_date TEXT,
         deleted_at TEXT,
@@ -341,6 +447,34 @@ export const initDB = () => {
     );
 
     ensureColumnExists(tx, 'sales', 'deleted_at', 'TEXT');
+    ensureColumnExists(tx, 'sales', 'sale_type', `TEXT DEFAULT 'birds'`);
+    ensureColumnExists(tx, 'sales', 'quantity_sold', 'INTEGER');
+    ensureColumnExists(tx, 'sales', 'unit_price', 'REAL');
+
+    // EGG COLLECTIONS
+    tx.executeSql(
+      `
+      CREATE TABLE IF NOT EXISTS egg_collections (
+        egg_collection_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        batch_id INTEGER,
+        collection_date TEXT,
+        eggs_collected INTEGER,
+        eggs_sold INTEGER DEFAULT 0,
+        eggs_broken INTEGER DEFAULT 0,
+        eggs_household INTEGER DEFAULT 0,
+        eggs_hatching INTEGER DEFAULT 0,
+        sale_revenue REAL DEFAULT 0,
+        notes TEXT,
+        deleted_at TEXT,
+        synced INTEGER DEFAULT 0
+      );
+    `,
+      [],
+      () => console.log('Egg collections table created'),
+      (_, err) => console.log('Egg collections table error', err),
+    );
+
+    ensureColumnExists(tx, 'egg_collections', 'deleted_at', 'TEXT');
 
     tx.executeSql(
       `
@@ -392,7 +526,10 @@ export const initDB = () => {
     );
 
     ensureColumnExists(tx, 'notification_inbox', 'read_at', 'TEXT');
-  });
+  },
+  error => console.log('Database initialization transaction error', error),
+  compactSalesTable,
+  );
 };
 
 // ================= USERS =================
@@ -1870,18 +2007,27 @@ export const deleteExpenseRecord = expense_id => {
 // Adds a sale record and calculates total revenue.
 export const addSaleRecord = (
   batch_id,
-  birds_sold,
-  price_per_bird,
+  sale_type,
+  quantity_sold,
+  unit_price,
   sale_date,
   callback,
 ) => {
-  const total_revenue = Number(birds_sold) * Number(price_per_bird);
+  const total_revenue = Number(quantity_sold) * Number(unit_price);
 
   db.transaction(tx => {
     tx.executeSql(
-      `INSERT INTO sales (batch_id, birds_sold, price_per_bird, total_revenue, sale_date, synced)
-      VALUES (?, ?, ?, ?, ?, 0)`,
-      [batch_id, birds_sold, price_per_bird, total_revenue, sale_date],
+      `INSERT INTO sales (
+        batch_id, sale_type, quantity_sold, unit_price, total_revenue, sale_date, synced
+      ) VALUES (?, ?, ?, ?, ?, ?, 0)`,
+      [
+        batch_id,
+        sale_type,
+        quantity_sold,
+        unit_price,
+        total_revenue,
+        sale_date,
+      ],
       (_, result) => {
         console.log('Sale added', result.insertId);
         callback && callback();
@@ -1920,6 +2066,101 @@ export const deleteSaleRecord = sale_id => {
       [getCurrentTimestamp(), sale_id],
       () => console.log('Sale marked deleted'),
       (_, error) => console.log('Delete sale error', error),
+    );
+  });
+};
+
+// Adds one batch-linked egg collection with collected and broken counts.
+export const addEggCollectionRecord = (
+  batch_id,
+  collection_date,
+  eggs_collected,
+  eggs_broken,
+  callback,
+) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `INSERT INTO egg_collections (
+        batch_id, collection_date, eggs_collected, eggs_sold, eggs_broken,
+        eggs_household, eggs_hatching, sale_revenue, notes, synced
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      [
+        batch_id,
+        collection_date,
+        eggs_collected,
+        0,
+        eggs_broken,
+        0,
+        0,
+        0,
+        null,
+      ],
+      (_, result) => {
+        console.log('Egg collection added', result.insertId);
+        callback && callback();
+      },
+      (_, error) => {
+        console.log('Error adding egg collection', error);
+        return false;
+      },
+    );
+  });
+};
+
+// Loads egg inventory after breakage, legacy dispositions, and shared-table egg sales.
+export const getEggAvailabilityByBatchId = (batch_id, callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `SELECT MAX(
+         COALESCE((SELECT SUM(eggs_collected) FROM egg_collections
+                   WHERE batch_id = ? AND deleted_at IS NULL), 0)
+         - COALESCE((SELECT SUM(COALESCE(eggs_broken, 0) + COALESCE(eggs_sold, 0)
+                                  + COALESCE(eggs_household, 0) + COALESCE(eggs_hatching, 0))
+                     FROM egg_collections WHERE batch_id = ? AND deleted_at IS NULL), 0)
+         - COALESCE((SELECT SUM(quantity_sold) FROM sales
+                     WHERE batch_id = ? AND sale_type = 'eggs' AND deleted_at IS NULL), 0),
+         0
+       ) AS available_eggs`,
+      [batch_id, batch_id, batch_id],
+      (_, result) => callback(Number(result.rows.item(0)?.available_eggs || 0)),
+      (_, error) => {
+        console.log('Error calculating available eggs', error);
+        callback(0);
+        return false;
+      },
+    );
+  });
+};
+
+// Loads active egg collection records for one batch.
+export const getEggCollectionsByBatchId = (batch_id, callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `SELECT * FROM egg_collections
+       WHERE batch_id = ? AND deleted_at IS NULL
+       ORDER BY collection_date DESC, egg_collection_id DESC`,
+      [batch_id],
+      (_, result) => callback(rowsToArray(result.rows)),
+      (_, error) => {
+        console.log('Error fetching egg collections', error);
+        callback([]);
+        return false;
+      },
+    );
+  });
+};
+
+// Soft-deletes an egg collection and marks it for backup sync.
+export const deleteEggCollectionRecord = egg_collection_id => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `UPDATE egg_collections SET deleted_at = ?, synced = 0 WHERE egg_collection_id = ?`,
+      [getCurrentTimestamp(), egg_collection_id],
+      () => console.log('Egg collection marked deleted'),
+      (_, error) => {
+        console.log('Delete egg collection error', error);
+        return false;
+      },
     );
   });
 };
@@ -2097,14 +2338,51 @@ export const importBootstrapData = (authenticatedUser, bootstrapData) =>
       ...(safeData.sales || []).map(record => ({
         sql: `
           INSERT OR REPLACE INTO sales
-          (sale_id, batch_id, birds_sold, price_per_bird, total_revenue, sale_date, deleted_at, synced)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+          (sale_id, batch_id, sale_type, quantity_sold, unit_price, total_revenue, sale_date, deleted_at, synced)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
         `,
         params: [
           record.sale_id,
           record.batch_id,
-          record.birds_sold,
-          record.price_per_bird,
+          record.sale_type || 'birds',
+          record.quantity_sold ?? record.birds_sold,
+          record.unit_price ?? record.price_per_bird,
+          record.total_revenue,
+          record.sale_date,
+          record.deleted_at ?? null,
+        ],
+      })),
+      ...(safeData.egg_collections || []).map(record => ({
+        sql: `
+          INSERT OR REPLACE INTO egg_collections
+          (egg_collection_id, batch_id, collection_date, eggs_collected, eggs_sold, eggs_broken, eggs_household, eggs_hatching, sale_revenue, notes, deleted_at, synced)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        `,
+        params: [
+          record.egg_collection_id,
+          record.batch_id,
+          record.collection_date,
+          record.eggs_collected,
+          record.eggs_sold ?? 0,
+          record.eggs_broken ?? 0,
+          record.eggs_household ?? 0,
+          record.eggs_hatching ?? 0,
+          record.sale_revenue ?? 0,
+          record.notes ?? null,
+          record.deleted_at ?? null,
+        ],
+      })),
+      ...(safeData.egg_sales || []).map(record => ({
+        sql: `
+          INSERT OR IGNORE INTO sales
+          (sale_id, batch_id, sale_type, quantity_sold, unit_price, total_revenue, sale_date, deleted_at, synced)
+          VALUES (?, ?, 'eggs', ?, ?, ?, ?, ?, 1)
+        `,
+        params: [
+          -Number(record.egg_sale_id),
+          record.batch_id,
+          record.eggs_sold,
+          record.price_per_egg,
           record.total_revenue,
           record.sale_date,
           record.deleted_at ?? null,

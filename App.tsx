@@ -3,7 +3,7 @@ import { ActivityIndicator, AppState, View, StyleSheet } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import { clearRememberedSession, getRememberedSession, initDB } from './src/database/db';
+import { getRememberedSession, initDB } from './src/database/db';
 import { syncPendingBackup } from './src/services/backupSync';
 import { consumePendingNotificationOpen } from './src/services/localNotifications';
 
@@ -35,6 +35,7 @@ import ExpenseScreen from './src/screens/ExpenseScreen';
 import ViewExpensesScreen from './src/screens/ViewExpensesScreen';
 import SalesScreen from './src/screens/SalesScreen';
 import ViewSalesScreen from './src/screens/ViewSalesScreen';
+import EggProductionScreen from './src/screens/EggProductionScreen';
 
 // Creates the root stack navigator and a navigation ref for notification opens.
 const Stack = createNativeStackNavigator();
@@ -50,7 +51,6 @@ export default function App() {
   // Tracks initial app readiness and the current user for notification routing.
   const [isReady, setIsReady] = useState(false);
   const [initialUserId, setInitialUserId] = useState<number | null>(null);
-  const appStateRef = useRef(AppState.currentState);
   const currentUserIdRef = useRef<number | null>(null);
 
   // Keeps the notification routing ref aligned with the restored session.
@@ -111,20 +111,11 @@ export default function App() {
     openNotificationsFromIntent();
   }, [isReady, openNotificationsFromIntent]);
 
-  // Watches app foreground/background changes for notification opens and session clearing.
+  // Watches app foreground changes for pending notification opens.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
-      const previousAppState = appStateRef.current;
-      appStateRef.current = nextAppState;
-
       if (nextAppState === 'active') {
         openNotificationsFromIntent();
-      }
-
-      if (previousAppState === 'active' && nextAppState.match(/inactive|background/)) {
-        clearRememberedSession(() => {
-          console.log('Remembered session cleared after app exit/background');
-        });
       }
     });
 
@@ -298,6 +289,11 @@ export default function App() {
           name="ViewSales"
           component={ViewSalesScreen}
           options={{ title: 'Sales Records' }}
+        />
+        <Stack.Screen
+          name="EggProduction"
+          component={EggProductionScreen}
+          options={{ title: 'Egg Production' }}
         />
 
       </Stack.Navigator>

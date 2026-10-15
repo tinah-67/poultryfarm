@@ -77,7 +77,7 @@ const appFaqItems = [
   },
 ];
 
-const CONTACT_EMAIL = 'c2515124@gmail.com';
+const CONTACT_EMAIL = 'c12515124@gmail.com';
 const CONTACT_PHONE = '+254114906046';
 const CONTACT_WHATSAPP_NUMBER = '254114906046';
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, Alert, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, TextInput, Button, Alert, TouchableOpacity, Pressable, StyleSheet, RefreshControl } from 'react-native';
 import { clearRememberedSession, loginUser, saveRememberedSession } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 import { bootstrapDeviceLogin } from '../services/bootstrapLogin';
@@ -36,6 +36,7 @@ export default function LoginScreen({ navigation }) {
           navigation.replace('RecoveryQuestion', {
             userId: user.user_id,
             requiredOnLogin: true,
+            rememberAfterSetup: rememberMe,
           });
         });
         return;
@@ -132,7 +133,7 @@ export default function LoginScreen({ navigation }) {
       <View style={styles.passwordField}>
         <TextInput
           placeholder="Password"
-          placeholderTextColor="#999"
+          placeholderTextColor="#64748b"
           secureTextEntry={!showPassword}
           value={password}
           onChangeText={setPassword}
@@ -149,12 +150,19 @@ export default function LoginScreen({ navigation }) {
       </View>
 
       {/* Lets the user keep a short-lived remembered session. */}
-      <TouchableOpacity style={styles.rememberRow} onPress={() => setRememberMe(!rememberMe)} activeOpacity={0.7}>
+      <Pressable
+        style={styles.rememberRow}
+        onPress={() => setRememberMe(previous => !previous)}
+        hitSlop={8}
+        android_ripple={{ color: 'rgba(255, 255, 255, 0.18)' }}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: rememberMe }}
+      >
         <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
           {rememberMe ? <View style={styles.checkboxIndicator} /> : null}
         </View>
         <Text style={styles.rememberText}>Remember Me</Text>
-      </TouchableOpacity>
+      </Pressable>
 
       <Button title="Login" onPress={handleLogin} />
 
@@ -190,7 +198,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#fff',
+    color: '#0f172a',
     textAlign: 'center',
     marginBottom: 20,
   },
@@ -212,7 +220,8 @@ const styles = StyleSheet.create({
     padding: 12,
     paddingRight: 56,
     borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(253, 242, 242, 0.93)',
+    color: '#fff',
   },
   passwordToggle: {
     position: 'absolute',
@@ -231,6 +240,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRadius: 6,
   },
   checkbox: {
     width: 22,

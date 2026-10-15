@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Button, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { getUserById, updateUserRecoveryQuestion } from '../database/db';
+import { getUserById, saveRememberedSession, updateUserRecoveryQuestion } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 import { syncPendingBackup } from '../services/backupSync';
 import { RECOVERY_QUESTIONS } from '../constants/recoveryQuestions';
@@ -10,6 +10,7 @@ export default function RecoveryQuestionScreen({ navigation, route }) {
   // Stores the selected question, answer, and dropdown/loading state.
   const userId = route?.params?.userId;
   const requiredOnLogin = route?.params?.requiredOnLogin === true;
+  const rememberAfterSetup = route?.params?.rememberAfterSetup === true;
   const [recoveryQuestion, setRecoveryQuestion] = useState('');
   const [recoveryAnswer, setRecoveryAnswer] = useState('');
   const [loading, setLoading] = useState(true);
@@ -65,7 +66,14 @@ export default function RecoveryQuestionScreen({ navigation, route }) {
           text: 'OK',
           onPress: () => {
             if (requiredOnLogin) {
-              navigation.replace('Home', { userId });
+              const continueToHome = () => navigation.replace('Home', { userId });
+
+              if (rememberAfterSetup) {
+                saveRememberedSession(userId, continueToHome);
+                return;
+              }
+
+              continueToHome();
               return;
             }
 

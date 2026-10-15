@@ -134,12 +134,32 @@ const tableConfigs = [
     idColumn: 'sale_id',
     endpoint: 'sales',
     selectSql: `
-      SELECT sales.sale_id, sales.batch_id, sales.birds_sold, sales.price_per_bird, sales.total_revenue, sales.sale_date, sales.deleted_at
+                  SELECT sales.sale_id, sales.batch_id, sales.sale_type, sales.quantity_sold,
+                    sales.unit_price, sales.total_revenue, sales.sale_date, sales.deleted_at
       FROM sales
       JOIN batches ON batches.batch_id = sales.batch_id
       WHERE sales.synced = 0
         AND batches.synced = 1
       ORDER BY sale_id
+    `,
+  },
+  {
+    key: 'egg_collections',
+    tableName: 'egg_collections',
+    idColumn: 'egg_collection_id',
+    endpoint: 'egg-collections',
+    selectSql: `
+      SELECT egg_collections.egg_collection_id, egg_collections.batch_id,
+             egg_collections.collection_date, egg_collections.eggs_collected,
+             egg_collections.eggs_sold, egg_collections.eggs_broken,
+             egg_collections.eggs_household, egg_collections.eggs_hatching,
+             egg_collections.sale_revenue, egg_collections.notes,
+             egg_collections.deleted_at
+      FROM egg_collections
+      JOIN batches ON batches.batch_id = egg_collections.batch_id
+      WHERE egg_collections.synced = 0
+        AND batches.synced = 1
+      ORDER BY egg_collection_id
     `,
   },
 ];

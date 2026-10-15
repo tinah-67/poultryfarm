@@ -68,7 +68,9 @@ export default function BatchDetailsScreen({ route, navigation }) {
             0
           );
           const totalBirdsSold = (salesRecords || []).reduce(
-            (sum, item) => sum + Number(item.birds_sold || 0),
+            (sum, item) => item.sale_type === 'birds'
+              ? sum + Number(item.quantity_sold || 0)
+              : sum,
             0
           );
           const birdsAvailableForSale = Math.max(initialChicks - totalMortality - totalBirdsSold, 0);
@@ -140,6 +142,7 @@ export default function BatchDetailsScreen({ route, navigation }) {
       {/* Opens batch record screens according to the user's role. */}
       <Button title="Feeds" onPress={() => navigation.navigate('Feed', { batchId, userId })} />
       <Button title="Mortality" onPress={() => navigation.navigate('Mortality', { batchId, userId })} />
+      <Button title="Egg Production" onPress={() => navigation.navigate('EggProduction', { batchId, userId })} />
       <Button title="Vaccination" onPress={() => navigation.navigate('Vaccination', { batchId, userId })} />
       {canAccessFinancialActions ? (
         <Button title="Expenses" onPress={() => navigation.navigate('Expense', { batchId, farmId, farmName, userId })} />

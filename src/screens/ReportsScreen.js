@@ -345,7 +345,9 @@ export default function ReportsScreen({ route }) {
                         0
                       );
                       const totalSold = safeSaleRecords.reduce(
-                        (sum, item) => sum + Number(item.birds_sold || 0),
+                        (sum, item) => item.sale_type === 'birds'
+                          ? sum + Number(item.quantity_sold || 0)
+                          : sum,
                         0
                       );
                       const totalFeedUsed = safeFeedRecords.reduce(
@@ -679,7 +681,8 @@ export default function ReportsScreen({ route }) {
         title: 'Sales Report',
         summary: [
           { label: 'Sales Entries', value: String(salesData.length) },
-          { label: 'Birds Sold', value: String(salesData.reduce((sum, item) => sum + Number(item.birds_sold || 0), 0)) },
+          { label: 'Birds Sold', value: String(salesData.reduce((sum, item) => item.sale_type === 'birds' ? sum + Number(item.quantity_sold || 0) : sum, 0)) },
+          { label: 'Eggs Sold', value: String(salesData.reduce((sum, item) => item.sale_type === 'eggs' ? sum + Number(item.quantity_sold || 0) : sum, 0)) },
           { label: 'Total Revenue', value: formatCurrency(salesTotal) },
           { label: 'Average Sale', value: salesData.length ? formatCurrency(salesTotal / salesData.length) : formatCurrency(0) },
         ],
@@ -688,8 +691,9 @@ export default function ReportsScreen({ route }) {
           { key: 'location', title: 'Location', width: 140 },
           { key: 'batch_id', title: 'Batch ID', width: 90 },
           { key: 'batch_name', title: 'Batch Name', width: 130 },
-          { key: 'birds_sold', title: 'Birds Sold', width: 100 },
-          { key: 'price_per_bird', title: 'Price/Bird', width: 110 },
+          { key: 'sale_type', title: 'Category', width: 90 },
+          { key: 'quantity_sold', title: 'Quantity', width: 100 },
+          { key: 'unit_price', title: 'Unit Price', width: 110 },
           { key: 'total_revenue', title: 'Revenue', width: 110 },
           { key: 'sale_date', title: 'Sale Date', width: 120 },
           { key: 'batch_status', title: 'Batch Status', width: 120 },
@@ -1062,7 +1066,7 @@ export default function ReportsScreen({ route }) {
                 return <Text style={styles.cellText}>{Number.isFinite(numericValue) ? String(numericValue) : '0'}</Text>;
               }
 
-              if (['amount', 'feed_cost', 'price_per_bird', 'total_revenue', 'total_expenses'].includes(column.key)) {
+              if (['amount', 'feed_cost', 'unit_price', 'total_revenue', 'total_expenses'].includes(column.key)) {
                 return <Text style={styles.cellText}>{formatCurrency(value)}</Text>;
               }
 

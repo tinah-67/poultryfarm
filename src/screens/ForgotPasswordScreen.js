@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Button, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Button, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { getUserByEmail, updateUserPassword } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
 import { syncPendingBackup } from '../services/backupSync';
@@ -40,6 +40,8 @@ export default function ForgotPasswordScreen({ navigation }) {
   const [answer, setAnswer] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Recomputes password validation as the user types.
   const passwordMessage = useMemo(
@@ -74,6 +76,8 @@ export default function ForgotPasswordScreen({ navigation }) {
       setAnswer('');
       setNewPassword('');
       setConfirmPassword('');
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
     });
   };
 
@@ -151,22 +155,42 @@ export default function ForgotPasswordScreen({ navigation }) {
             onChangeText={setAnswer}
             style={styles.input}
           />
-          <TextInput
-            placeholder="New Password"
-            placeholderTextColor="#999"
-            value={newPassword}
-            onChangeText={setNewPassword}
-            secureTextEntry
-            style={styles.input}
-          />
-          <TextInput
-            placeholder="Confirm New Password"
-            placeholderTextColor="#999"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-            style={styles.input}
-          />
+          <View style={styles.passwordField}>
+            <TextInput
+              placeholder="New Password"
+              placeholderTextColor="#64748b"
+              value={newPassword}
+              onChangeText={setNewPassword}
+              secureTextEntry={!showNewPassword}
+              style={[styles.input, styles.passwordInput]}
+            />
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={showNewPassword ? 'Hide new password' : 'Show new password'}
+              onPress={() => setShowNewPassword(previous => !previous)}
+              style={styles.passwordToggle}
+            >
+              <Text style={styles.passwordToggleText}>{showNewPassword ? 'Hide' : 'Show'}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.passwordField}>
+            <TextInput
+              placeholder="Confirm New Password"
+              placeholderTextColor="#64748b"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry={!showConfirmPassword}
+              style={[styles.input, styles.passwordInput]}
+            />
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={showConfirmPassword ? 'Hide confirmed password' : 'Show confirmed password'}
+              onPress={() => setShowConfirmPassword(previous => !previous)}
+              style={styles.passwordToggle}
+            >
+              <Text style={styles.passwordToggleText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
+            </TouchableOpacity>
+          </View>
 
           {passwordMessage ? <Text style={styles.warningText}>{passwordMessage}</Text> : null}
 
@@ -201,6 +225,28 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    color: '#0f172a',
+  },
+  passwordField: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  passwordInput: {
+    paddingRight: 68,
+    marginBottom: 0,
+  },
+  passwordToggle: {
+    position: 'absolute',
+    top: 0,
+    right: 8,
+    bottom: 12,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  passwordToggleText: {
+    color: '#166534',
+    fontSize: 14,
+    fontWeight: '700',
   },
   panel: {
     marginTop: 18,

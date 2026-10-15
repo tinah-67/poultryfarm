@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Alert, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, View } from 'react-native';
+import { Alert, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, ImageBackground, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { clearRememberedSession, getUserById } from '../database/db';
 import { syncPendingBackup } from '../services/backupSync';
@@ -102,7 +102,11 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
 
   // Renders role-aware navigation cards for the main app workflows.
   return (
-    <View style={styles.background}>
+    <ImageBackground
+      source={require('../Broilers-Chickens.webp')}
+      style={styles.background}
+      imageStyle={styles.backgroundImage}
+    >
       <View style={styles.overlay}>
         <ScrollView
           contentContainerStyle={styles.container}
@@ -187,7 +191,7 @@ export default function DashboardScreen({ navigation, route, showBottomTabs = fa
           </TouchableOpacity>
         </ScrollView>
       </View>
-    </View>
+    </ImageBackground>
   );
 }
 
@@ -195,7 +199,9 @@ const styles = StyleSheet.create({
   // Background, overlay, and dashboard layout styles.
   background: {
     flex: 1,
-    backgroundColor: '#0f172a',
+  },
+  backgroundImage: {
+    resizeMode: 'cover',
   },
   overlay: {
     flex: 1,

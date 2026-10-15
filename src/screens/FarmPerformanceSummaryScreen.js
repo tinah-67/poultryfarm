@@ -226,7 +226,9 @@ export default function FarmPerformanceSummaryScreen({ navigation, route }) {
                         0
                       );
                       farmTotals.birdsSold += (saleRecords || []).reduce(
-                        (sum, item) => sum + Number(item.birds_sold || 0),
+                        (sum, item) => item.sale_type === 'birds'
+                          ? sum + Number(item.quantity_sold || 0)
+                          : sum,
                         0
                       );
                       farmTotals.revenue += (saleRecords || []).reduce(

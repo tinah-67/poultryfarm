@@ -179,7 +179,9 @@ export const loadNotificationsForUser = async userId => {
             0
           );
           const totalSold = safeSaleRecords.reduce(
-            (sum, item) => sum + Number(item.birds_sold || 0),
+            (sum, item) => item.sale_type === 'birds'
+              ? sum + Number(item.quantity_sold || 0)
+              : sum,
             0
           );
           const batchLabel = getFlockLabel(batch);

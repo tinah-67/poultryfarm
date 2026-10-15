@@ -481,6 +481,7 @@ const styles = StyleSheet.create({
     paddingRight: 56,
     borderRadius: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    color: '#0f172a',
   },
   passwordToggle: {
     position: 'absolute',

@@ -1,7 +1,14 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { deleteSaleRecord, getBatchById, getMortalityRecordsByBatchId, getSalesByBatchId, getUserById } from '../database/db';
+import {
+  deleteSaleRecord,
+  getBatchById,
+  getEggAvailabilityByBatchId,
+  getMortalityRecordsByBatchId,
+  getSalesByBatchId,
+  getUserById,
+} from '../database/db';
 import DataTable from '../components/DataTable';
 import ScreenBackground from '../components/ScreenBackground';
 
@@ -11,8 +18,10 @@ export default function ViewSalesScreen({ route, navigation }) {
   const batchId = route?.params?.batchId;
   const userId = route?.params?.userId;
   const [records, setRecords] = useState([]);
+  const [saleType, setSaleType] = useState('birds');
   const [currentUser, setCurrentUser] = useState(null);
   const [availableBirds, setAvailableBirds] = useState(0);
+  const [availableEggs, setAvailableEggs] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Loads sales plus mortality and batch data so remaining birds can be calculated.
@@ -20,6 +29,7 @@ export default function ViewSalesScreen({ route, navigation }) {
     if (!batchId) {
       setRecords([]);
       setAvailableBirds(0);
+      setAvailableEggs(0);
       return;
     }
 
@@ -27,15 +37,19 @@ export default function ViewSalesScreen({ route, navigation }) {
       if (!batch) {
         setRecords([]);
         setAvailableBirds(0);
+        setAvailableEggs(0);
         return;
       }
 
+      getEggAvailabilityByBatchId(batchId, setAvailableEggs);
       getMortalityRecordsByBatchId(batchId, mortalityRecords => {
         getSalesByBatchId(batchId, salesRecords => {
           const safeSalesRecords = salesRecords || [];
           const initialChicks = Number(batch.initial_chicks || 0);
           const totalMortality = (mortalityRecords || []).reduce((sum, item) => sum + Number(item.number_dead || 0), 0);
-          const totalBirdsSold = safeSalesRecords.reduce((sum, item) => sum + Number(item.birds_sold || 0), 0);
+          const totalBirdsSold = safeSalesRecords.reduce((sum, item) => item.sale_type === 'eggs'
+            ? sum
+            : sum + Number(item.quantity_sold || 0), 0);
           setRecords(safeSalesRecords);
           setAvailableBirds(Math.max(initialChicks - totalMortality - totalBirdsSold, 0));
         });
@@ -58,23 +72,24 @@ export default function ViewSalesScreen({ route, navigation }) {
 
   // Computes summary values and table columns for the sales list.
   const canDeleteSales = ['owner', 'manager'].includes(currentUser?.role);
-  const totalRevenue = records.reduce((sum, item) => sum + Number(item.total_revenue || 0), 0);
+  const selectedRecords = records.filter(item => (item.sale_type || 'birds') === saleType);
+  const totalRevenue = selectedRecords.reduce((sum, item) => sum + Number(item.total_revenue || 0), 0);
   const filteredRecords = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
     if (!normalizedQuery) {
-      return records;
+      return selectedRecords;
     }
 
-    return records.filter(item =>
-      [item.birds_sold, item.price_per_bird, item.total_revenue, item.sale_date]
+    return selectedRecords.filter(item =>
+      [item.quantity_sold, item.unit_price, item.total_revenue, item.sale_date]
         .filter(value => value !== null && value !== undefined)
         .some(value => String(value).toLowerCase().includes(normalizedQuery))
     );
-  }, [records, searchQuery]);
+  }, [selectedRecords, searchQuery]);
   const columns = [
-    { key: 'birds_sold', title: 'Birds Sold', width: 110 },
-    { key: 'price_per_bird', title: 'Price/Bird', width: 120 },
+    { key: 'quantity_sold', title: `${saleType === 'eggs' ? 'Eggs' : 'Birds'} Sold`, width: 110 },
+    { key: 'unit_price', title: `Price/${saleType === 'eggs' ? 'Egg' : 'Bird'}`, width: 120 },
     { key: 'total_revenue', title: 'Revenue', width: 120 },
     { key: 'sale_date', title: 'Sold On', width: 180 },
     { key: 'actions', title: 'Actions', width: 120 },
@@ -92,7 +107,14 @@ export default function ViewSalesScreen({ route, navigation }) {
       'Are you sure you want to delete this sales record?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => { deleteSaleRecord(saleId); loadSalesState(); } },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteSaleRecord(saleId);
+            loadSalesState();
+          },
+        },
       ]
     );
   };
@@ -100,7 +122,30 @@ export default function ViewSalesScreen({ route, navigation }) {
   return (
     <ScreenBackground contentContainerStyle={styles.container}>
       <Text style={styles.title}>Sales Records</Text>
-      <Text style={styles.summary}>Birds Available for Sale: {availableBirds}</Text>
+      <View style={styles.saleTypeControl}>
+        {[
+          { key: 'birds', label: 'Bird Sales' },
+          { key: 'eggs', label: 'Egg Sales' },
+        ].map(option => (
+          <TouchableOpacity
+            key={option.key}
+            style={[styles.saleTypeButton, saleType === option.key && styles.saleTypeButtonSelected]}
+            onPress={() => {
+              setSaleType(option.key);
+              setSearchQuery('');
+            }}
+            accessibilityRole="button"
+            accessibilityState={{ selected: saleType === option.key }}
+          >
+            <Text style={[styles.saleTypeText, saleType === option.key && styles.saleTypeTextSelected]}>
+              {option.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Text style={styles.summary}>
+        {saleType === 'eggs' ? 'Eggs' : 'Birds'} Available for Sale: {saleType === 'eggs' ? availableEggs : availableBirds}
+      </Text>
       <Text style={styles.summary}>Total Revenue: {totalRevenue}</Text>
       {/* Opens the sales entry screen for this batch. */}
       <View style={styles.actions}>
@@ -110,7 +155,7 @@ export default function ViewSalesScreen({ route, navigation }) {
         value={searchQuery}
         onChangeText={setSearchQuery}
         style={styles.searchInput}
-        placeholder="Search by birds sold, price, revenue, or date"
+        placeholder={`Search by ${saleType === 'eggs' ? 'eggs' : 'birds'} sold, price, revenue, or date`}
         placeholderTextColor="#64748b"
       />
       {/* Displays sales records in a reusable table. */}
@@ -118,11 +163,11 @@ export default function ViewSalesScreen({ route, navigation }) {
         <DataTable
           columns={columns}
           data={filteredRecords}
-          keyExtractor={(item, index) => (item.sale_id || index).toString()}
-          emptyText={searchQuery.trim() ? 'No sales records match your search.' : 'No sales records yet'}
+          keyExtractor={(item, index) => String(item.sale_id || index)}
+          emptyText={searchQuery.trim() ? `No ${saleType} sales match your search.` : `No ${saleType} sales records yet`}
           renderCell={(item, column) => {
-            if (column.key === 'birds_sold') return <Text style={styles.cellText}>{item.birds_sold}</Text>;
-            if (column.key === 'price_per_bird') return <Text style={styles.cellText}>{item.price_per_bird}</Text>;
+            if (column.key === 'quantity_sold') return <Text style={styles.cellText}>{item.quantity_sold}</Text>;
+            if (column.key === 'unit_price') return <Text style={styles.cellText}>{item.unit_price}</Text>;
             if (column.key === 'total_revenue') return <Text style={styles.cellText}>{item.total_revenue}</Text>;
             if (column.key === 'sale_date') return <Text style={styles.cellText}>{item.sale_date}</Text>;
             if (column.key === 'actions') {
@@ -152,6 +197,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
   title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
   summary: { marginBottom: 12, fontWeight: '700', color: '#fff' },
+  saleTypeControl: { flexDirection: 'row', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 6, overflow: 'hidden', marginBottom: 12 },
+  saleTypeButton: { flex: 1, alignItems: 'center', paddingVertical: 10, backgroundColor: '#fff' },
+  saleTypeButtonSelected: { backgroundColor: '#166534' },
+  saleTypeText: { color: '#0f172a', fontWeight: '600' },
+  saleTypeTextSelected: { color: '#fff' },
   actions: { marginBottom: 14 },
   searchInput: {
     borderWidth: 1,

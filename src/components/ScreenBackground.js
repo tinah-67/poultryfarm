@@ -1,7 +1,7 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ImageBackground, ScrollView, StyleSheet, View } from 'react-native';
 
-// Provides a shared neutral farm-style background and dark overlay used by app screens.
+// Provides the shared chicken image background and dark overlay used by app screens.
 export default function ScreenBackground({
   children,
   scroll = false,
@@ -12,7 +12,11 @@ export default function ScreenBackground({
   // Uses a scroll view when the screen content may be taller than the viewport.
   if (scroll) {
     return (
-      <View style={styles.background}>
+      <ImageBackground
+        source={require('../Broilers-Chickens.webp')}
+        style={styles.background}
+        imageStyle={styles.backgroundImage}
+      >
         <View style={styles.overlay}>
           <ScrollView
             style={styles.fill}
@@ -23,25 +27,31 @@ export default function ScreenBackground({
             {children}
           </ScrollView>
         </View>
-      </View>
+      </ImageBackground>
     );
   }
 
   // Uses a fixed content container for simple non-scrolling screens.
   return (
-    <View style={styles.background}>
+    <ImageBackground
+      source={require('../Broilers-Chickens.webp')}
+      style={styles.background}
+      imageStyle={styles.backgroundImage}
+    >
       <View style={styles.overlay}>
         <View style={[styles.content, contentContainerStyle]}>{children}</View>
       </View>
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  // Covers the screen with a neutral farm-themed background and readable overlay.
+  // Covers the screen with the shared image and readable overlay.
   background: {
     flex: 1,
-    backgroundColor: '#0f172a',
+  },
+  backgroundImage: {
+    resizeMode: 'cover',
   },
   overlay: {
     flex: 1,
