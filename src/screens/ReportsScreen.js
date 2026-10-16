@@ -7,6 +7,7 @@ import { exportReportToExcel } from '../services/reportExport';
 import {
   getAccessibleFarms,
   getBatchesByFarmId,
+  getEggCollectionsByBatchId,
   getExpensesByFarmId,
   getExpensesByBatchId,
   getFeedRecordsByBatchId,
@@ -25,8 +26,8 @@ try {
 }
 
 // Defines report types and the limited set available to worker users.
-const REPORT_TYPES = ['batches', 'sales', 'expenses', 'feed', 'mortality', 'vaccinations'];
-const WORKER_REPORT_TYPES = ['feed', 'mortality', 'vaccinations'];
+const REPORT_TYPES = ['batches', 'sales', 'eggCollections', 'expenses', 'feed', 'mortality', 'vaccinations'];
+const WORKER_REPORT_TYPES = ['feed', 'eggCollections', 'mortality', 'vaccinations'];
 const ZERO_DEFAULT_KEYS = ['birds_alive', 'birds_sold', 'total_mortality', 'number_dead'];
 
 // Formats report numeric values with a fixed number of decimals.
@@ -140,6 +141,7 @@ const createEmptyData = () => ({
   farms: [],
   batches: [],
   sales: [],
+  eggCollections: [],
   expenses: [],
   feed: [],
   mortality: [],
@@ -271,6 +273,7 @@ export default function ReportsScreen({ route }) {
         farms: safeFarms,
         batches: [],
         sales: [],
+        eggCollections: [],
         expenses: [],
         feed: [],
         mortality: [],
@@ -293,6 +296,7 @@ export default function ReportsScreen({ route }) {
           ...nextData,
           batches: nextData.batches.sort((left, right) => String(right.start_date).localeCompare(String(left.start_date))),
           sales: nextData.sales.sort((left, right) => String(right.sale_date).localeCompare(String(left.sale_date))),
+          eggCollections: nextData.eggCollections.sort((left, right) => String(right.collection_date).localeCompare(String(left.collection_date))),
           expenses: nextData.expenses.sort((left, right) => String(right.expense_date).localeCompare(String(left.expense_date))),
           feed: feedWithRemaining.sort((left, right) => String(right.date_recorded).localeCompare(String(left.date_recorded))),
           mortality: nextData.mortality.sort((left, right) => String(right.date_recorded).localeCompare(String(left.date_recorded))),
@@ -443,11 +447,25 @@ export default function ReportsScreen({ route }) {
                         });
                       });
 
-                      processedBatches += 1;
+                      getEggCollectionsByBatchId(batch.batch_id, eggCollectionRecords => {
+                        (eggCollectionRecords || []).forEach(record => {
+                          nextData.eggCollections.push({
+                            ...record,
+                            batch_name: batch.breed || "Batch " + batch.batch_id,
+                            farm_id: farm.farm_id,
+                            farm_name: farm.farm_name,
+                            location: farm.location,
+                            breed: batch.breed,
+                            batch_status: batch.status || "active",
+                          });
+                        });
 
-                      if (processedBatches === safeBatches.length) {
-                        finalizeReportsLoad();
-                      }
+                        processedBatches += 1;
+
+                        if (processedBatches === safeBatches.length) {
+                          finalizeReportsLoad();
+                        }
+                      });
                     });
                   });
                 });
@@ -617,6 +635,10 @@ export default function ReportsScreen({ route }) {
       isWithinDateRange(item.sale_date, parsedFromDate, parsedToDate)
       && matchesFarmAndBatchFilters(item)
     )),
+    eggCollections: reportData.eggCollections.filter(item => (
+      isWithinDateRange(item.collection_date, parsedFromDate, parsedToDate)
+      && matchesFarmAndBatchFilters(item)
+    )),
     expenses: reportData.expenses.filter(item => (
       isWithinDateRange(item.expense_date, parsedFromDate, parsedToDate)
       && matchesFarmAndBatchFilters(item)
@@ -639,10 +661,13 @@ export default function ReportsScreen({ route }) {
   const reportConfig = useMemo(() => {
     const batchData = filteredReportData.batches;
     const salesData = filteredReportData.sales;
+    const eggCollectionData = filteredReportData.eggCollections;
     const expenseData = filteredReportData.expenses;
     const feedData = filteredReportData.feed;
     const mortalityData = filteredReportData.mortality;
     const vaccinationData = filteredReportData.vaccinations;
+    const eggSalesRevenue = salesData.reduce((sum, item) => item.sale_type === 'eggs' ? sum + Number(item.total_revenue || 0) : sum, 0);
+    const birdSalesRevenue = salesData.reduce((sum, item) => item.sale_type === 'birds' ? sum + Number(item.total_revenue || 0) : sum, 0);
     const salesTotal = salesData.reduce((sum, item) => sum + Number(item.total_revenue || 0), 0);
     const expenseTotal = expenseData.reduce((sum, item) => sum + Number(item.amount || 0), 0);
     const feedTotalKg = feedData.reduce((sum, item) => sum + Number(item.feed_quantity || 0), 0);
@@ -683,6 +708,8 @@ export default function ReportsScreen({ route }) {
           { label: 'Sales Entries', value: String(salesData.length) },
           { label: 'Birds Sold', value: String(salesData.reduce((sum, item) => item.sale_type === 'birds' ? sum + Number(item.quantity_sold || 0) : sum, 0)) },
           { label: 'Eggs Sold', value: String(salesData.reduce((sum, item) => item.sale_type === 'eggs' ? sum + Number(item.quantity_sold || 0) : sum, 0)) },
+          { label: 'Eggs Revenue', value: formatCurrency(eggSalesRevenue) },
+          { label: 'Birds Revenue', value: formatCurrency(birdSalesRevenue) },
           { label: 'Total Revenue', value: formatCurrency(salesTotal) },
           { label: 'Average Sale', value: salesData.length ? formatCurrency(salesTotal / salesData.length) : formatCurrency(0) },
         ],
@@ -700,6 +727,27 @@ export default function ReportsScreen({ route }) {
         ],
         data: salesData,
         emptyText: 'No sales records found yet.',
+      },
+      eggCollections: {
+        title: 'Egg Collection Report',
+        summary: [
+          { label: 'Collection Entries', value: String(eggCollectionData.length) },
+          { label: 'Eggs Collected', value: String(eggCollectionData.reduce((sum, item) => sum + Number(item.eggs_collected || 0), 0)) },
+          { label: 'Broken at Collection', value: String(eggCollectionData.reduce((sum, item) => sum + Number(item.eggs_broken || 0), 0)) },
+          { label: 'Farms Covered', value: String(getUniqueFarmCount(eggCollectionData)) },
+        ],
+        columns: [
+          { key: 'farm_name', title: 'Farm', width: 130 },
+          { key: 'location', title: 'Location', width: 140 },
+          { key: 'batch_id', title: 'Batch ID', width: 90 },
+          { key: 'batch_name', title: 'Batch Name', width: 130 },
+          { key: 'collection_date', title: 'Collection Date', width: 130 },
+          { key: 'eggs_collected', title: 'Eggs Collected', width: 120 },
+          { key: 'eggs_broken', title: 'Broken at Collection', width: 145 },
+          { key: 'batch_status', title: 'Batch Status', width: 120 },
+        ],
+        data: eggCollectionData,
+        emptyText: 'No egg collection records found yet.',
       },
       expenses: {
         title: 'Expense Report',
@@ -1003,7 +1051,7 @@ export default function ReportsScreen({ route }) {
       <View style={styles.reportPicker}>
         {availableReportTypes.map(reportType => {
           const isSelected = activeReport === reportType;
-          const label = reportType.charAt(0).toUpperCase() + reportType.slice(1);
+          const label = reportType === 'eggCollections' ? 'Egg Collections' : reportType.charAt(0).toUpperCase() + reportType.slice(1);
 
           return (
             <TouchableOpacity

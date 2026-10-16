@@ -1,29 +1,91 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import DashboardScreen from './DashboardScreen';
 import NotificationsScreen from './NotificationsScreen';
 import HelpScreen from './HelpScreen';
+import { getAccessibleFarms, getBatchesByFarmId, getUserById } from '../database/db';
 
 // Defines the bottom tabs available after login.
 const TAB_CONFIG = [
-  { key: 'dashboard', label: 'Dashboard', icon: '\u2302' },
+  { key: 'dashboard', label: 'Home', icon: '\u2302' },
   { key: 'notifications', label: 'Reminders', icon: '\u25A3' },
   { key: 'help', label: 'Help', icon: '?' },
 ];
 
-// Hosts the dashboard, reminders, and help screens behind a persistent bottom tab bar.
+// Hosts the dashboard, reminders, and help behind a persistent bottom tab bar.
 export default function HomeShellScreen({ navigation, route }) {
   // Tracks the active tab and the signed-in user id shared by each child screen.
   const userId = route?.params?.userId;
   const requestedTab = route?.params?.activeTab;
   const [activeTab, setActiveTab] = useState(requestedTab || 'dashboard');
+  const [checkingOwnerSetup, setCheckingOwnerSetup] = useState(true);
+  const setupCheckRef = useRef(0);
+
+  // Requires an owner to create a farm and at least one batch before using the app.
+  useEffect(() => {
+    setCheckingOwnerSetup(true);
+    const requestId = setupCheckRef.current + 1;
+    setupCheckRef.current = requestId;
+
+    if (!userId) {
+      setCheckingOwnerSetup(false);
+      return () => {
+        setupCheckRef.current += 1;
+      };
+    }
+
+    getUserById(userId, user => {
+      if (requestId !== setupCheckRef.current) return;
+
+      if (user?.role !== 'owner') {
+        setCheckingOwnerSetup(false);
+        return;
+      }
+
+      getAccessibleFarms(userId, farms => {
+        if (requestId !== setupCheckRef.current) return;
+
+        const accessibleFarms = farms || [];
+        if (accessibleFarms.length === 0) {
+          navigation.replace('AddFarm', { userId, onboarding: true });
+          return;
+        }
+
+        const batchRequests = accessibleFarms.map(farm => new Promise(resolve => {
+          getBatchesByFarmId(farm.farm_id, batches => resolve(batches || []));
+        }));
+
+        Promise.all(batchRequests).then(batchGroups => {
+          if (requestId !== setupCheckRef.current) return;
+
+          if (batchGroups.some(batches => batches.length > 0)) {
+            setCheckingOwnerSetup(false);
+            return;
+          }
+
+          navigation.replace('CreateBatch', {
+            userId,
+            farmId: accessibleFarms[0].farm_id,
+            onboarding: true,
+          });
+        }).catch(error => {
+          console.log('Could not check owner farm setup', error);
+          if (requestId === setupCheckRef.current) setCheckingOwnerSetup(false);
+        });
+      });
+    });
+
+    return () => {
+      setupCheckRef.current += 1;
+    };
+  }, [navigation, userId]);
 
   // Responds to navigation requests that ask the shell to open a specific tab.
   useEffect(() => {
-    if (requestedTab && requestedTab !== activeTab) {
-      setActiveTab(requestedTab);
-    }
-  }, [activeTab, requestedTab]);
+    if (!requestedTab) return;
+    if (requestedTab !== activeTab) setActiveTab(requestedTab);
+    navigation.setParams({ activeTab: undefined });
+  }, [activeTab, navigation, requestedTab]);
 
   // Passes the current user id through to whichever tab screen is active.
   const sharedRoute = useMemo(
@@ -42,6 +104,15 @@ export default function HomeShellScreen({ navigation, route }) {
     navigation,
     route: sharedRoute,
   };
+
+  if (checkingOwnerSetup) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4CAF50" />
+        <Text style={styles.loadingText}>Checking farm setup...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -81,6 +152,8 @@ export default function HomeShellScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: '#0f172a' },
+  loadingText: { color: '#e2e8f0' },
   // Shell layout and tab bar styles.
   container: {
     flex: 1,

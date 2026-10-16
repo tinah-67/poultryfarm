@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TextInput, Button, Alert, TouchableOpacity, StyleSheet } from 'react-native';
 import { createUser, getUserByEmail } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
@@ -6,7 +6,7 @@ import { syncPendingBackup } from '../services/backupSync';
 import { RECOVERY_QUESTIONS } from '../constants/recoveryQuestions';
 
 // Validates owner and staff account fields before allowing registration.
-const getValidationMessage = ({
+const getValidationErrors = ({
   firstName,
   lastName,
   email,
@@ -14,63 +14,132 @@ const getValidationMessage = ({
   confirmPassword,
   recoveryQuestion,
   recoveryAnswer,
-}, forSubmit = false, requireRecoverySetup = true) => {
-  const nameRegex = /^[A-Za-z]+$/;
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+}, showRequired = false, requireRecoverySetup = true) => {
+  const nameRegex = /^[A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF]+(?: [A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF]+)*$/;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  const normalizedFirstName = firstName.trim();
+  const normalizedLastName = lastName.trim();
   const normalizedEmail = email.trim().toLowerCase();
+  const normalizedRecoveryAnswer = recoveryAnswer.trim();
+  const errors = {};
 
-  if (
-    forSubmit &&
-    (
-      !firstName ||
-      !lastName ||
-      !normalizedEmail ||
-      !password ||
-      !confirmPassword ||
-      (requireRecoverySetup && (!recoveryQuestion || !recoveryAnswer))
-    )
-  ) {
-    return 'Please fill all required fields';
+  if (normalizedFirstName && !nameRegex.test(normalizedFirstName)) {
+    errors.firstName = 'Use letters and spaces only';
+  } else if (showRequired && !normalizedFirstName) {
+    errors.firstName = 'Enter your first name';
   }
 
-  if (firstName && !nameRegex.test(firstName)) {
-    return 'First name can only contain letters';
-  }
-
-  if (lastName && !nameRegex.test(lastName)) {
-    return 'Last name can only contain letters';
+  if (normalizedLastName && !nameRegex.test(normalizedLastName)) {
+    errors.lastName = 'Use letters and spaces only';
+  } else if (showRequired && !normalizedLastName) {
+    errors.lastName = 'Enter your last name';
   }
 
   if (normalizedEmail && !emailRegex.test(normalizedEmail)) {
-    return 'Please enter a valid email address';
+    errors.email = 'Enter a valid email address';
+  } else if (showRequired && !normalizedEmail) {
+    errors.email = 'Enter your email address';
   }
 
   if (password && password.length < 8) {
-    return 'Password must be at least 8 characters';
-  }
-
-  if (password && !/[A-Za-z]/.test(password)) {
-    return 'Password must contain at least one letter';
-  }
-
-  if (password && !/\d/.test(password)) {
-    return 'Password must contain at least one number';
+    errors.password = 'Use at least 8 characters';
+  } else if (password && !/[A-Za-z]/.test(password)) {
+    errors.password = 'Add at least one letter';
+  } else if (password && !/\d/.test(password)) {
+    errors.password = 'Add at least one number';
+  } else if (showRequired && !password) {
+    errors.password = 'Enter a password';
   }
 
   if (confirmPassword && password !== confirmPassword) {
-    return 'Passwords do not match';
+    errors.confirmPassword = 'Passwords do not match';
+  } else if (showRequired && !confirmPassword) {
+    errors.confirmPassword = 'Confirm your password';
   }
 
   if (requireRecoverySetup && recoveryQuestion && !RECOVERY_QUESTIONS.includes(recoveryQuestion.trim())) {
-    return 'Select one recovery question';
+    errors.recoveryQuestion = 'Select one of the listed questions';
+  } else if (showRequired && requireRecoverySetup && !recoveryQuestion.trim()) {
+    errors.recoveryQuestion = 'Select a recovery question';
   }
 
-  if (requireRecoverySetup && recoveryAnswer && recoveryAnswer.trim().length < 2) {
-    return 'Recovery answer is too short';
+  if (requireRecoverySetup && normalizedRecoveryAnswer && normalizedRecoveryAnswer.length < 2) {
+    errors.recoveryAnswer = 'Use at least 2 characters';
+  } else if (showRequired && requireRecoverySetup && !normalizedRecoveryAnswer) {
+    errors.recoveryAnswer = 'Enter your recovery answer';
   }
 
-  return '';
+  return errors;
 };
+
+// Keeps password focus state separate from the registration screen's hooks.
+function PasswordFieldWithRequirements({
+  password,
+  onChangeText,
+  showPassword,
+  onTogglePassword,
+  isEmptyInvalid,
+}) {
+  const [isFocused, setIsFocused] = useState(false);
+  const passwordRequirements = [
+    { key: 'length', label: 'At least 8 characters', met: password.length >= 8 },
+    { key: 'letter', label: 'At least one letter', met: /[A-Za-z]/.test(password) },
+    { key: 'number', label: 'At least one number', met: /\d/.test(password) },
+  ];
+
+  return (
+    <>
+      <View style={styles.passwordField}>
+        <TextInput
+          placeholder="Password"
+          placeholderTextColor="#999"
+          secureTextEntry={!showPassword}
+          value={password}
+          onChangeText={onChangeText}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          autoComplete="new-password"
+          style={[styles.passwordInput, isEmptyInvalid ? styles.inputInvalid : null]}
+        />
+        <TouchableOpacity onPress={onTogglePassword} style={styles.passwordToggle}>
+          <Text style={styles.passwordToggleText}>{showPassword ? '\u{1F648}' : '\u{1F441}'}</Text>
+        </TouchableOpacity>
+      </View>
+      <View
+        style={[styles.passwordRequirements, !isFocused ? styles.passwordRequirementsHidden : null]}
+        accessibilityElementsHidden={!isFocused}
+        importantForAccessibility={isFocused ? 'auto' : 'no-hide-descendants'}
+      >
+        <Text style={styles.passwordRequirementsTitle}>Password must include:</Text>
+        {passwordRequirements.map(requirement => (
+          <View
+            key={requirement.key}
+            style={styles.passwordRequirementRow}
+            accessible
+            accessibilityLabel={`${requirement.label}, ${requirement.met ? 'met' : 'not met'}`}
+          >
+            <View
+              style={[
+                styles.passwordRequirementCheckbox,
+                requirement.met ? styles.passwordRequirementCheckboxMet : null,
+              ]}
+            >
+              {requirement.met ? <Text style={styles.passwordRequirementCheck}>✓</Text> : null}
+            </View>
+            <Text
+              style={[
+                styles.passwordRequirementText,
+                requirement.met ? styles.passwordRequirementTextMet : null,
+              ]}
+            >
+              {requirement.label}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </>
+  );
+}
 
 // Creates owner accounts from public sign-up and staff accounts from the owner dashboard.
 export default function RegisterScreen({ navigation, route }) {
@@ -96,55 +165,19 @@ export default function RegisterScreen({ navigation, route }) {
   const [role, setRole] = useState(isOwnerCreatingStaff ? 'manager' : 'owner');
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showRecoveryQuestionDropdown, setShowRecoveryQuestionDropdown] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const hasStartedTyping = Boolean(
-    firstName ||
-    lastName ||
-    email ||
-    password ||
-    confirmPassword ||
-    (requiresRecoverySetup && (recoveryQuestion || recoveryAnswer))
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [emailAvailabilityError, setEmailAvailabilityError] = useState('');
+  const validationErrors = getValidationErrors(
+    { firstName, lastName, email, password, confirmPassword, recoveryQuestion, recoveryAnswer },
+    hasSubmitted,
+    requiresRecoverySetup
   );
-
-  // Shows validation feedback after the user begins entering account details.
-  useEffect(() => {
-    if (!hasStartedTyping) {
-      setErrorMessage('');
-      return;
-    }
-
-    setErrorMessage(
-      getValidationMessage(
-        {
-          firstName,
-          lastName,
-          email,
-          password,
-          confirmPassword,
-          recoveryQuestion,
-          recoveryAnswer,
-        },
-        false,
-        requiresRecoverySetup
-      )
-    );
-  }, [
-    confirmPassword,
-    email,
-    firstName,
-    hasStartedTyping,
-    lastName,
-    password,
-    recoveryAnswer,
-    recoveryQuestion,
-    requiresRecoverySetup,
-  ]);
-
   // Validates the form, prevents duplicate emails, creates the user, and attempts backup sync.
   const handleRegister = () => {
+    setHasSubmitted(true);
     const normalizedEmail = email.trim().toLowerCase();
     const targetRole = isOwnerCreatingStaff ? role : 'owner';
-    const validationMessage = getValidationMessage(
+    const errors = getValidationErrors(
       {
         firstName,
         lastName,
@@ -158,31 +191,25 @@ export default function RegisterScreen({ navigation, route }) {
       requiresRecoverySetup
     );
 
-    if (validationMessage) {
-      setErrorMessage(validationMessage);
-      Alert.alert('Error', validationMessage);
+    if (Object.keys(errors).length > 0) {
       return;
     }
 
     if (isOwnerCreatingStaff && !['manager', 'worker'].includes(targetRole)) {
-      const message = 'Staff accounts can only be manager or worker';
-      setErrorMessage(message);
-      Alert.alert('Error', message);
+      Alert.alert('Error', 'Staff accounts can only be manager or worker');
       return;
     }
 
-    setErrorMessage('');
+    setEmailAvailabilityError('');
 
     getUserByEmail(normalizedEmail, async existingUser => {
       if (existingUser) {
-        const message = 'An account with that email already exists';
-        setErrorMessage(message);
-        Alert.alert('Error', message);
+        setEmailAvailabilityError('An account with this email already exists');
         return;
       }
 
       try {
-        await createUser(
+        const createdUser = await createUser(
           firstName.trim(),
           lastName.trim(),
           normalizedEmail,
@@ -202,22 +229,31 @@ export default function RegisterScreen({ navigation, route }) {
           console.log('Backup pending after local registration', error);
         }
 
-        Alert.alert(
-          'Success',
-          backupSucceeded
-            ? isOwnerCreatingStaff
-              ? 'Staff account created and backed up to cloud'
-              : 'Owner account created and backed up to cloud'
-            : isOwnerCreatingStaff
-              ? 'Staff account created locally (backup pending)'
-              : 'Owner account created locally (backup pending)'
-        );
+        const successMessage = backupSucceeded
+          ? isOwnerCreatingStaff
+            ? 'Staff account created and backed up to cloud'
+            : 'Owner account created and backed up to cloud'
+          : isOwnerCreatingStaff
+            ? 'Staff account created locally (backup pending)'
+            : 'Owner account created locally (backup pending)';
 
-        if (isOwnerCreatingStaff) {
-          navigation.goBack();
-        } else {
-          navigation.navigate('Login');
-        }
+        Alert.alert('Success', successMessage, [
+          {
+            text: isOwnerCreatingStaff ? 'Done' : 'Continue',
+            onPress: () => {
+              if (isOwnerCreatingStaff) {
+                navigation.goBack();
+              } else if (createdUser?.insertId) {
+                navigation.replace('AddFarm', {
+                  userId: createdUser.insertId,
+                  onboarding: true,
+                });
+              } else {
+                navigation.navigate('Login');
+              }
+            },
+          },
+        ]);
       } catch (error) {
         console.log(error);
         Alert.alert('Error', 'Failed to create account locally');
@@ -227,9 +263,8 @@ export default function RegisterScreen({ navigation, route }) {
 
   return (
     <ScreenBackground scroll contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>{isOwnerCreatingStaff ? 'Create Staff Account' : 'Create Owner Account'}</Text>
-
-      {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+      <View style={styles.formCard}>
+        <Text style={styles.title}>{isOwnerCreatingStaff ? 'Create Staff Account' : 'Create Owner Account'}</Text>
 
       <Text style={styles.roleLabel}>
         {isOwnerCreatingStaff ? `Staff Role: ${role}` : 'Public sign-up creates owner accounts only'}
@@ -281,38 +316,51 @@ export default function RegisterScreen({ navigation, route }) {
         placeholderTextColor="#999"
         value={firstName}
         onChangeText={setFirstName}
-        style={styles.input}
+        autoCapitalize="words"
+        autoCorrect={false}
+        style={[styles.input, validationErrors.firstName ? styles.inputInvalid : null]}
       />
+      {validationErrors.firstName ? <Text style={styles.fieldError}>{validationErrors.firstName}</Text> : null}
       <TextInput
         placeholder="Last Name"
         placeholderTextColor="#999"
         value={lastName}
         onChangeText={setLastName}
-        style={styles.input}
+        autoCapitalize="words"
+        autoCorrect={false}
+        style={[styles.input, validationErrors.lastName ? styles.inputInvalid : null]}
       />
+      {validationErrors.lastName ? <Text style={styles.fieldError}>{validationErrors.lastName}</Text> : null}
       <TextInput
         placeholder="Email"
         placeholderTextColor="#999"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={value => {
+          setEmail(value);
+          setEmailAvailabilityError('');
+        }}
         autoCapitalize="none"
-        style={styles.input}
+        autoCorrect={false}
+        keyboardType="email-address"
+        autoComplete="username"
+        style={[
+          styles.input,
+          emailAvailabilityError || validationErrors.email ? styles.inputInvalid : null,
+        ]}
       />
+      {emailAvailabilityError || validationErrors.email ? (
+        <Text style={styles.fieldError}>{emailAvailabilityError || validationErrors.email}</Text>
+      ) : null}
 
       {/* Collects and confirms the password with visibility toggles. */}
-      <View style={styles.passwordField}>
-        <TextInput
-          placeholder="Password"
-          placeholderTextColor="#999"
-          secureTextEntry={!showPassword}
-          value={password}
-          onChangeText={setPassword}
-          style={styles.passwordInput}
-        />
-        <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.passwordToggle}>
-          <Text style={styles.passwordToggleText}>{showPassword ? '\u{1F648}' : '\u{1F441}'}</Text>
-        </TouchableOpacity>
-      </View>
+      <PasswordFieldWithRequirements
+        password={password}
+        onChangeText={setPassword}
+        showPassword={showPassword}
+        onTogglePassword={() => setShowPassword(previous => !previous)}
+        isEmptyInvalid={hasSubmitted && !password}
+      />
+      {hasSubmitted && !password ? <Text style={styles.fieldError}>Enter a password</Text> : null}
 
       <View style={styles.passwordField}>
         <TextInput
@@ -321,19 +369,26 @@ export default function RegisterScreen({ navigation, route }) {
           secureTextEntry={!showConfirmPassword}
           value={confirmPassword}
           onChangeText={setConfirmPassword}
-          style={styles.passwordInput}
+          autoComplete="new-password"
+          style={[styles.passwordInput, validationErrors.confirmPassword ? styles.inputInvalid : null]}
         />
         <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.passwordToggle}>
           <Text style={styles.passwordToggleText}>{showConfirmPassword ? '\u{1F648}' : '\u{1F441}'}</Text>
         </TouchableOpacity>
       </View>
+      {validationErrors.confirmPassword ? (
+        <Text style={styles.fieldError}>{validationErrors.confirmPassword}</Text>
+      ) : null}
 
       {/* Owner self-registration requires recovery setup immediately. */}
       {requiresRecoverySetup ? (
         <>
           <View style={styles.dropdownContainer}>
             <TouchableOpacity
-              style={styles.dropdownTrigger}
+              style={[
+                styles.dropdownTrigger,
+                validationErrors.recoveryQuestion ? styles.inputInvalid : null,
+              ]}
               activeOpacity={0.8}
               onPress={() => setShowRecoveryQuestionDropdown(previous => !previous)}
             >
@@ -367,13 +422,19 @@ export default function RegisterScreen({ navigation, route }) {
               </View>
             ) : null}
           </View>
+          {validationErrors.recoveryQuestion ? (
+            <Text style={styles.fieldError}>{validationErrors.recoveryQuestion}</Text>
+          ) : null}
           <TextInput
             placeholder="Recovery Answer"
             placeholderTextColor="#999"
             value={recoveryAnswer}
             onChangeText={setRecoveryAnswer}
-            style={styles.input}
+            style={[styles.input, validationErrors.recoveryAnswer ? styles.inputInvalid : null]}
           />
+          {validationErrors.recoveryAnswer ? (
+            <Text style={styles.fieldError}>{validationErrors.recoveryAnswer}</Text>
+          ) : null}
         </>
       ) : null}
 
@@ -388,6 +449,7 @@ export default function RegisterScreen({ navigation, route }) {
           <Text style={styles.loginLink}>Already have an account? Login</Text>
         </TouchableOpacity>
       ) : null}
+      </View>
     </ScreenBackground>
   );
 }
@@ -396,7 +458,20 @@ const styles = StyleSheet.create({
   // Form layout, validation, dropdown, and password field styles.
   container: {
     flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  formCard: {
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     padding: 20,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    backgroundColor: 'rgba(15, 23, 42, 0.78)',
   },
   title: {
     fontSize: 24,
@@ -405,18 +480,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
   },
-  error: {
-    color: '#fde68a',
-    fontSize: 15,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 14,
+  fieldError: {
+    color: '#fecaca',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: -6,
+    marginBottom: 10,
+  },
+  inputInvalid: {
+    borderColor: '#f87171',
   },
   roleLabel: {
     color: '#fff',
     marginBottom: 12,
   },
   dropdownContainer: {
+    width: '100%',
     marginBottom: 12,
   },
   dropdownTrigger: {
@@ -463,6 +542,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   input: {
+    width: '100%',
     borderWidth: 1,
     borderColor: '#ccc',
     padding: 12,
@@ -472,9 +552,59 @@ const styles = StyleSheet.create({
   },
   passwordField: {
     position: 'relative',
+    width: '100%',
     marginBottom: 12,
   },
+  passwordRequirements: {
+    width: '100%',
+    marginTop: -4,
+    marginBottom: 12,
+  },
+  passwordRequirementsHidden: {
+    display: 'none',
+  },
+  passwordRequirementsTitle: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 7,
+  },
+  passwordRequirementRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  passwordRequirementCheckbox: {
+    width: 18,
+    height: 18,
+    borderWidth: 1.5,
+    borderColor: '#94a3b8',
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    marginRight: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  passwordRequirementCheckboxMet: {
+    borderColor: '#22c55e',
+    backgroundColor: '#16a34a',
+  },
+  passwordRequirementCheck: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 14,
+  },
+  passwordRequirementText: {
+    color: '#cbd5e1',
+    fontSize: 13,
+  },
+  passwordRequirementTextMet: {
+    color: '#bbf7d0',
+    fontWeight: '600',
+  },
   passwordInput: {
+    width: '100%',
     borderWidth: 1,
     borderColor: '#ccc',
     padding: 12,

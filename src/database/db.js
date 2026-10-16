@@ -53,6 +53,7 @@ const softDeleteBatchDescendants = (tx, batchId, deletedAt) => {
     { tableName: 'expenses', idColumn: 'batch_id' },
     { tableName: 'sales', idColumn: 'batch_id' },
     { tableName: 'egg_collections', idColumn: 'batch_id' },
+    { tableName: 'egg_breakage_records', idColumn: 'batch_id' },
   ];
 
   childTables.forEach(({ tableName, idColumn }) => {
@@ -476,6 +477,26 @@ export const initDB = () => {
 
     ensureColumnExists(tx, 'egg_collections', 'deleted_at', 'TEXT');
 
+    // EGG BREAKAGE AFTER COLLECTION
+    tx.executeSql(
+      `
+      CREATE TABLE IF NOT EXISTS egg_breakage_records (
+        egg_breakage_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        batch_id INTEGER,
+        breakage_date TEXT,
+        eggs_broken INTEGER,
+        notes TEXT,
+        deleted_at TEXT,
+        synced INTEGER DEFAULT 0
+      );
+    `,
+      [],
+      () => console.log('Egg breakage records table created'),
+      (_, err) => console.log('Egg breakage records table error', err),
+    );
+
+    ensureColumnExists(tx, 'egg_breakage_records', 'deleted_at', 'TEXT');
+
     tx.executeSql(
       `
       CREATE TABLE IF NOT EXISTS app_session (
@@ -607,6 +628,8 @@ export const getUserById = (userId, callback) => {
       },
       (_, error) => {
         console.log('Error fetching user by id', error);
+        callback && callback(null);
+        return false;
       },
     );
   });
@@ -966,6 +989,8 @@ export const getBatchesByFarmId = (farm_id, callback) => {
       },
       (_, error) => {
         console.log('Error fetching batches', error);
+        callback([]);
+        return false;
       },
     );
   });
@@ -2012,8 +2037,11 @@ export const addSaleRecord = (
   unit_price,
   sale_date,
   callback,
+  total_revenue_override,
 ) => {
-  const total_revenue = Number(quantity_sold) * Number(unit_price);
+  const total_revenue = total_revenue_override == null
+    ? Number(quantity_sold) * Number(unit_price)
+    : Number(total_revenue_override);
 
   db.transaction(tx => {
     tx.executeSql(
@@ -2117,15 +2145,76 @@ export const getEggAvailabilityByBatchId = (batch_id, callback) => {
          - COALESCE((SELECT SUM(COALESCE(eggs_broken, 0) + COALESCE(eggs_sold, 0)
                                   + COALESCE(eggs_household, 0) + COALESCE(eggs_hatching, 0))
                      FROM egg_collections WHERE batch_id = ? AND deleted_at IS NULL), 0)
+         - COALESCE((SELECT SUM(eggs_broken) FROM egg_breakage_records
+                     WHERE batch_id = ? AND deleted_at IS NULL), 0)
          - COALESCE((SELECT SUM(quantity_sold) FROM sales
                      WHERE batch_id = ? AND sale_type = 'eggs' AND deleted_at IS NULL), 0),
          0
        ) AS available_eggs`,
-      [batch_id, batch_id, batch_id],
+      [batch_id, batch_id, batch_id, batch_id],
       (_, result) => callback(Number(result.rows.item(0)?.available_eggs || 0)),
       (_, error) => {
         console.log('Error calculating available eggs', error);
         callback(0);
+        return false;
+      },
+    );
+  });
+};
+
+// Records eggs that broke after their collection entry was saved.
+export const addEggBreakageRecord = (
+  batch_id,
+  breakage_date,
+  eggs_broken,
+  notes,
+  callback,
+) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `INSERT INTO egg_breakage_records
+       (batch_id, breakage_date, eggs_broken, notes, synced)
+       VALUES (?, ?, ?, ?, 0)`,
+      [batch_id, breakage_date, eggs_broken, notes || null],
+      (_, result) => {
+        console.log('Egg breakage record added', result.insertId);
+        callback && callback();
+      },
+      (_, error) => {
+        console.log('Error adding egg breakage record', error);
+        return false;
+      },
+    );
+  });
+};
+
+// Loads active post-collection breakage records for a batch.
+export const getEggBreakageRecordsByBatchId = (batch_id, callback) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `SELECT * FROM egg_breakage_records
+       WHERE batch_id = ? AND deleted_at IS NULL
+       ORDER BY breakage_date DESC, egg_breakage_id DESC`,
+      [batch_id],
+      (_, result) => callback(rowsToArray(result.rows)),
+      (_, error) => {
+        console.log('Error fetching egg breakage records', error);
+        callback([]);
+        return false;
+      },
+    );
+  });
+};
+
+// Soft-deletes a post-collection breakage event and queues the change for sync.
+export const deleteEggBreakageRecord = egg_breakage_id => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `UPDATE egg_breakage_records SET deleted_at = ?, synced = 0 WHERE egg_breakage_id = ?`,
+      [getCurrentTimestamp(), egg_breakage_id],
+      () => console.log('Egg breakage record marked deleted'),
+      (_, error) => {
+        console.log('Delete egg breakage record error', error);
         return false;
       },
     );
@@ -2368,6 +2457,21 @@ export const importBootstrapData = (authenticatedUser, bootstrapData) =>
           record.eggs_household ?? 0,
           record.eggs_hatching ?? 0,
           record.sale_revenue ?? 0,
+          record.notes ?? null,
+          record.deleted_at ?? null,
+        ],
+      })),
+      ...(safeData.egg_breakage_records || []).map(record => ({
+        sql: `
+          INSERT OR REPLACE INTO egg_breakage_records
+          (egg_breakage_id, batch_id, breakage_date, eggs_broken, notes, deleted_at, synced)
+          VALUES (?, ?, ?, ?, ?, ?, 1)
+        `,
+        params: [
+          record.egg_breakage_id,
+          record.batch_id,
+          record.breakage_date,
+          record.eggs_broken,
           record.notes ?? null,
           record.deleted_at ?? null,
         ],

@@ -162,6 +162,22 @@ const tableConfigs = [
       ORDER BY egg_collection_id
     `,
   },
+  {
+    key: 'egg_breakage_records',
+    tableName: 'egg_breakage_records',
+    idColumn: 'egg_breakage_id',
+    endpoint: 'egg-breakage-records',
+    selectSql: `
+      SELECT egg_breakage_records.egg_breakage_id, egg_breakage_records.batch_id,
+             egg_breakage_records.breakage_date, egg_breakage_records.eggs_broken,
+             egg_breakage_records.notes, egg_breakage_records.deleted_at
+      FROM egg_breakage_records
+      JOIN batches ON batches.batch_id = egg_breakage_records.batch_id
+      WHERE egg_breakage_records.synced = 0
+        AND batches.synced = 1
+      ORDER BY egg_breakage_id
+    `,
+  },
 ];
 
 // Converts SQLite result rows into a normal JavaScript array.

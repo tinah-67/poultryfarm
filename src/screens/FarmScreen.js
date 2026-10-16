@@ -7,6 +7,7 @@ import ScreenBackground from '../components/ScreenBackground';
 export default function FarmScreen({ navigation, route }) {
   // Tracks the farm form and save/refresh state.
   const userId = route?.params?.userId ?? route?.params?.user_Id;
+  const isOnboarding = route?.params?.onboarding === true;
 
   console.log('FarmScreen userId:', userId);
 
@@ -58,13 +59,22 @@ export default function FarmScreen({ navigation, route }) {
 
         setIsSaving(true);
 
-        createFarm(userId, trimmedFarmName, trimmedLocation, () => {
+        createFarm(userId, trimmedFarmName, trimmedLocation, farmId => {
           setIsSaving(false);
-          Alert.alert('Success', 'Farm added successfully');
 
+          if (isOnboarding) {
+            if (!farmId) {
+              Alert.alert('Error', 'Farm could not be saved. Please try again.');
+              return;
+            }
+
+            navigation.replace('CreateBatch', { userId, farmId, onboarding: true });
+            return;
+          }
+
+          Alert.alert('Success', 'Farm added successfully');
           setFarmName('');
           setLocation('');
-
           navigation.navigate('ViewFarms', { userId });
         });
       });
@@ -88,7 +98,8 @@ export default function FarmScreen({ navigation, route }) {
       keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
     >
-      <Text style={styles.title}>Add Farm</Text>
+      <Text style={styles.title}>{isOnboarding ? 'Step 1 of 2: Create your farm' : 'Add Farm'}</Text>
+      {isOnboarding ? <Text style={styles.setupNote}>First, add the farm where you keep your birds.</Text> : null}
 
       {/* Collects the farm name and physical location. */}
       <TextInput
@@ -107,16 +118,18 @@ export default function FarmScreen({ navigation, route }) {
         style={styles.input}
       />
 
-      <Button
-        title={isSaving ? 'Saving...' : 'Save Farm'}
+            <Button
+        title={isSaving ? 'Saving...' : (isOnboarding ? 'Save farm and continue' : 'Save Farm')}
         onPress={handleAddFarm}
         disabled={!isFormValid || isSaving}
       />
+      {!isOnboarding ? (
+        <Button
+          title="View Farms"
+          onPress={() => navigation.navigate('ViewFarms', { userId })}
+        />
+      ) : null}
 
-      <Button
-        title="View Farms"
-        onPress={() => navigation.navigate('ViewFarms', { userId })}
-      />
     </ScreenBackground>
   );
 }
@@ -125,6 +138,7 @@ const styles = StyleSheet.create({
   // Farm form layout and input styles.
   container: { flexGrow: 1, padding: 20 },
   title: { fontSize: 20, fontWeight: 'bold', marginBottom: 10, color: '#fff' },
+  setupNote: { color: '#e2e8f0', marginBottom: 14 },
   input: {
     borderWidth: 1,
     marginBottom: 10,

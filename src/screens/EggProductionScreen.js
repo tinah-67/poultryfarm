@@ -1,317 +1,256 @@
 import React, { useCallback, useState } from 'react';
-import {
-    Alert,
-    Button,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-    addEggCollectionRecord,
-    deleteEggCollectionRecord,
-    getBatchById,
-    getEggAvailabilityByBatchId,
-    getEggCollectionsByBatchId,
-    getUserById,
+  getEggAvailabilityByBatchId,
+  getEggBreakageRecordsByBatchId,
+  getEggCollectionsByBatchId,
 } from '../database/db';
-import DataTable from '../components/DataTable';
 import ScreenBackground from '../components/ScreenBackground';
 
-const getLocalDateString = () => {
-    const today = new Date();
-    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(
-        2,
-        '0',
-    )}-${String(today.getDate()).padStart(2, '0')}`;
-};
+// Shows flock totals and opens the four egg production workflows.
+export default function EggProductionScreen({ route, navigation }) {
+  const batchId = route?.params?.batchId;
+  const userId = route?.params?.userId;
+  const [summary, setSummary] = useState({
+    collected: 0,
+    brokenAtCollection: 0,
+    brokenLater: 0,
+    available: 0,
+  });
 
-// Records daily egg collection and breakage for one flock.
-export default function EggProductionScreen({ route }) {
-    const batchId = route?.params?.batchId;
-    const userId = route?.params?.userId;
-    const [collectionDate, setCollectionDate] = useState(getLocalDateString());
-    const [eggsCollected, setEggsCollected] = useState('');
-    const [eggsBroken, setEggsBroken] = useState('');
-    const [records, setRecords] = useState([]);
-    const [availableEggs, setAvailableEggs] = useState(0);
-    const [currentUser, setCurrentUser] = useState(null);
-    const [batch, setBatch] = useState(null);
-
-    const loadRecords = useCallback(() => {
+  const loadSummary = useCallback(() => {
     if (!batchId) {
-        setRecords([]);
-      setAvailableEggs(0);
-        return;
-        }
-
-        getEggCollectionsByBatchId(batchId, data => setRecords(data || []));
-        getEggAvailabilityByBatchId(batchId, count => setAvailableEggs(count));
-    }, [batchId]);
-
-    useFocusEffect(
-        useCallback(() => {
-        if (userId) {
-            getUserById(userId, user => setCurrentUser(user));
-        } else {
-            setCurrentUser(null);
-        }
-
-        if (batchId) {
-            getBatchById(batchId, batchRecord => setBatch(batchRecord));
-        } else {
-            setBatch(null);
-        }
-
-        loadRecords();
-        }, [batchId, loadRecords, userId]),
-    );
-
-    const canRecordEggs = ['owner', 'worker'].includes(currentUser?.role);
-    const isBatchCompleted =
-        String(batch?.status || 'active').toLowerCase() === 'completed';
-    const totalCollected = records.reduce(
-        (sum, record) => sum + Number(record.eggs_collected || 0),
-        0,
-    );
-    const totalBroken = records.reduce(
-      (sum, record) => sum + Number(record.eggs_broken || 0),
-      0,
-    );
-    const columns = [
-      { key: 'date', title: 'Collection Date', width: 150 },
-      { key: 'collected', title: 'Collected', width: 110 },
-      { key: 'broken', title: 'Broken', width: 100 },
-      { key: 'actions', title: 'Actions', width: 110 },
-    ];
-
-    const isValidDate = dateText => {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) {
-        return false;
-        }
-
-        const [year, month, day] = dateText.split('-').map(Number);
-        const date = new Date(year, month - 1, day);
-        return (
-        date.getFullYear() === year &&
-        date.getMonth() === month - 1 &&
-        date.getDate() === day &&
-        dateText <= getLocalDateString()
-        );
-    };
-
-    const handleAdd = () => {
-        if (!canRecordEggs) {
-        Alert.alert(
-            'Access denied',
-            'Only owner and worker users can record egg collection.',
-        );
-        return;
-        }
-
-        if (!batchId) {
-        Alert.alert('Error', 'Flock not found');
-        return;
-        }
-
-        if (!isValidDate(collectionDate)) {
-        Alert.alert(
-            'Invalid date',
-            'Enter a valid collection date that is not in the future.',
-        );
-        return;
-        }
-
-      if (!/^\d+$/.test(eggsCollected.trim())) {
-        Alert.alert(
-            'Invalid collection count',
-        'Enter a positive whole number for eggs collected.',
-        );
-        return;
-        }
-
-      const collected = Number(eggsCollected);
-      const brokenText = eggsBroken.trim();
-      if (brokenText && !/^\d+$/.test(brokenText)) {
-        Alert.alert(
-          'Invalid broken-egg count',
-          'Enter a whole number of zero or more for broken eggs, or leave it blank if none were broken.',
-        );
-        return;
-      }
-
-      const broken = brokenText ? Number(brokenText) : 0;
-    if (collected <= 0) {
-      Alert.alert(
-        'Invalid collection',
-        'Collected eggs must be greater than zero.',
-      );
+      setSummary({ collected: 0, brokenAtCollection: 0, brokenLater: 0, available: 0 });
       return;
     }
 
-    if (broken > collected) {
-      Alert.alert(
-        'Broken eggs exceed collection',
-        'Broken eggs cannot exceed the total eggs collected.',
-      );
-      return;
-    }
+    getEggCollectionsByBatchId(batchId, records => {
+      const collectionRecords = records || [];
+      setSummary(current => ({
+        ...current,
+        collected: collectionRecords.reduce((sum, record) => sum + Number(record.eggs_collected || 0), 0),
+        brokenAtCollection: collectionRecords.reduce((sum, record) => sum + Number(record.eggs_broken || 0), 0),
+      }));
+    });
+    getEggBreakageRecordsByBatchId(batchId, records => {
+      setSummary(current => ({
+        ...current,
+        brokenLater: (records || []).reduce((sum, record) => sum + Number(record.eggs_broken || 0), 0),
+      }));
+    });
+    getEggAvailabilityByBatchId(batchId, available => {
+      setSummary(current => ({ ...current, available }));
+    });
+  }, [batchId]);
 
-    addEggCollectionRecord(
-      batchId,
-      collectionDate,
-      collected,
-      broken,
-      () => {
-        setCollectionDate(getLocalDateString());
-        setEggsCollected('');
-        setEggsBroken('');
-        loadRecords();
-        Alert.alert('Success', 'Egg collection recorded.');
-      },
-    );
-  };
+  useFocusEffect(
+    useCallback(() => {
+      loadSummary();
+    }, [loadSummary]),
+  );
 
-  const handleDelete = id => {
-    if (!canRecordEggs) {
-      Alert.alert(
-        'Access denied',
-        'Only owner and worker users can delete egg collection records.',
-      );
-      return;
-    }
+  const summaryItems = [
+    { label: 'Collected', value: summary.collected },
+    { label: 'Broken', value: summary.brokenAtCollection + summary.brokenLater },
+    { label: 'Available', value: summary.available },
+  ];
 
-    Alert.alert('Delete egg record', 'Delete this collection record?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          deleteEggCollectionRecord(id);
-          loadRecords();
-        },
-      },
-    ]);
-  };
+  const actions = [
+    {
+      number: '01',
+      title: 'Record egg collection',
+      description: 'Log a collection and any eggs broken during collection.',
+      screen: 'RecordEggCollection',
+      tint: '#dcfce7',
+      accent: '#15803d',
+    },
+    {
+      number: '02',
+      title: 'Record later breakage',
+      description: 'Track eggs damaged after collection.',
+      screen: 'RecordEggBreakage',
+      tint: '#ffe4e6',
+      accent: '#be123c',
+    },
+    {
+      number: '03',
+      title: 'Collection history',
+      description: 'Review collection totals and records.',
+      screen: 'ViewEggCollections',
+      tint: '#dbeafe',
+      accent: '#1d4ed8',
+    },
+    {
+      number: '04',
+      title: 'Breakage history',
+      description: 'Review breakage records for this flock.',
+      screen: 'ViewEggBreakage',
+      tint: '#fef3c7',
+      accent: '#b45309',
+    },
+  ];
 
   return (
     <ScreenBackground scroll contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Egg Production</Text>
-      <Text style={styles.subtitle}>Batch ID: {batchId ?? 'N/A'}</Text>
-      <View style={styles.summaryRow}>
-        <Text style={styles.summary}>Collected: {totalCollected} eggs</Text>
-        <Text style={styles.summary}>
-          Broken: {totalBroken} eggs
-        </Text>
-        <Text style={styles.summary}>Available to sell: {availableEggs} eggs</Text>
+      <View style={styles.header}>
+        <View style={styles.headerCopy}>
+          <Text style={styles.eyebrow}>FLOCK RECORDS</Text>
+          <Text style={styles.title}>Egg production</Text>
+          <Text style={styles.subtitle}>Production and inventory at a glance</Text>
+        </View>
+        <View style={styles.batchBadge}>
+          <Text style={styles.batchLabel}>BATCH</Text>
+          <Text style={styles.batchValue}>{batchId ?? 'N/A'}</Text>
+        </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Daily Collection</Text>
-      {isBatchCompleted ? (
-        <Text style={styles.note}>
-          This flock is completed. New egg collection entries are disabled.
-        </Text>
-      ) : canRecordEggs ? (
-        <>
-          <TextInput
-            value={collectionDate}
-            onChangeText={setCollectionDate}
-            placeholder="Collection date (YYYY-MM-DD)"
-            placeholderTextColor="#64748b"
-            style={styles.input}
-          />
-          <CountInput
-            label="Eggs collected"
-            value={eggsCollected}
-            onChangeText={setEggsCollected}
-          />
-          <CountInput
-            label="Eggs broken (enter 0 if none)"
-            value={eggsBroken}
-            onChangeText={setEggsBroken}
-          />
-          <Button title="Save Egg Collection" onPress={handleAdd} />
-        </>
-      ) : (
-        <Text style={styles.note}>
-          Only owners and workers can record or delete egg collection records.
-        </Text>
-      )}
+      <View style={styles.summaryPanel}>
+        <Text style={styles.panelLabel}>CURRENT EGG TOTALS</Text>
+        <View style={styles.summaryRow}>
+          {summaryItems.map(item => (
+            <View key={item.label} style={styles.summaryItem}>
+              <Text style={styles.summaryValue}>{item.value}</Text>
+              <Text style={styles.summaryLabel}>{item.label}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
 
-      <Text style={styles.sectionTitle}>Collection History</Text>
-      <DataTable
-        columns={columns}
-        data={records}
-        keyExtractor={(item, index) => String(item.egg_collection_id || index)}
-        emptyText="No egg collections recorded for this flock yet."
-        renderCell={(item, column) => {
-          if (column.key === 'date')
-            return <Text style={styles.cellText}>{item.collection_date}</Text>;
-          if (column.key === 'collected')
-            return <Text style={styles.cellText}>{item.eggs_collected}</Text>;
-          if (column.key === 'broken')
-            return <Text style={styles.cellText}>{item.eggs_broken}</Text>;
-          if (column.key === 'actions') {
-            return canRecordEggs ? (
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => handleDelete(item.egg_collection_id)}
-              >
-                <Text style={styles.deleteButtonText}>Delete</Text>
-              </TouchableOpacity>
-            ) : (
-              <Text style={styles.viewOnly}>View only</Text>
-            );
-          }
-          return null;
-        }}
-      />
+      <View style={styles.sectionHeader}>
+        <View>
+          <Text style={styles.sectionTitle}>Production tools</Text>
+          <Text style={styles.sectionSubtitle}>Choose a task for this flock</Text>
+        </View>
+        <Text style={styles.actionCount}>4 TASKS</Text>
+      </View>
+
+      <View style={styles.actions}>
+        {actions.map(action => (
+          <TouchableOpacity
+            key={action.screen}
+            style={styles.actionCard}
+            onPress={() => navigation.navigate(action.screen, { batchId, userId })}
+            accessibilityRole="button"
+            accessibilityHint={action.description}
+            activeOpacity={0.82}
+          >
+            <View style={[styles.actionNumber, { backgroundColor: action.tint }]}>
+              <Text style={[styles.actionNumberText, { color: action.accent }]}>
+                {action.number}
+              </Text>
+            </View>
+            <View style={styles.actionCopy}>
+              <Text style={styles.actionTitle}>{action.title}</Text>
+              <Text style={styles.actionDescription}>{action.description}</Text>
+            </View>
+            <Text style={styles.actionArrow}>&gt;</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </ScreenBackground>
   );
 }
 
-const CountInput = ({ label, value, onChangeText }) => (
-  <TextInput
-    value={value}
-    onChangeText={onChangeText}
-    placeholder={label}
-    placeholderTextColor="#64748b"
-    keyboardType="number-pad"
-    style={styles.input}
-  />
-);
-
 const styles = StyleSheet.create({
-  container: { padding: 20, gap: 10 },
-  title: { fontSize: 22, fontWeight: '700', color: '#fff' },
-  subtitle: { color: '#e2e8f0' },
-  summaryRow: { gap: 4, marginVertical: 4 },
-  summary: { color: '#fff', fontWeight: '700' },
-  sectionTitle: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
-    marginTop: 12,
+  container: {
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 36,
+    gap: 22,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 6,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerCopy: { flex: 1 },
+  eyebrow: {
+    color: '#bbf7d0',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.8,
+    marginBottom: 6,
+  },
+  title: { color: '#fff', fontSize: 28, fontWeight: '800' },
+  subtitle: { color: '#e2e8f0', fontSize: 13, marginTop: 5 },
+  batchBadge: {
+    minWidth: 70,
+    alignItems: 'center',
+    paddingVertical: 9,
     paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  batchLabel: { color: '#cbd5e1', fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+  batchValue: { color: '#fff', fontSize: 15, fontWeight: '700', marginTop: 3 },
+  summaryPanel: {
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 18,
+    padding: 16,
+    shadowColor: '#020617',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
+  },
+  panelLabel: {
+    color: '#64748b',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    marginBottom: 12,
+  },
+  summaryRow: { flexDirection: 'row', gap: 8 },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
     paddingVertical: 10,
-    backgroundColor: '#fff',
-    color: '#0f172a',
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
   },
-  note: { color: '#cbd5e1' },
-  cellText: { color: '#334155' },
-  deleteButton: {
-    backgroundColor: '#fee2e2',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 5,
+  summaryValue: { color: '#0f172a', fontSize: 21, fontWeight: '800' },
+  summaryLabel: { color: '#64748b', fontSize: 11, fontWeight: '600', marginTop: 3 },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  deleteButtonText: { color: '#b91c1c', fontWeight: '600' },
-  viewOnly: { color: '#64748b', fontStyle: 'italic' },
+  sectionTitle: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  sectionSubtitle: { color: '#cbd5e1', fontSize: 12, marginTop: 3 },
+  actionCount: { color: '#dcfce7', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  actions: { gap: 11 },
+  actionCard: {
+    minHeight: 82,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
+    shadowColor: '#020617',
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  actionNumber: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionNumberText: { fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
+  actionCopy: { flex: 1, gap: 4 },
+  actionTitle: { color: '#0f172a', fontSize: 15, fontWeight: '800' },
+  actionDescription: { color: '#64748b', fontSize: 12, lineHeight: 17 },
+  actionArrow: { color: '#94a3b8', fontSize: 22, fontWeight: '600', paddingLeft: 4 },
 });

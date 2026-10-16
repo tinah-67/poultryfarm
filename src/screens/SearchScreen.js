@@ -5,6 +5,8 @@ import ScreenBackground from '../components/ScreenBackground';
 import DataTable from '../components/DataTable';
 import {
   getAccessibleFarms,
+  getEggCollectionsByBatchId,
+  getUserById,
   getBatchesByFarmId,
   getExpensesByBatchId,
   getFeedRecordsByBatchId,
@@ -14,7 +16,8 @@ import {
 } from '../database/db';
 
 // Defines the searchable record groups shown as filter chips.
-const SEARCH_TYPES = ['all', 'farms', 'batches', 'sales', 'expenses', 'feed', 'mortality', 'vaccinations'];
+const SEARCH_TYPES = ['all', 'farms', 'batches', 'sales', 'eggCollections', 'expenses', 'feed', 'mortality', 'vaccinations'];
+const SEARCH_TYPE_LABELS = { eggCollections: 'Egg collections' };
 
 // Combines searchable values into one lowercase string for simple matching.
 const buildSearchText = values =>
@@ -27,6 +30,9 @@ const buildSearchText = values =>
 export default function SearchScreen({ route }) {
   // Stores the query, selected type, refresh state, and indexed records.
   const userId = route?.params?.userId;
+  const [currentUser, setCurrentUser] = useState(null);
+  const canSearchSales = String(currentUser?.user_id || '') === String(userId || '')
+    && ['owner', 'manager'].includes(currentUser?.role);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedType, setSelectedType] = useState('all');
@@ -34,6 +40,7 @@ export default function SearchScreen({ route }) {
     farms: [],
     batches: [],
     sales: [],
+    eggCollections: [],
     expenses: [],
     feed: [],
     mortality: [],
@@ -41,12 +48,16 @@ export default function SearchScreen({ route }) {
   });
 
   // Loads accessible data and flattens it into search result records.
-  const loadSearchData = useCallback((done) => {
+  const loadSearchData = useCallback((done, searchUser) => {
+    const canLoadSales = String(searchUser?.user_id || '') === String(userId || '')
+      && ['owner', 'manager'].includes(searchUser?.role);
+
     if (!userId) {
       setRecords({
         farms: [],
         batches: [],
         sales: [],
+        eggCollections: [],
         expenses: [],
         feed: [],
         mortality: [],
@@ -64,6 +75,7 @@ export default function SearchScreen({ route }) {
           farms: [],
           batches: [],
           sales: [],
+          eggCollections: [],
           expenses: [],
           feed: [],
           mortality: [],
@@ -84,6 +96,7 @@ export default function SearchScreen({ route }) {
         })),
         batches: [],
         sales: [],
+        eggCollections: [],
         expenses: [],
         feed: [],
         mortality: [],
@@ -192,7 +205,7 @@ export default function SearchScreen({ route }) {
                         });
                       });
 
-                      (saleRecords || []).forEach(item => {
+                      (canLoadSales ? saleRecords || [] : []).forEach(item => {
                         nextRecords.sales.push({
                           id: `sale-${item.sale_id}`,
                           type: 'sales',
@@ -233,16 +246,40 @@ export default function SearchScreen({ route }) {
                         });
                       });
 
-                      processedBatches += 1;
+                      getEggCollectionsByBatchId(batch.batch_id, eggCollectionRecords => {
+                        (eggCollectionRecords || []).forEach(item => {
+                          nextRecords.eggCollections.push({
+                            id: 'egg-collection-' + item.egg_collection_id,
+                            type: 'eggCollections',
+                            batchId: batch.batch_id,
+                            farmName: farm.farm_name,
+                            location: farm.location || 'N/A',
+                            summary: (item.eggs_collected || 0) + ' eggs collected - '
+                              + (item.eggs_broken || 0) + ' broken - '
+                              + (item.collection_date || 'N/A'),
+                            searchText: buildSearchText([
+                              farm.farm_name,
+                              farm.location,
+                              batch.breed,
+                              item.collection_date,
+                              item.eggs_collected,
+                              item.eggs_broken,
+                              item.notes,
+                            ]),
+                          });
+                        });
 
-                      if (processedBatches === safeBatches.length) {
-                        processedFarms += 1;
+                        processedBatches += 1;
 
-                        if (processedFarms === safeFarms.length) {
-                          setRecords(nextRecords);
-                          done && done();
+                        if (processedBatches === safeBatches.length) {
+                          processedFarms += 1;
+
+                          if (processedFarms === safeFarms.length) {
+                            setRecords(nextRecords);
+                            done && done();
+                          }
                         }
-                      }
+                      });
                     });
                   });
                 });
@@ -254,41 +291,65 @@ export default function SearchScreen({ route }) {
     });
   }, [userId]);
 
-  // Rebuilds the search index whenever the screen receives focus.
+  // Rebuilds the search index after the current user's role is known.
   useFocusEffect(
     useCallback(() => {
-      loadSearchData();
-    }, [loadSearchData])
+      if (!userId) {
+        setCurrentUser(null);
+        loadSearchData();
+        return undefined;
+      }
+
+      let isFocused = true;
+      getUserById(userId, user => {
+        if (!isFocused) {
+          return;
+        }
+
+        const searchUser = user || null;
+        setCurrentUser(searchUser);
+        loadSearchData(undefined, searchUser);
+      });
+
+      return () => {
+        isFocused = false;
+      };
+    }, [loadSearchData, userId])
   );
 
   // Handles pull-to-refresh for search data.
   const handleRefresh = () => {
     setRefreshing(true);
-    loadSearchData(() => setRefreshing(false));
+    loadSearchData(() => setRefreshing(false), currentUser);
   };
 
   // Combines every indexed record type for the "All" search mode.
   const allRecords = useMemo(() => ([
     ...records.farms,
     ...records.batches,
-    ...records.sales,
+    ...(canSearchSales ? records.sales : []),
+    ...records.eggCollections,
     ...records.expenses,
     ...records.feed,
     ...records.mortality,
     ...records.vaccinations,
-  ]), [records]);
+  ]), [canSearchSales, records]);
 
   // Applies the selected type filter and text search.
   const filteredResults = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    const source = selectedType === 'all' ? allRecords : records[selectedType] || [];
+    const source = selectedType === 'all'
+      ? allRecords
+      : selectedType === 'sales' && !canSearchSales
+        ? []
+        : records[selectedType] || [];
 
     if (!normalizedQuery) {
       return source;
     }
 
     return source.filter(item => item.searchText.includes(normalizedQuery));
-  }, [allRecords, query, records, selectedType]);
+  }, [allRecords, canSearchSales, query, records, selectedType]);
 
   // Defines the result table columns.
   const columns = [
@@ -304,6 +365,9 @@ export default function SearchScreen({ route }) {
     total: allRecords.length,
     shown: filteredResults.length,
   };
+  const visibleSearchTypes = canSearchSales
+    ? SEARCH_TYPES
+    : SEARCH_TYPES.filter(type => type !== 'sales');
 
   return (
     <ScreenBackground
@@ -318,15 +382,15 @@ export default function SearchScreen({ route }) {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Search farms, batches, sales, mortality, feed..."
+          placeholder="Search farms, batches, egg collections, sales, mortality, feed..."
           placeholderTextColor="#64748b"
           style={styles.input}
         />
 
         <View style={styles.filterRow}>
-          {SEARCH_TYPES.map(type => {
+          {visibleSearchTypes.map(type => {
             const isSelected = selectedType === type;
-            const label = type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1);
+            const label = SEARCH_TYPE_LABELS[type] || (type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1));
 
             return (
               <TouchableOpacity
@@ -362,7 +426,7 @@ export default function SearchScreen({ route }) {
           columns={columns}
           data={filteredResults.map(item => ({
             ...item,
-            type: item.type.charAt(0).toUpperCase() + item.type.slice(1),
+            type: item.type === 'eggCollections' ? 'Egg collection' : item.type.charAt(0).toUpperCase() + item.type.slice(1),
             batchId: item.batchId ?? 'N/A',
             farmName: item.farmName ?? 'N/A',
             location: item.location ?? 'N/A',

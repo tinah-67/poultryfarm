@@ -11,13 +11,21 @@ try {
     DateTimePicker = null;
 }
 
+const getTodayDateString = () => {
+    const today = new Date();
+    return today.getFullYear() + '-' +
+        String(today.getMonth() + 1).padStart(2, '0') + '-' +
+        String(today.getDate()).padStart(2, '0');
+};
+
 // Lets owners and managers create a new poultry batch for a selected farm.
 export default function CreateBatchScreen({ navigation, route }) {
     // Stores batch form fields, validation messages, and current user role.
     const farmId = route?.params?.farmId;
     const userId = route?.params?.userId;
+    const isOnboarding = route?.params?.onboarding === true;
 
-    const [startDate, setStartDate] = useState('');
+    const [startDate, setStartDate] = useState(isOnboarding ? getTodayDateString() : '');
     const [breed, setBreed] = useState('');
     const [initialChicks, setInitialChicks] = useState('');
     const [purchaseCost, setPurchaseCost] = useState('');
@@ -151,6 +159,14 @@ export default function CreateBatchScreen({ navigation, route }) {
             Number(initialChicks),
             purchaseCost.trim() === '' ? 0 : Number(purchaseCost),
             () => {
+                if (isOnboarding) {
+                    navigation.reset({
+                        index: 0,
+                        routes: [{ name: 'Home', params: { userId } }],
+                    });
+                    return;
+                }
+
                 Alert.alert("Success", "Batch created");
                 navigation.goBack();
             }
@@ -159,11 +175,13 @@ export default function CreateBatchScreen({ navigation, route }) {
 
     return (
         <ScreenBackground contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Create Batch</Text>
+        <Text style={styles.title}>{isOnboarding ? 'Step 2 of 2: Create your first batch' : 'Create Batch'}</Text>
         <Text style={styles.helperText}>
-            {canManageBatches
-                ? 'Owners and managers can create new batches.'
-                : 'You can view batches, but only owners and managers can create them.'}
+            {isOnboarding
+                ? 'Add at least one batch to finish setup and continue to your dashboard.'
+                : canManageBatches
+                    ? 'Owners and managers can create new batches.'
+                    : 'You can view batches, but only owners and managers can create them.'}
         </Text>
 
         {/* Chooses the batch start date using the picker or Today shortcut. */}
@@ -207,7 +225,7 @@ export default function CreateBatchScreen({ navigation, route }) {
         {chicksError ? <Text style={styles.errorText}>{chicksError}</Text> : null}
 
         <TextInput
-            placeholder="Bird Purchase Cost"
+            placeholder="Total bird cost (enter 0 if none)"
             placeholderTextColor="#666"
             value={purchaseCost}
             onChangeText={handlePurchaseCostChange}
@@ -216,7 +234,7 @@ export default function CreateBatchScreen({ navigation, route }) {
         />
         {costError ? <Text style={styles.errorText}>{costError}</Text> : null}
 
-        <Button title="Create Batch" onPress={handleCreate} disabled={!isFormValid || !canManageBatches} />
+        <Button title={isOnboarding ? 'Create batch and continue' : 'Create Batch'} onPress={handleCreate} disabled={!isFormValid || !canManageBatches} />
         </ScreenBackground>
     );
 }

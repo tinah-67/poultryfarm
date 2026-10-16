@@ -10,13 +10,18 @@ import {
   getUserById,
 } from '../database/db';
 import ScreenBackground from '../components/ScreenBackground';
+import { formatBatchAge } from '../utils/batchAge';
 
-// Lets owner and manager users record bird sales for an active batch.
+// Lets owner and manager users record bird and egg sales for an active batch.
 export default function SalesScreen({ route, navigation }) {
   // Stores route ids, sale fields, role data, available birds, and batch status.
   const batchId = route?.params?.batchId;
   const userId = route?.params?.userId;
-  const [saleType, setSaleType] = useState(null);
+  const routeSaleType = route?.params?.saleType;
+  const [saleType, setSaleType] = useState(
+    routeSaleType === 'eggs' || routeSaleType === 'birds' ? routeSaleType : null
+  );
+  const [eggSaleUnit, setEggSaleUnit] = useState('egg');
   const [quantitySold, setQuantitySold] = useState('');
   const [pricePerUnit, setPricePerUnit] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
@@ -83,6 +88,14 @@ export default function SalesScreen({ route, navigation }) {
 
   const canRecordSales = ['owner', 'manager'].includes(currentUser?.role);
   const isBatchCompleted = String(batch?.status || 'active').toLowerCase() === 'completed';
+  const batchAge = saleType === 'birds' ? formatBatchAge(batch?.start_date) : null;
+  const saleUnitMultiplier = saleType === 'eggs' && eggSaleUnit === 'tray' ? 30 : 1;
+  const quantityLabel = saleType === 'eggs'
+    ? (eggSaleUnit === 'tray' ? 'Trays Sold' : 'Eggs Sold')
+    : 'Birds Sold';
+  const priceLabel = saleType === 'eggs'
+    ? (eggSaleUnit === 'tray' ? 'Price Per Tray' : 'Price Per Egg')
+    : 'Price Per Bird';
 
   // Validates permission, batch status, quantity, price, and available birds before saving.
   const handleAdd = () => {
@@ -107,7 +120,7 @@ export default function SalesScreen({ route, navigation }) {
     }
 
     if (!quantitySold || !pricePerUnit) {
-      Alert.alert('Error', `Enter ${saleType === 'eggs' ? 'eggs' : 'birds'} sold and the price per ${saleType === 'eggs' ? 'egg' : 'bird'}.`);
+      Alert.alert('Error', `Enter ${quantityLabel.toLowerCase()} and the ${priceLabel.toLowerCase()}.`);
       return;
     }
 
@@ -119,18 +132,19 @@ export default function SalesScreen({ route, navigation }) {
     const priceValue = Number(pricePerUnit);
 
     if (!Number.isFinite(priceValue) || priceValue <= 0) {
-      Alert.alert('Error', `Price per ${saleType === 'eggs' ? 'egg' : 'bird'} must be greater than 0.`);
+      Alert.alert('Error', `${priceLabel} must be greater than 0.`);
       return;
     }
 
-    const quantityToSell = Number(quantitySold);
+    const enteredQuantity = Number(quantitySold);
+    const quantityToSell = enteredQuantity * saleUnitMultiplier;
     const availableQuantity = saleType === 'eggs' ? availableEggs : availableBirds;
 
     if (quantityToSell > availableQuantity) {
-      Alert.alert(
-        `Not enough ${saleType}`,
-        `Only ${availableQuantity} ${saleType} are currently available for sale in this batch.`,
-      );
+      const availableMessage = saleType === 'eggs' && eggSaleUnit === 'tray'
+        ? `Only ${Math.floor(availableEggs / 30)} full trays (${availableEggs} eggs) are currently available.`
+        : `Only ${availableQuantity} ${saleType} are currently available for sale in this batch.`;
+      Alert.alert(`Not enough ${saleType}`, availableMessage);
       return;
     }
 
@@ -138,10 +152,23 @@ export default function SalesScreen({ route, navigation }) {
       setQuantitySold('');
       setPricePerUnit('');
       loadSaleAvailability();
-      Alert.alert('Success', `${saleType === 'eggs' ? 'Egg' : 'Bird'} sale recorded.`);
+      const savedMessage = saleType === 'eggs' && eggSaleUnit === 'tray'
+        ? `${enteredQuantity} ${enteredQuantity === 1 ? 'tray' : 'trays'} (${quantityToSell} eggs) recorded.`
+        : `${saleType === 'eggs' ? 'Egg' : 'Bird'} sale recorded.`;
+      Alert.alert('Success', savedMessage);
     };
 
-    addSaleRecord(batchId, saleType, quantityToSell, priceValue, new Date().toISOString(), onSaved);
+    const pricePerStoredUnit = priceValue / saleUnitMultiplier;
+    const totalRevenue = enteredQuantity * priceValue;
+    addSaleRecord(
+      batchId,
+      saleType,
+      quantityToSell,
+      pricePerStoredUnit,
+      new Date().toISOString(),
+      onSaved,
+      totalRevenue,
+    );
   };
 
   return (
@@ -162,6 +189,7 @@ export default function SalesScreen({ route, navigation }) {
             style={[styles.saleTypeButton, saleType === option.key && styles.saleTypeButtonSelected]}
             onPress={() => {
               setSaleType(option.key);
+              setEggSaleUnit('egg');
               setQuantitySold('');
               setPricePerUnit('');
             }}
@@ -179,11 +207,42 @@ export default function SalesScreen({ route, navigation }) {
           {saleType === 'eggs' ? 'Eggs' : 'Birds'} Available for Sale: {saleType === 'eggs' ? availableEggs : availableBirds}
         </Text>
       ) : null}
+      {batchAge ? <Text style={styles.ageSummary}>Bird age today: {batchAge}</Text> : null}
+      {saleType === 'eggs' ? (
+        <View>
+          <Text style={styles.unitLabel}>Sell eggs by</Text>
+          <View style={styles.saleTypeControl}>
+            {[
+              { key: 'egg', label: 'Each Egg' },
+              { key: 'tray', label: 'Tray (30 eggs)' },
+            ].map(option => (
+              <TouchableOpacity
+                key={option.key}
+                style={[styles.saleTypeButton, eggSaleUnit === option.key && styles.saleTypeButtonSelected]}
+                onPress={() => {
+                  setEggSaleUnit(option.key);
+                  setQuantitySold('');
+                  setPricePerUnit('');
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: eggSaleUnit === option.key }}
+              >
+                <Text style={[styles.saleTypeText, eggSaleUnit === option.key && styles.saleTypeTextSelected]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {eggSaleUnit === 'tray' ? (
+            <Text style={styles.noteText}>Up to {Math.floor(availableEggs / 30)} full trays available.</Text>
+          ) : null}
+        </View>
+      ) : null}
       {/* Shows sale entry fields only when recording is allowed. */}
       {canRecordSales && !isBatchCompleted && saleType ? (
         <>
           <TextInput
-            placeholder={saleType === 'eggs' ? 'Eggs Sold' : 'Birds Sold'}
+            placeholder={quantityLabel}
             placeholderTextColor="#666"
             value={quantitySold}
             onChangeText={setQuantitySold}
@@ -191,13 +250,16 @@ export default function SalesScreen({ route, navigation }) {
             style={styles.input}
           />
           <TextInput
-            placeholder={saleType === 'eggs' ? 'Price Per Egg' : 'Price Per Bird'}
+            placeholder={priceLabel}
             placeholderTextColor="#666"
             value={pricePerUnit}
             onChangeText={setPricePerUnit}
-            keyboardType="numeric"
+            keyboardType="decimal-pad"
             style={styles.input}
           />
+          {quantitySold && pricePerUnit && Number(quantitySold) > 0 && Number(pricePerUnit) > 0 ? (
+            <Text style={styles.summary}>Sale Total: {(Number(quantitySold) * Number(pricePerUnit)).toFixed(2)}</Text>
+          ) : null}
           <Button title="Add Sale" onPress={handleAdd} />
         </>
       ) : isBatchCompleted ? null : canRecordSales ? (
@@ -220,8 +282,10 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, marginBottom: 10, color: '#fff', fontWeight: '700' },
   lockedNote: { color: '#fecaca', marginBottom: 12 },
   noteText: { color: '#cbd5e1', marginBottom: 12 },
+  ageSummary: { color: '#bbf7d0', fontWeight: '700', marginBottom: 10 },
   input: { borderWidth: 1, padding: 10, marginBottom: 10, borderRadius: 5, backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: '#cbd5e1' },
   summary: { marginVertical: 10, fontWeight: 'bold', color: '#fff' },
+  unitLabel: { color: '#fff', fontWeight: '700', marginBottom: 6 },
   saleTypeControl: {
     flexDirection: 'row',
     borderWidth: 1,

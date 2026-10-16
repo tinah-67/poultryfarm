@@ -12,6 +12,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import HomeShellScreen from './src/screens/HomeShellScreen';
+import QuickRecordScreen from './src/screens/QuickRecordScreen';
 import FarmManagementScreen from './src/screens/FarmManagementScreen';
 import FarmScreen from './src/screens/FarmScreen';
 import ViewFarmsScreen from './src/screens/ViewFarmsScreen';
@@ -36,6 +37,10 @@ import ViewExpensesScreen from './src/screens/ViewExpensesScreen';
 import SalesScreen from './src/screens/SalesScreen';
 import ViewSalesScreen from './src/screens/ViewSalesScreen';
 import EggProductionScreen from './src/screens/EggProductionScreen';
+import RecordEggCollectionScreen from './src/screens/RecordEggCollectionScreen';
+import RecordEggBreakageScreen from './src/screens/RecordEggBreakageScreen';
+import ViewEggCollectionsScreen from './src/screens/ViewEggCollectionsScreen';
+import ViewEggBreakageScreen from './src/screens/ViewEggBreakageScreen';
 
 // Creates the root stack navigator and a navigation ref for notification opens.
 const Stack = createNativeStackNavigator();
@@ -176,6 +181,11 @@ export default function App() {
           options={{ headerShown: false }}
         />
         <Stack.Screen
+          name="QuickRecord"
+          component={QuickRecordScreen}
+          options={{ title: 'Choose Flock' }}
+        />
+        <Stack.Screen
           name="FarmManagement"
           component={FarmManagementScreen}
           options={{ title: 'Farm Management' }}
@@ -183,7 +193,11 @@ export default function App() {
         <Stack.Screen
           name="AddFarm"
           component={FarmScreen}
-          options={{ title: 'Add Farm' }}
+          options={({ route }) => ({
+            title: route?.params?.onboarding ? 'Step 1 of 2: Create Farm' : 'Add Farm',
+            headerBackVisible: !route?.params?.onboarding,
+            gestureEnabled: !route?.params?.onboarding,
+          })}
         />
 
         <Stack.Screen
@@ -225,7 +239,11 @@ export default function App() {
         {/* Batch operations and batch-level records. */}
         <Stack.Screen name="CreateBatch"
           component={CreateBatchScreen}
-          options={{ title: 'Record Batch' }}
+          options={({ route }) => ({
+            title: route?.params?.onboarding ? 'Step 2 of 2: First Batch' : 'Record Batch',
+            headerBackVisible: !route?.params?.onboarding,
+            gestureEnabled: !route?.params?.onboarding,
+          })}
         />
         <Stack.Screen name="ViewBatches"
           component={ViewBatchesScreen}
@@ -294,6 +312,26 @@ export default function App() {
           name="EggProduction"
           component={EggProductionScreen}
           options={{ title: 'Egg Production' }}
+        />
+        <Stack.Screen
+          name="RecordEggCollection"
+          component={RecordEggCollectionScreen}
+          options={{ title: 'Record Egg Collection' }}
+        />
+        <Stack.Screen
+          name="RecordEggBreakage"
+          component={RecordEggBreakageScreen}
+          options={{ title: 'Record Egg Breakage' }}
+        />
+        <Stack.Screen
+          name="ViewEggCollections"
+          component={ViewEggCollectionsScreen}
+          options={{ title: 'Egg Collection Records' }}
+        />
+        <Stack.Screen
+          name="ViewEggBreakage"
+          component={ViewEggBreakageScreen}
+          options={{ title: 'Egg Breakage Records' }}
         />
 
       </Stack.Navigator>

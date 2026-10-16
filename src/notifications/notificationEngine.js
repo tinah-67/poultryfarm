@@ -1,6 +1,8 @@
 import {
   getAccessibleFarms,
   getBatchesByFarmId,
+  getEggAvailabilityByBatchId,
+  getEggCollectionsByBatchId,
   getFeedRecordsByBatchId,
   getMortalityRecordsByBatchId,
   getSalesByBatchId,
@@ -74,6 +76,8 @@ export const canRoleSeeNotification = (role, notificationType) => {
       'Feed records',
       'Low birds',
       'Flock status',
+      'Egg collection',
+      'Egg sales',
     ].includes(notificationType);
   }
 
@@ -82,6 +86,7 @@ export const canRoleSeeNotification = (role, notificationType) => {
       'Vaccination',
       'Mortality',
       'Feed records',
+      'Egg collection',
     ].includes(notificationType);
   }
 
@@ -98,6 +103,8 @@ const toPromise = executor =>
 const getUserByIdAsync = userId => toPromise(resolve => getUserById(userId, resolve));
 const getAccessibleFarmsAsync = userId => toPromise(resolve => getAccessibleFarms(userId, resolve));
 const getBatchesByFarmIdAsync = farmId => toPromise(resolve => getBatchesByFarmId(farmId, resolve));
+const getEggAvailabilityByBatchIdAsync = batchId => toPromise(resolve => getEggAvailabilityByBatchId(batchId, resolve));
+const getEggCollectionsByBatchIdAsync = batchId => toPromise(resolve => getEggCollectionsByBatchId(batchId, resolve));
 const getFeedRecordsByBatchIdAsync = batchId => toPromise(resolve => getFeedRecordsByBatchId(batchId, resolve));
 const getMortalityRecordsByBatchIdAsync = batchId => toPromise(resolve => getMortalityRecordsByBatchId(batchId, resolve));
 const getSalesByBatchIdAsync = batchId => toPromise(resolve => getSalesByBatchId(batchId, resolve));
@@ -162,17 +169,23 @@ export const loadNotificationsForUser = async userId => {
             mortalityRecords,
             saleRecords,
             vaccinationRecords,
+            eggCollectionRecords,
+            availableEggs,
           ] = await Promise.all([
             getFeedRecordsByBatchIdAsync(batch.batch_id),
             getMortalityRecordsByBatchIdAsync(batch.batch_id),
             getSalesByBatchIdAsync(batch.batch_id),
             getVaccinationRecordsByBatchIdAsync(batch.batch_id),
+            getEggCollectionsByBatchIdAsync(batch.batch_id),
+            getEggAvailabilityByBatchIdAsync(batch.batch_id),
           ]);
 
           const safeFeedRecords = feedRecords || [];
           const safeMortalityRecords = mortalityRecords || [];
           const safeSaleRecords = saleRecords || [];
           const safeVaccinationRecords = vaccinationRecords || [];
+          const safeEggCollectionRecords = eggCollectionRecords || [];
+          const safeAvailableEggs = Number(availableEggs || 0);
           const initialChicks = Number(batch.initial_chicks || 0);
           const totalDead = safeMortalityRecords.reduce(
             (sum, item) => sum + Number(item.number_dead || 0),
@@ -195,6 +208,13 @@ export const loadNotificationsForUser = async userId => {
             .filter(Boolean)
             .sort((left, right) => right - left)[0] || null;
           const daysSinceLastFeed = latestFeedDate ? getDaysBetween(today, latestFeedDate) : null;
+          const latestEggCollectionDate = safeEggCollectionRecords
+            .map(item => parseLocalDate(item.collection_date))
+            .filter(Boolean)
+            .sort((left, right) => right - left)[0] || null;
+          const daysSinceLastEggCollection = latestEggCollectionDate
+            ? getDaysBetween(today, latestEggCollectionDate)
+            : null;
           const lowBirdThreshold = Math.max(10, Math.ceil(initialChicks * 0.1));
           const items = [];
 
@@ -252,6 +272,37 @@ export const loadNotificationsForUser = async userId => {
               batchId: batch.batch_id,
               title: 'Feed records may be outdated',
               detail: `The last feed entry was ${daysSinceLastFeed} day(s) ago.`,
+            });
+          }
+
+          // Reminds users to enter a collection when a producing flock has gone three days without one.
+          if (isActive && daysSinceLastEggCollection != null && daysSinceLastEggCollection >= 3) {
+            items.push({
+              id: 'egg-collection-stale-' + batch.batch_id,
+              severity: 'warning',
+              type: 'Egg collection',
+              farmName: farm.farm_name,
+              farmLocation: farm.location || 'N/A',
+              batchLabel,
+              batchId: batch.batch_id,
+              title: 'Egg collection may be due',
+              detail: 'The last collection was ' + daysSinceLastEggCollection
+                + ' day(s) ago. Record the next collection for this flock.',
+            });
+          }
+
+          // Alerts managers when collected eggs remain available for sale.
+          if (isActive && safeAvailableEggs > 0) {
+            items.push({
+              id: 'egg-sales-available-' + batch.batch_id,
+              severity: 'info',
+              type: 'Egg sales',
+              farmName: farm.farm_name,
+              farmLocation: farm.location || 'N/A',
+              batchLabel,
+              batchId: batch.batch_id,
+              title: 'Eggs are available for sale',
+              detail: safeAvailableEggs + ' eggs are available. Record the sale when they are sold.',
             });
           }
 

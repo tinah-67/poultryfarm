@@ -127,6 +127,9 @@ export default function LoginScreen({ navigation }) {
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="email-address"
+        autoComplete="username"
         style={styles.input}
       />
 
@@ -137,7 +140,7 @@ export default function LoginScreen({ navigation }) {
           secureTextEntry={!showPassword}
           value={password}
           onChangeText={setPassword}
-          key={showPassword ? 'visible' : 'hidden'}
+          autoComplete="current-password"
           style={styles.passwordInput}
         />
         <TouchableOpacity
